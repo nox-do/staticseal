@@ -267,6 +267,8 @@ button:disabled {
 <script>
 (() => {
   const DEFAULT_CHUNK_SIZE = 92;
+  const FILE_WARN_BYTES = 5 * 1024 * 1024;
+  const FILE_CONFIRM_BYTES = 25 * 1024 * 1024;
 
   const form = document.getElementById('encrypt-form');
   const sourceFile = document.getElementById('source-file');
@@ -291,22 +293,27 @@ button:disabled {
     .replaceAll('"', '&quot;');
 
   const toBase64 = (bytes) => {
-    let binary = '';
-    for (let index = 0; index < bytes.byteLength; index += 1) {
-      binary += String.fromCharCode(bytes[index]);
+    const parts = [];
+    const rawChunkSize = 0x8000;
+    for (let index = 0; index < bytes.byteLength; index += rawChunkSize) {
+      parts.push(String.fromCharCode(...bytes.slice(index, index + rawChunkSize)));
     }
-    return btoa(binary);
+    return btoa(parts.join(''));
   };
 
   const fromBase64 = (value) => Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
 
-  const chunkString = (value, size) => {
+  const toBase64Chunks = (bytes, size) => {
     const chunks = [];
-    for (let index = 0; index < value.length; index += size) {
-      chunks.push(value.slice(index, index + size));
+    let rawChunkSize = Math.floor((size * 3) / 4);
+    rawChunkSize -= rawChunkSize % 3;
+    for (let index = 0; index < bytes.byteLength; index += rawChunkSize) {
+      chunks.push(toBase64(bytes.slice(index, index + rawChunkSize)));
     }
     return chunks;
   };
+
+  const fromBase64Chunks = (chunks) => joinBytes(...chunks.map(fromBase64));
 
   const joinBytes = (...parts) => {
     const total = parts.reduce((sum, part) => sum + part.byteLength, 0);
@@ -322,6 +329,13 @@ button:disabled {
   const outputFilenameFor = (name) => {
     const base = name.replace(/\.[^.]+$/, '') || 'file';
     return `${base}_encrypted.html`;
+  };
+
+  const formatBytes = (bytes) => {
+    if (bytes < 1024 * 1024) {
+      return `${Math.ceil(bytes / 1024)} KB`;
+    }
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   };
 
   const inferContentType = (file) => {
@@ -343,6 +357,18 @@ button:disabled {
     };
     return types[extension] || 'application/octet-stream';
   };
+
+  const authenticatedDataFor = (payload) => encoder.encode(JSON.stringify({
+    v: payload.v,
+    alg: payload.alg,
+    kdf: payload.kdf,
+    iterations: payload.iterations,
+    encoding: payload.encoding,
+    filename: payload.filename,
+    contentType: payload.contentType,
+    salt: payload.salt,
+    iv: payload.iv
+  }));
 
   async function deriveKey(passphrase, salt, iterationCount, usages) {
     const baseKey = await crypto.subtle.importKey(
@@ -369,16 +395,7 @@ button:disabled {
   async function encryptBytes(bytes, passphrase, iterationCount, file) {
     const salt = crypto.getRandomValues(new Uint8Array(16));
     const iv = crypto.getRandomValues(new Uint8Array(12));
-    const key = await deriveKey(passphrase, salt, iterationCount, ['encrypt']);
-    const encrypted = new Uint8Array(await crypto.subtle.encrypt(
-      { name: 'AES-GCM', iv },
-      key,
-      bytes
-    ));
-    const tag = encrypted.slice(encrypted.byteLength - 16);
-    const ciphertext = encrypted.slice(0, encrypted.byteLength - 16);
-
-    return {
+    const metadata = {
       v: 1,
       alg: 'AES-GCM',
       kdf: 'PBKDF2-SHA256',
@@ -387,9 +404,21 @@ button:disabled {
       filename: file.name,
       contentType: inferContentType(file),
       salt: toBase64(salt),
-      iv: toBase64(iv),
+      iv: toBase64(iv)
+    };
+    const key = await deriveKey(passphrase, salt, iterationCount, ['encrypt']);
+    const encrypted = new Uint8Array(await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv, additionalData: authenticatedDataFor(metadata) },
+      key,
+      bytes
+    ));
+    const tag = encrypted.slice(encrypted.byteLength - 16);
+    const ciphertext = encrypted.slice(0, encrypted.byteLength - 16);
+
+    return {
+      ...metadata,
       tag: toBase64(tag),
-      ciphertext: chunkString(toBase64(ciphertext), DEFAULT_CHUNK_SIZE)
+      ciphertext: toBase64Chunks(ciphertext, DEFAULT_CHUNK_SIZE)
     };
   }
 
@@ -408,9 +437,9 @@ button:disabled {
   async function verifyPayload(payload, passphrase, expectedBytes) {
     const key = await deriveKey(passphrase, fromBase64(payload.salt), payload.iterations, ['decrypt']);
     const decrypted = new Uint8Array(await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: fromBase64(payload.iv) },
+      { name: 'AES-GCM', iv: fromBase64(payload.iv), additionalData: authenticatedDataFor(payload) },
       key,
-      joinBytes(fromBase64(payload.ciphertext.join('')), fromBase64(payload.tag))
+      joinBytes(fromBase64Chunks(payload.ciphertext), fromBase64(payload.tag))
     ));
     if (!equalBytes(decrypted, expectedBytes)) {
       throw new Error('Decrypt roundtrip failed.');
@@ -421,7 +450,7 @@ button:disabled {
     const safeTitle = escapeHtml(title);
     const safeSource = escapeHtml(sourceName);
     const generatedAt = new Date().toISOString();
-    const payloadJson = JSON.stringify(payload, null, 2).replaceAll('</', '<\\/');
+  const payloadJson = JSON.stringify(payload, null, 2).replaceAll('</', '<\\/');
     const scriptClose = '</' + 'script>';
 
     return `<!doctype html>
@@ -549,6 +578,14 @@ button:disabled { cursor: wait; opacity: 0.72; }
   color: var(--ink);
   font-weight: 800;
 }
+.viewer-title small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
 .viewer-actions {
   display: flex;
   gap: 0.5rem;
@@ -628,7 +665,7 @@ ${scriptClose}
   const button = document.getElementById('unlock-button');
   const status = document.getElementById('status');
   const payload = JSON.parse(document.getElementById('encrypted-payload').textContent);
-  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
 
   const fromBase64 = (value) => Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
   const escapeHtml = (value) => value
@@ -646,6 +683,20 @@ ${scriptClose}
     }
     return out;
   };
+
+  const fromBase64Chunks = (chunks) => joinBytes(...chunks.map(fromBase64));
+
+  const authenticatedDataFor = (payload) => encoder.encode(JSON.stringify({
+    v: payload.v,
+    alg: payload.alg,
+    kdf: payload.kdf,
+    iterations: payload.iterations,
+    encoding: payload.encoding,
+    filename: payload.filename,
+    contentType: payload.contentType,
+    salt: payload.salt,
+    iv: payload.iv
+  }));
 
   async function deriveKey(password) {
     const baseKey = await crypto.subtle.importKey(
@@ -672,26 +723,29 @@ ${scriptClose}
   async function unlock(password) {
     const key = await deriveKey(password);
     return new Uint8Array(await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: fromBase64(payload.iv) },
+      { name: 'AES-GCM', iv: fromBase64(payload.iv), additionalData: authenticatedDataFor(payload) },
       key,
-      joinBytes(fromBase64(payload.ciphertext.join('')), fromBase64(payload.tag))
+      joinBytes(fromBase64Chunks(payload.ciphertext), fromBase64(payload.tag))
     ));
   }
 
   function renderBlobViewer(bytes) {
     const contentType = payload.contentType || 'application/octet-stream';
     const filename = payload.filename || 'sealed-file';
+    const isHtml = contentType === 'text/html' || contentType === 'application/xhtml+xml';
     const blob = new Blob([bytes], { type: contentType });
     const url = URL.createObjectURL(blob);
     const safeName = escapeHtml(filename);
     const safeType = escapeHtml(contentType);
+    const openLabel = isHtml ? 'Open active HTML' : 'Open';
+    const previewLabel = isHtml ? 'Sandboxed preview' : safeType;
 
     document.body.className = 'viewer-page';
     document.body.innerHTML = '<main class="viewer-shell">' +
       '<header class="viewer-bar">' +
-      '<div class="viewer-title">' + safeName + '</div>' +
+      '<div class="viewer-title">' + safeName + '<small>' + previewLabel + '</small></div>' +
       '<div class="viewer-actions">' +
-      '<a href="' + url + '" target="_blank" rel="noopener">Open</a>' +
+      '<a href="' + url + '" target="_blank" rel="noopener">' + openLabel + '</a>' +
       '<a href="' + url + '" download="' + safeName + '">Download</a>' +
       '</div>' +
       '</header>' +
@@ -699,6 +753,10 @@ ${scriptClose}
       '</main>';
 
     const viewer = document.getElementById('viewer-content');
+    if (isHtml) {
+      viewer.innerHTML = '<iframe class="viewer-frame" sandbox="" title="' + safeName + '" src="' + url + '"></iframe>';
+      return;
+    }
     if (contentType === 'application/pdf') {
       viewer.innerHTML = '<iframe class="viewer-frame" title="' + safeName + '" src="' + url + '"></iframe>';
       return;
@@ -715,13 +773,6 @@ ${scriptClose}
   }
 
   function renderUnlocked(bytes) {
-    const contentType = payload.contentType || '';
-    if (contentType === 'text/html' || contentType === 'application/xhtml+xml') {
-      document.open();
-      document.write(decoder.decode(bytes));
-      document.close();
-      return;
-    }
     renderBlobViewer(bytes);
   }
 
@@ -773,7 +824,12 @@ ${scriptClose}
       return;
     }
     const type = inferContentType(file);
-    fileMeta.textContent = `${file.name} · ${Math.ceil(file.size / 1024)} KB · ${type}`;
+    fileMeta.textContent = `${file.name} · ${formatBytes(file.size)} · ${type}`;
+    if (file.size >= FILE_WARN_BYTES) {
+      setStatus('Large files can make the browser slow and produce very large HTML wrappers.', 'error');
+    } else {
+      setStatus('');
+    }
     if (!outputTitle.value) {
       outputTitle.value = file.name.replace(/\.[^.]+$/, '');
     }
@@ -805,6 +861,10 @@ ${scriptClose}
     }
     if (!crypto.subtle) {
       setStatus('This browser does not expose Web Crypto on this page.', 'error');
+      return;
+    }
+    if (file.size >= FILE_CONFIRM_BYTES && !window.confirm('This file is larger than 25 MB. Encryption may be slow and the output HTML will be much larger. Continue?')) {
+      setStatus('Encryption cancelled.', 'error');
       return;
     }
 

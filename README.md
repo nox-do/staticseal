@@ -13,9 +13,11 @@ The output contains:
 - a visible security note for maintainers
 - PBKDF2-SHA256 key derivation
 - AES-GCM encrypted file payload
+- authenticated metadata binding with AES-GCM additional data
 - chunked ciphertext so the generated file remains somewhat readable and tooling-friendly
 - a decrypt roundtrip check before writing the output
-- direct browser rendering for unlocked HTML, PDF, and images
+- sandboxed browser preview for unlocked HTML
+- direct browser rendering for unlocked PDF and images
 - a download/open fallback for other file types
 
 ## Web UI
@@ -33,10 +35,12 @@ The source file and passphrase are not uploaded to GitHub Pages or any backend.
 
 Unlocked behavior depends on the original file type:
 
-- HTML replaces the wrapper page and renders directly
+- HTML renders in a sandboxed preview, with a separate action to open it as active HTML
 - PDF opens in an embedded browser PDF view
 - images render inline
 - other files get Open and Download actions
+
+The browser app is designed for small to medium static artifacts. It warns for larger files because browser memory use and the generated wrapper size both grow with the source file.
 
 ## CLI usage
 
