@@ -237,9 +237,15 @@ button:disabled {
         <input id="source-file" name="source-file" type="file">
       </div>
 
-      <div class="row">
-        <label for="password">Passphrase</label>
-        <input id="password" name="password" type="password" autocomplete="new-password" placeholder="Use a long phrase">
+      <div class="row grid">
+        <div>
+          <label for="password">Passphrase</label>
+          <input id="password" name="password" type="password" autocomplete="new-password" placeholder="Use a long phrase">
+        </div>
+        <div>
+          <label for="password-repeat">Repeat passphrase</label>
+          <input id="password-repeat" name="password-repeat" type="password" autocomplete="new-password" placeholder="Repeat passphrase">
+        </div>
       </div>
 
       <div class="row grid">
@@ -253,7 +259,7 @@ button:disabled {
         </div>
       </div>
 
-      <div class="row grid">
+      <div class="row">
         <div>
           <label for="kdf-strength">Passphrase stretching</label>
           <select id="kdf-strength" name="kdf-strength">
@@ -262,10 +268,6 @@ button:disabled {
             <option value="420000">Stronger - 420k PBKDF2 rounds</option>
           </select>
           <p class="meta" id="kdf-help">Recommended balances unlock speed with resistance to offline password guessing.</p>
-        </div>
-        <div>
-          <span class="label">Cipher</span>
-          <p class="meta">AES-GCM with PBKDF2-SHA256</p>
         </div>
       </div>
 
@@ -287,6 +289,7 @@ button:disabled {
   const sourceFile = document.getElementById('source-file');
   const fileMeta = document.getElementById('file-meta');
   const password = document.getElementById('password');
+  const passwordRepeat = document.getElementById('password-repeat');
   const outputTitle = document.getElementById('output-title');
   const outputName = document.getElementById('output-name');
   const kdfStrength = document.getElementById('kdf-strength');
@@ -471,7 +474,7 @@ button:disabled {
     const safeTitle = escapeHtml(title);
     const safeSource = escapeHtml(sourceName);
     const generatedAt = new Date().toISOString();
-  const payloadJson = JSON.stringify(payload, null, 2).replaceAll('</', '<\\/');
+    const payloadJson = JSON.stringify(payload, null, 2).replaceAll('</', '<\\/');
     const scriptClose = '</' + 'script>';
 
     return `<!doctype html>
@@ -870,6 +873,7 @@ ${scriptClose}
     event.preventDefault();
     const file = sourceFile.files[0];
     const passphrase = password.value;
+    const repeatedPassphrase = passwordRepeat.value;
     const iterationCount = Number(kdfStrength.value);
 
     if (!file) {
@@ -880,6 +884,11 @@ ${scriptClose}
     if (!passphrase) {
       setStatus('Enter a passphrase.', 'error');
       password.focus();
+      return;
+    }
+    if (passphrase !== repeatedPassphrase) {
+      setStatus('Passphrases do not match.', 'error');
+      passwordRepeat.focus();
       return;
     }
     if (!KDF_PRESETS[iterationCount]) {

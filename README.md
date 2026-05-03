@@ -2,10 +2,12 @@
 
 Small static-site helper for turning a normal static file into a self-contained encrypted HTML file.
 
+Current version: `0.9.x`.
+
 It can run as:
 
 - a static browser app on GitHub Pages for HTML, PDF, images, and downloadable files
-- a local Node.js CLI for HTML files
+- a local Node.js CLI for the same static file wrapper format
 
 The output contains:
 
@@ -47,9 +49,9 @@ The browser app is designed for small to medium static artifacts. It warns for l
 
 ```bash
 node ./bin/self-encrypt.mjs \
-  --in ../newio/praxis-upload-journey-unencrypted.html \
-  --out ../newio/praxis-upload-journey.html \
-  --title "Praxis Upload Modul - geschützter Pitch"
+  --in report.pdf \
+  --out report_encrypted.html \
+  --title "Protected report"
 ```
 
 The password is requested interactively and is not passed as a CLI argument.
@@ -83,3 +85,8 @@ Keep the unencrypted source local and publish only the generated encrypted HTML.
 Use the repository root as the Pages source. GitHub will serve `index.html` as the web UI.
 
 Generated encrypted HTML wrappers can also be hosted on GitHub Pages, Netlify, S3, or sent as standalone files.
+
+## Roadmap
+
+- Evaluate Argon2id or scrypt as an optional future KDF. PBKDF2-SHA256 is used today because it is browser-native and dependency-free.
+- Add automated browser smoke tests for HTML, PDF, image, wrong password, and long-title cases.

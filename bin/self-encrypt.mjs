@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 import { createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes } from 'node:crypto';
-import { readFile, writeFile } from 'node:fs/promises';
-import { basename, dirname, resolve } from 'node:path';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { basename, dirname, extname, resolve } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 
+const VERSION = '0.9.0';
 const DEFAULT_ITERATIONS = 210_000;
 const DEFAULT_CHUNK_SIZE = 92;
 
@@ -44,6 +44,9 @@ function parseArgs(argv) {
       case '--stdin-password':
         args.stdinPassword = true;
         break;
+      case '--version':
+        args.version = true;
+        break;
       case '--help':
       case '-h':
         args.help = true;
@@ -57,18 +60,19 @@ function parseArgs(argv) {
 }
 
 function printHelp() {
-  output.write(`self-encrypt
+  output.write(`self-encrypt ${VERSION}
 
 Usage:
-  node ./bin/self-encrypt.mjs --in input.html --out locked.html [--title "Protected page"]
+  node ./bin/self-encrypt.mjs --in input.pdf --out input_encrypted.html [--title "Protected file"]
 
 Options:
-  --in <file>              Plain HTML source
-  --out <file>             Encrypted self-contained HTML output
+  --in <file>              Static source file
+  --out <file>             Encrypted self-contained HTML wrapper
   --title <text>           Browser title and lock-screen context
   --iterations <number>    PBKDF2 iterations, default ${DEFAULT_ITERATIONS}
   --chunk-size <number>    Base64 payload chunk size, default ${DEFAULT_CHUNK_SIZE}
   --stdin-password         Read password from stdin instead of prompting
+  --version                Show version
   --help                   Show this help
 `);
 }
@@ -80,20 +84,62 @@ function requiredString(value, name) {
   return value;
 }
 
-function chunkString(value, size) {
-  const chunks = [];
-  for (let index = 0; index < value.length; index += size) {
-    chunks.push(value.slice(index, index + size));
-  }
-  return chunks;
-}
-
 function escapeHtml(value) {
   return value
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;');
+}
+
+function rawChunkSizeFor(base64ChunkSize) {
+  let rawSize = Math.floor((base64ChunkSize * 3) / 4);
+  rawSize -= rawSize % 3;
+  return Math.max(rawSize, 3);
+}
+
+function toBase64Chunks(bytes, size) {
+  const chunks = [];
+  const rawSize = rawChunkSizeFor(size);
+  for (let index = 0; index < bytes.length; index += rawSize) {
+    chunks.push(bytes.subarray(index, index + rawSize).toString('base64'));
+  }
+  return chunks;
+}
+
+function fromBase64Chunks(chunks) {
+  return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk, 'base64')));
+}
+
+function inferContentType(filePath) {
+  const types = {
+    '.html': 'text/html',
+    '.htm': 'text/html',
+    '.xhtml': 'application/xhtml+xml',
+    '.pdf': 'application/pdf',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+    '.svg': 'image/svg+xml',
+    '.txt': 'text/plain'
+  };
+  return types[extname(filePath).toLowerCase()] || 'application/octet-stream';
+}
+
+function authenticatedDataFor(payload) {
+  return Buffer.from(JSON.stringify({
+    v: payload.v,
+    alg: payload.alg,
+    kdf: payload.kdf,
+    iterations: payload.iterations,
+    encoding: payload.encoding,
+    filename: payload.filename,
+    contentType: payload.contentType,
+    salt: payload.salt,
+    iv: payload.iv
+  }), 'utf8');
 }
 
 async function readPassword({ stdinPassword }) {
@@ -107,45 +153,59 @@ async function readPassword({ stdinPassword }) {
 
   const rl = createInterface({ input, output });
   try {
-    return await rl.question('Password: ');
+    const password = await rl.question('Password: ');
+    const repeat = await rl.question('Repeat password: ');
+    if (password !== repeat) {
+      throw new Error('Passwords do not match.');
+    }
+    return password;
   } finally {
     rl.close();
   }
 }
 
-function encryptHtml(html, password, { iterations, chunkSize }) {
+function encryptBytes(bytes, password, { iterations, chunkSize, sourceName, contentType }) {
   const salt = randomBytes(16);
   const iv = randomBytes(12);
-  const key = pbkdf2Sync(password, salt, iterations, 32, 'sha256');
-  const cipher = createCipheriv('aes-256-gcm', key, iv);
-  const ciphertext = Buffer.concat([cipher.update(html, 'utf8'), cipher.final()]);
-  const tag = cipher.getAuthTag();
-
-  const payload = {
+  const metadata = {
     v: 1,
     alg: 'AES-GCM',
     kdf: 'PBKDF2-SHA256',
     iterations,
+    encoding: 'bytes',
+    filename: sourceName,
+    contentType,
     salt: salt.toString('base64'),
-    iv: iv.toString('base64'),
-    tag: tag.toString('base64'),
-    ciphertext: chunkString(ciphertext.toString('base64'), chunkSize)
+    iv: iv.toString('base64')
   };
+  const key = pbkdf2Sync(password, salt, iterations, 32, 'sha256');
+  const cipher = createCipheriv('aes-256-gcm', key, iv);
+  cipher.setAAD(authenticatedDataFor(metadata));
+  const ciphertext = Buffer.concat([cipher.update(bytes), cipher.final()]);
+  const tag = cipher.getAuthTag();
 
-  return payload;
+  return {
+    ...metadata,
+    tag: tag.toString('base64'),
+    ciphertext: toBase64Chunks(ciphertext, chunkSize)
+  };
 }
 
-function verifyPayload(payload, password, expectedHtml) {
+function decryptPayload(payload, password) {
   const salt = Buffer.from(payload.salt, 'base64');
   const iv = Buffer.from(payload.iv, 'base64');
   const tag = Buffer.from(payload.tag, 'base64');
-  const ciphertext = Buffer.from(payload.ciphertext.join(''), 'base64');
+  const ciphertext = fromBase64Chunks(payload.ciphertext);
   const key = pbkdf2Sync(password, salt, payload.iterations, 32, 'sha256');
   const decipher = createDecipheriv('aes-256-gcm', key, iv);
+  decipher.setAAD(authenticatedDataFor(payload));
   decipher.setAuthTag(tag);
-  const decoded = Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
+  return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+}
 
-  if (decoded !== expectedHtml) {
+function verifyPayload(payload, password, expectedBytes) {
+  const decoded = decryptPayload(payload, password);
+  if (!decoded.equals(expectedBytes)) {
     throw new Error('Decrypt roundtrip failed.');
   }
 }
@@ -154,9 +214,11 @@ function renderWrapper({ title, payload, sourceName }) {
   const safeTitle = escapeHtml(title);
   const safeSource = escapeHtml(sourceName);
   const generatedAt = new Date().toISOString();
+  const payloadJson = JSON.stringify(payload, null, 2).replaceAll('</', '<\\/');
+  const scriptClose = '</' + 'script>';
 
   return `<!doctype html>
-<html lang="de">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -168,7 +230,7 @@ function renderWrapper({ title, payload, sourceName }) {
   --paper: #fffdf8;
   --ink: #211c17;
   --muted: #686057;
-  --line: #c7332b;
+  --line: #b82f26;
   --border: rgba(33, 28, 23, 0.14);
   --shadow: 0 22px 70px rgba(56, 42, 24, 0.14);
   --serif: Georgia, "Times New Roman", serif;
@@ -181,39 +243,18 @@ body {
   display: grid;
   place-items: center;
   padding: clamp(1.25rem, 5vw, 4rem);
-  background:
-    radial-gradient(circle at 16% 8%, rgba(199, 51, 43, 0.13), transparent 28rem),
-    linear-gradient(180deg, #fbf4e9 0%, var(--bg) 56%, #f3eadf 100%);
+  background: #faf7f0;
   color: var(--ink);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 .lock-shell {
   width: min(100%, 34rem);
-  position: relative;
   padding: clamp(1.4rem, 5vw, 2.4rem);
   border: 1px solid var(--border);
-  border-radius: 1.35rem;
-  background: rgba(255, 253, 248, 0.88);
+  border-radius: 8px;
+  background: rgba(255, 253, 248, 0.92);
   box-shadow: var(--shadow);
-  overflow: hidden;
 }
-.lock-thread {
-  position: absolute;
-  top: -1.5rem;
-  left: 0;
-  width: 8rem;
-  height: calc(100% + 3rem);
-  pointer-events: none;
-  z-index: 0;
-}
-.lock-thread path {
-  fill: none;
-  stroke: var(--line);
-  stroke-width: 2;
-  stroke-linecap: round;
-  filter: drop-shadow(0 12px 22px rgba(199, 51, 43, 0.2));
-}
-.lock-content { position: relative; z-index: 1; }
 .kicker {
   margin: 0 0 0.85rem;
   color: var(--line);
@@ -226,9 +267,8 @@ h1 {
   margin: 0 0 0.85rem;
   font-family: var(--serif);
   font-weight: 400;
-  font-size: clamp(2rem, 8vw, 4rem);
+  font-size: clamp(2rem, 8vw, 4.2rem);
   line-height: 1;
-  letter-spacing: -0.04em;
   overflow-wrap: anywhere;
   word-break: break-word;
   hyphens: auto;
@@ -248,7 +288,7 @@ form {
 label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 input, button {
   min-height: 3rem;
-  border-radius: 999px;
+  border-radius: 8px;
   font: inherit;
 }
 input {
@@ -278,45 +318,113 @@ button:disabled { cursor: wait; opacity: 0.72; }
   margin-top: 1rem;
   font-size: 0.86rem;
 }
+.viewer-page {
+  display: block;
+  padding: 0;
+  background: #1f1f1c;
+}
+.viewer-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.viewer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem;
+  background: #fffdf8;
+  border-bottom: 1px solid var(--border);
+}
+.viewer-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+  font-weight: 800;
+}
+.viewer-title small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.viewer-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+.viewer-actions a {
+  min-height: 2.55rem;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 8px;
+  padding: 0 0.85rem;
+  background: var(--line);
+  color: white;
+  font-size: 0.92rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+.viewer-frame {
+  width: 100%;
+  height: 100%;
+  min-height: calc(100vh - 4.1rem);
+  border: 0;
+  background: white;
+}
+.image-frame {
+  width: 100%;
+  height: calc(100vh - 4.1rem);
+  object-fit: contain;
+  background: #1f1f1c;
+}
+.download-only {
+  width: min(100%, 34rem);
+  align-self: center;
+  justify-self: center;
+  margin: 2rem;
+  padding: 1.25rem;
+  border-radius: 8px;
+  background: #fffdf8;
+}
 @media (max-width: 520px) {
   form { grid-template-columns: 1fr; }
   button { width: 100%; }
+  .viewer-bar { align-items: stretch; flex-direction: column; }
+  .viewer-actions a { width: 100%; }
 }
 </style>
 </head>
 <body>
   <main class="lock-shell">
-    <svg class="lock-thread" aria-hidden="true" preserveAspectRatio="none" viewBox="0 0 100 100">
-      <path d="M24 -4 C7 18 34 31 20 52 C9 70 22 83 16 104" />
-    </svg>
-    <div class="lock-content">
-      <p class="kicker">Geschützter Pitch</p>
-      <h1>Ein roter Faden, aber nicht für Suchmaschinen.</h1>
-      <p>Diese Datei enthält einen verschlüsselten Onepager. Das Passwort öffnet den Inhalt lokal im Browser.</p>
-      <form id="unlock-form" autocomplete="off">
-        <label for="password">Passwort</label>
-        <input id="password" name="password" type="password" placeholder="Passwort" autofocus>
-        <button id="unlock-button" type="submit">Öffnen</button>
-      </form>
-      <div class="status" id="status" role="status" aria-live="polite"></div>
-      <p class="hint">Hinweis: Das ist ein statischer Schutz für Verteilung und Neugier-Barriere, kein Ersatz für echtes Access-Control.</p>
-    </div>
+    <p class="kicker">Protected file</p>
+    <h1>${safeTitle}</h1>
+    <p>This file contains encrypted content. The passphrase unlocks it locally in your browser.</p>
+    <form id="unlock-form" autocomplete="off">
+      <label for="password">Passphrase</label>
+      <input id="password" name="password" type="password" placeholder="Passphrase" autofocus>
+      <button id="unlock-button" type="submit">Open</button>
+    </form>
+    <div class="status" id="status" role="status" aria-live="polite"></div>
+    <p class="hint">Static encryption is not a replacement for server-side access control.</p>
   </main>
 
 <!--
   Security note:
   This static wrapper intentionally exposes salt, IV, KDF parameters, and ciphertext.
   Salt and IV are not secrets; browser-side decryption needs them.
-  This protects against casual browsing, indexing, and accidental exposure,
-  but it is not server-side access control and cannot prevent offline brute force
-  if the HTML file is downloaded.
+  Anyone who downloads this file can attempt offline password guesses.
 
   Generated from: ${safeSource}
   Generated at: ${generatedAt}
 -->
 <script id="encrypted-payload" type="application/json">
-${JSON.stringify(payload, null, 2)}
-</script>
+${payloadJson}
+${scriptClose}
 <script>
 (() => {
   const form = document.getElementById('unlock-form');
@@ -324,8 +432,14 @@ ${JSON.stringify(payload, null, 2)}
   const button = document.getElementById('unlock-button');
   const status = document.getElementById('status');
   const payload = JSON.parse(document.getElementById('encrypted-payload').textContent);
+  const encoder = new TextEncoder();
 
   const fromBase64 = (value) => Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
+  const escapeHtml = (value) => value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
   const joinBytes = (...parts) => {
     const total = parts.reduce((sum, part) => sum + part.byteLength, 0);
     const out = new Uint8Array(total);
@@ -336,6 +450,20 @@ ${JSON.stringify(payload, null, 2)}
     }
     return out;
   };
+
+  const fromBase64Chunks = (chunks) => joinBytes(...chunks.map(fromBase64));
+
+  const authenticatedDataFor = (payload) => encoder.encode(JSON.stringify({
+    v: payload.v,
+    alg: payload.alg,
+    kdf: payload.kdf,
+    iterations: payload.iterations,
+    encoding: payload.encoding,
+    filename: payload.filename,
+    contentType: payload.contentType,
+    salt: payload.salt,
+    iv: payload.iv
+  }));
 
   async function deriveKey(password) {
     const baseKey = await crypto.subtle.importKey(
@@ -361,40 +489,79 @@ ${JSON.stringify(payload, null, 2)}
 
   async function unlock(password) {
     const key = await deriveKey(password);
-    const plaintext = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: fromBase64(payload.iv) },
+    return new Uint8Array(await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: fromBase64(payload.iv), additionalData: authenticatedDataFor(payload) },
       key,
-      joinBytes(fromBase64(payload.ciphertext.join('')), fromBase64(payload.tag))
-    );
-    return new TextDecoder().decode(plaintext);
+      joinBytes(fromBase64Chunks(payload.ciphertext), fromBase64(payload.tag))
+    ));
+  }
+
+  function renderBlobViewer(bytes) {
+    const contentType = payload.contentType || 'application/octet-stream';
+    const filename = payload.filename || 'sealed-file';
+    const isHtml = contentType === 'text/html' || contentType === 'application/xhtml+xml';
+    const blob = new Blob([bytes], { type: contentType });
+    const url = URL.createObjectURL(blob);
+    const safeName = escapeHtml(filename);
+    const safeType = escapeHtml(contentType);
+    const openLabel = isHtml ? 'Open active HTML' : 'Open';
+    const previewLabel = isHtml ? 'Sandboxed preview' : safeType;
+
+    document.body.className = 'viewer-page';
+    document.body.innerHTML = '<main class="viewer-shell">' +
+      '<header class="viewer-bar">' +
+      '<div class="viewer-title">' + safeName + '<small>' + previewLabel + '</small></div>' +
+      '<div class="viewer-actions">' +
+      '<a href="' + url + '" target="_blank" rel="noopener">' + openLabel + '</a>' +
+      '<a href="' + url + '" download="' + safeName + '">Download</a>' +
+      '</div>' +
+      '</header>' +
+      '<section id="viewer-content"></section>' +
+      '</main>';
+
+    const viewer = document.getElementById('viewer-content');
+    if (isHtml) {
+      viewer.innerHTML = '<iframe class="viewer-frame" sandbox="" title="' + safeName + '" src="' + url + '"></iframe>';
+      return;
+    }
+    if (contentType === 'application/pdf') {
+      viewer.innerHTML = '<iframe class="viewer-frame" title="' + safeName + '" src="' + url + '"></iframe>';
+      return;
+    }
+    if (contentType.startsWith('image/')) {
+      viewer.innerHTML = '<img class="image-frame" alt="' + safeName + '" src="' + url + '">';
+      return;
+    }
+    viewer.innerHTML = '<div class="download-only">' +
+      '<p class="kicker">Download</p>' +
+      '<h1>' + safeName + '</h1>' +
+      '<p>This browser may not preview ' + safeType + ' here. Use Open or Download.</p>' +
+      '</div>';
   }
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
-    const password = input.value;
-    if (!password) {
-      status.textContent = 'Bitte Passwort eingeben.';
+    const passphrase = input.value;
+    if (!passphrase) {
+      status.textContent = 'Enter the passphrase.';
       input.focus();
       return;
     }
 
     button.disabled = true;
-    status.textContent = 'Entschlüssle lokal im Browser ...';
+    status.textContent = 'Decrypting locally in this browser ...';
     try {
-      const decryptedHtml = await unlock(password);
-      document.open();
-      document.write(decryptedHtml);
-      document.close();
+      renderBlobViewer(await unlock(passphrase));
     } catch (error) {
       console.warn('Unlock failed', error);
-      status.textContent = 'Passwort passt nicht oder Datei ist beschädigt.';
+      status.textContent = 'Wrong passphrase or damaged file.';
       button.disabled = false;
       input.select();
       input.focus();
     }
   });
 })();
-</script>
+${scriptClose}
 </body>
 </html>
 `;
@@ -402,6 +569,10 @@ ${JSON.stringify(payload, null, 2)}
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+  if (args.version) {
+    output.write(`${VERSION}\n`);
+    return;
+  }
   if (args.help) {
     printHelp();
     return;
@@ -409,7 +580,8 @@ async function main() {
 
   const inputPath = resolve(requiredString(args.in, '--in'));
   const outputPath = resolve(requiredString(args.out, '--out'));
-  const title = args.title || `${basename(outputPath)} - geschützte Datei`;
+  const sourceName = basename(inputPath);
+  const title = args.title || `${sourceName} - protected file`;
 
   if (!Number.isInteger(args.iterations) || args.iterations < 100_000) {
     throw new Error('--iterations must be an integer >= 100000.');
@@ -423,20 +595,26 @@ async function main() {
     throw new Error('Password must not be empty.');
   }
 
-  const html = await readFile(inputPath, 'utf8');
-  const payload = encryptHtml(html, password, args);
-  verifyPayload(payload, password, html);
+  const bytes = await readFile(inputPath);
+  const payload = encryptBytes(bytes, password, {
+    iterations: args.iterations,
+    chunkSize: args.chunkSize,
+    sourceName,
+    contentType: inferContentType(inputPath)
+  });
+  verifyPayload(payload, password, bytes);
 
   const wrapper = renderWrapper({
     title,
     payload,
-    sourceName: basename(inputPath)
+    sourceName
   });
 
   await mkdir(dirname(outputPath), { recursive: true });
   await writeFile(outputPath, wrapper, 'utf8');
 
   output.write(`Encrypted ${inputPath} -> ${outputPath}\n`);
+  output.write(`Content type: ${payload.contentType}\n`);
   output.write(`Payload chunks: ${payload.ciphertext.length}\n`);
 }
 
