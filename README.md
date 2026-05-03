@@ -1,5 +1,7 @@
 # self-encrypted
 
+Web UI: https://nox-do.github.io/staticseal/
+
 Small static-site helper for turning a normal static file into a self-contained encrypted HTML file.
 
 Current version: `0.9.x`.
