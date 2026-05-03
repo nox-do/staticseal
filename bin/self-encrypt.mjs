@@ -8,6 +8,19 @@ import { stdin as input, stdout as output } from 'node:process';
 const VERSION = '0.9.0';
 const DEFAULT_ITERATIONS = 210_000;
 const DEFAULT_CHUNK_SIZE = 92;
+const AUTHENTICATED_METADATA = [
+  'v',
+  'alg',
+  'kdf',
+  'iterations',
+  'encoding',
+  'filename',
+  'contentType',
+  'access',
+  'unlockKey',
+  'salt',
+  'iv'
+];
 
 function parseArgs(argv) {
   const args = {
@@ -134,19 +147,9 @@ function inferContentType(filePath) {
 }
 
 function authenticatedDataFor(payload) {
-  return Buffer.from(JSON.stringify({
-    v: payload.v,
-    alg: payload.alg,
-    kdf: payload.kdf,
-    iterations: payload.iterations,
-    encoding: payload.encoding,
-    filename: payload.filename,
-    contentType: payload.contentType,
-    access: payload.access,
-    unlockKey: payload.unlockKey,
-    salt: payload.salt,
-    iv: payload.iv
-  }), 'utf8');
+  return Buffer.from(JSON.stringify(
+    Object.fromEntries(AUTHENTICATED_METADATA.map((key) => [key, payload[key]]))
+  ), 'utf8');
 }
 
 async function readPassword({ stdinPassword }) {
@@ -244,7 +247,6 @@ function renderWrapper({ title, payload, sourceName }) {
 <style>
 :root {
   --bg: #faf7f0;
-  --paper: #fffdf8;
   --ink: #211c17;
   --muted: #686057;
   --line: #b82f26;
@@ -386,15 +388,17 @@ button:disabled { cursor: wait; opacity: 0.72; }
   font-weight: 800;
   text-decoration: none;
 }
-.viewer-frame {
+.viewer-frame,
+.image-frame {
   width: 100%;
-  height: 100%;
   min-height: calc(100vh - 4.1rem);
+}
+.viewer-frame {
+  height: 100%;
   border: 0;
   background: white;
 }
 .image-frame {
-  width: 100%;
   height: calc(100vh - 4.1rem);
   object-fit: contain;
   background: #1f1f1c;
@@ -450,6 +454,19 @@ ${scriptClose}
   const status = document.getElementById('status');
   const payload = JSON.parse(document.getElementById('encrypted-payload').textContent);
   const encoder = new TextEncoder();
+  const AUTHENTICATED_METADATA = [
+    'v',
+    'alg',
+    'kdf',
+    'iterations',
+    'encoding',
+    'filename',
+    'contentType',
+    'access',
+    'unlockKey',
+    'salt',
+    'iv'
+  ];
 
   const fromBase64 = (value) => Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
   const escapeHtml = (value) => value
@@ -470,19 +487,9 @@ ${scriptClose}
 
   const fromBase64Chunks = (chunks) => joinBytes(...chunks.map(fromBase64));
 
-  const authenticatedDataFor = (payload) => encoder.encode(JSON.stringify({
-    v: payload.v,
-    alg: payload.alg,
-    kdf: payload.kdf,
-    iterations: payload.iterations,
-    encoding: payload.encoding,
-    filename: payload.filename,
-    contentType: payload.contentType,
-    access: payload.access,
-    unlockKey: payload.unlockKey,
-    salt: payload.salt,
-    iv: payload.iv
-  }));
+  const authenticatedDataFor = (payload) => encoder.encode(JSON.stringify(
+    Object.fromEntries(AUTHENTICATED_METADATA.map((key) => [key, payload[key]]))
+  ));
 
   async function deriveKey(password) {
     const baseKey = await crypto.subtle.importKey(
