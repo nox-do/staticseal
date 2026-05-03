@@ -32,7 +32,7 @@ button, input {
 .page {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: minmax(18rem, 0.95fr) minmax(22rem, 1.3fr);
+  grid-template-columns: minmax(20rem, 1.08fr) minmax(21rem, 1fr);
 }
 .intro {
   display: flex;
@@ -83,15 +83,15 @@ button, input {
 }
 .tool {
   align-self: center;
-  width: min(100%, 48rem);
+  width: min(100%, 40rem);
   margin: 0 auto;
   padding: clamp(1.25rem, 4vw, 3rem);
 }
 .local-sticker {
   display: grid;
-  gap: 0.45rem;
+  gap: 0.35rem;
   margin-bottom: 1rem;
-  padding: 0.95rem 1rem;
+  padding: 0.85rem 0.95rem;
   border: 1px solid rgba(31, 111, 112, 0.22);
   border-radius: 8px;
   background: rgba(237, 249, 246, 0.88);
@@ -102,8 +102,8 @@ button, input {
 }
 .local-sticker span {
   color: #315f60;
-  font-size: 0.84rem;
-  line-height: 1.45;
+  font-size: 0.8rem;
+  line-height: 1.4;
 }
 .local-sticker code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
@@ -255,7 +255,7 @@ button:disabled {
   <section class="tool" aria-label="File encryption tool">
     <div class="local-sticker" aria-label="Local processing notice">
       <strong>Your file stays in this browser.</strong>
-      <span>Staticseal uses the browser <code>File API</code> to read locally, <code>Web Crypto</code> to seal, and a <code>Blob</code> download to save. There is no upload endpoint in this page.</span>
+      <span>Uses <code>File API</code>, <code>Web Crypto</code>, and a <code>Blob</code> download. No upload endpoint. Extra cautious? Download this HTML page and run it locally.</span>
     </div>
     <form class="panel" id="encrypt-form">
       <div class="row">
