@@ -4,6 +4,8 @@ Small static-site helper for turning a normal static file into a self-contained 
 
 Current version: `0.9.x`.
 
+This is built for single static artifacts such as HTML onepagers, PDFs, and images. It is not a whole-website packager or asset crawler.
+
 It can run as:
 
 - a static browser app on GitHub Pages for HTML, PDF, images, and downloadable files
