@@ -152,26 +152,74 @@ function authenticatedDataFor(payload) {
   ), 'utf8');
 }
 
+function stripFinalLineEnding(value) {
+  if (value.endsWith('\r\n')) {
+    return value.slice(0, -2);
+  }
+  if (value.endsWith('\n') || value.endsWith('\r')) {
+    return value.slice(0, -1);
+  }
+  return value;
+}
+
+function readHiddenLine(prompt) {
+  if (!input.isTTY || typeof input.setRawMode !== 'function') {
+    const rl = createInterface({ input, output });
+    return rl.question(prompt).finally(() => rl.close());
+  }
+
+  return new Promise((resolve, reject) => {
+    let value = '';
+    const wasRaw = input.isRaw;
+    const cleanup = () => {
+      input.off('data', onData);
+      input.setRawMode(Boolean(wasRaw));
+      input.pause();
+      output.write('\n');
+    };
+    const onData = (chunk) => {
+      const text = chunk.toString('utf8');
+      for (const char of text) {
+        if (char === '\u0003') {
+          cleanup();
+          reject(new Error('Interrupted.'));
+          return;
+        }
+        if (char === '\r' || char === '\n' || char === '\u0004') {
+          cleanup();
+          resolve(value);
+          return;
+        }
+        if (char === '\u007f') {
+          value = value.slice(0, -1);
+          continue;
+        }
+        value += char;
+      }
+    };
+
+    output.write(prompt);
+    input.setRawMode(true);
+    input.resume();
+    input.on('data', onData);
+  });
+}
+
 async function readPassword({ stdinPassword }) {
   if (stdinPassword) {
     const chunks = [];
     for await (const chunk of input) {
       chunks.push(Buffer.from(chunk));
     }
-    return Buffer.concat(chunks).toString('utf8').trimEnd();
+    return stripFinalLineEnding(Buffer.concat(chunks).toString('utf8'));
   }
 
-  const rl = createInterface({ input, output });
-  try {
-    const password = await rl.question('Password: ');
-    const repeat = await rl.question('Repeat password: ');
-    if (password !== repeat) {
-      throw new Error('Passwords do not match.');
-    }
-    return password;
-  } finally {
-    rl.close();
+  const password = await readHiddenLine('Password: ');
+  const repeat = await readHiddenLine('Repeat password: ');
+  if (password !== repeat) {
+    throw new Error('Passwords do not match.');
   }
+  return password;
 }
 
 function encryptBytes(bytes, password, { iterations, chunkSize, sourceName, contentType, access }) {
@@ -526,19 +574,21 @@ ${scriptClose}
     const contentType = payload.contentType || 'application/octet-stream';
     const filename = payload.filename || 'sealed-file';
     const isHtml = contentType === 'text/html' || contentType === 'application/xhtml+xml';
+    const isSvg = contentType === 'image/svg+xml';
+    const canOpen = !isHtml && !isSvg;
     const blob = new Blob([bytes], { type: contentType });
     const url = URL.createObjectURL(blob);
     const safeName = escapeHtml(filename);
     const safeType = escapeHtml(contentType);
-    const openLabel = isHtml ? 'Open active HTML' : 'Open';
-    const previewLabel = isHtml ? 'Sandboxed preview' : safeType;
+    const previewLabel = isHtml ? 'Sandboxed preview' : isSvg ? 'Image preview' : safeType;
+    const openAction = canOpen ? '<a href="' + url + '" target="_blank" rel="noopener">Open</a>' : '';
 
     document.body.className = 'viewer-page';
     document.body.innerHTML = '<main class="viewer-shell">' +
       '<header class="viewer-bar">' +
       '<div class="viewer-title">' + safeName + '<small>' + previewLabel + '</small></div>' +
       '<div class="viewer-actions">' +
-      '<a href="' + url + '" target="_blank" rel="noopener">' + openLabel + '</a>' +
+      openAction +
       '<a href="' + url + '" download="' + safeName + '">Download</a>' +
       '</div>' +
       '</header>' +

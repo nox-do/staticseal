@@ -791,19 +791,21 @@ ${scriptClose}
     const contentType = payload.contentType || 'application/octet-stream';
     const filename = payload.filename || 'sealed-file';
     const isHtml = contentType === 'text/html' || contentType === 'application/xhtml+xml';
+    const isSvg = contentType === 'image/svg+xml';
+    const canOpen = !isHtml && !isSvg;
     const blob = new Blob([bytes], { type: contentType });
     const url = URL.createObjectURL(blob);
     const safeName = escapeHtml(filename);
     const safeType = escapeHtml(contentType);
-    const openLabel = isHtml ? 'Open active HTML' : 'Open';
-    const previewLabel = isHtml ? 'Sandboxed preview' : safeType;
+    const previewLabel = isHtml ? 'Sandboxed preview' : isSvg ? 'Image preview' : safeType;
+    const openAction = canOpen ? '<a href="' + url + '" target="_blank" rel="noopener">Open</a>' : '';
 
     document.body.className = 'viewer-page';
     document.body.innerHTML = '<main class="viewer-shell">' +
       '<header class="viewer-bar">' +
       '<div class="viewer-title">' + safeName + '<small>' + previewLabel + '</small></div>' +
       '<div class="viewer-actions">' +
-      '<a href="' + url + '" target="_blank" rel="noopener">' + openLabel + '</a>' +
+      openAction +
       '<a href="' + url + '" download="' + safeName + '">Download</a>' +
       '</div>' +
       '</header>' +

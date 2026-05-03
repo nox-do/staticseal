@@ -43,10 +43,12 @@ Passphrase mode is for confidentiality. No-passphrase mode is a publishing veil:
 
 Unlocked behavior depends on the original file type:
 
-- HTML renders in a sandboxed preview, with a separate action to open it as active HTML
+- HTML renders in a sandboxed preview
 - PDF opens in an embedded browser PDF view
-- images render inline
+- images render inline; SVG gets image preview plus download only
 - other files get Open and Download actions
+
+Active HTML and SVG are not opened directly from the wrapper because Blob URLs inherit the wrapper page's origin. Download those files if you need to inspect or run them outside the sandboxed preview.
 
 The browser app is designed for small to medium static artifacts. It warns for larger files because browser memory use and the generated wrapper size both grow with the source file.
 
@@ -59,7 +61,7 @@ node ./bin/self-encrypt.mjs \
   --title "Protected report"
 ```
 
-The password is requested interactively and is not passed as a CLI argument.
+The password is requested interactively, hidden while typing, and is not passed as a CLI argument.
 
 For automation you can use stdin:
 
