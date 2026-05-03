@@ -129,7 +129,7 @@ input[type="file"] {
 }
 input[type="text"],
 input[type="password"],
-input[type="number"] {
+select {
   width: 100%;
   min-height: 3rem;
   border: 1px solid var(--line);
@@ -138,7 +138,15 @@ input[type="number"] {
   background: white;
   color: var(--ink);
 }
-input:focus {
+select {
+  appearance: none;
+  background:
+    linear-gradient(45deg, transparent 50%, var(--muted) 50%) calc(100% - 1.1rem) 50% / 0.42rem 0.42rem no-repeat,
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%) calc(100% - 0.82rem) 50% / 0.42rem 0.42rem no-repeat,
+    white;
+}
+input:focus,
+select:focus {
   outline: 3px solid rgba(31, 111, 112, 0.18);
   border-color: var(--focus);
 }
@@ -247,8 +255,13 @@ button:disabled {
 
       <div class="row grid">
         <div>
-          <label for="iterations">PBKDF2 iterations</label>
-          <input id="iterations" name="iterations" type="number" min="100000" step="10000" value="210000">
+          <label for="kdf-strength">Passphrase stretching</label>
+          <select id="kdf-strength" name="kdf-strength">
+            <option value="160000">Fast - 160k PBKDF2 rounds</option>
+            <option value="210000" selected>Recommended - 210k PBKDF2 rounds</option>
+            <option value="420000">Stronger - 420k PBKDF2 rounds</option>
+          </select>
+          <p class="meta" id="kdf-help">Recommended balances unlock speed with resistance to offline password guessing.</p>
         </div>
         <div>
           <span class="label">Cipher</span>
@@ -276,11 +289,17 @@ button:disabled {
   const password = document.getElementById('password');
   const outputTitle = document.getElementById('output-title');
   const outputName = document.getElementById('output-name');
-  const iterations = document.getElementById('iterations');
+  const kdfStrength = document.getElementById('kdf-strength');
+  const kdfHelp = document.getElementById('kdf-help');
   const button = document.getElementById('encrypt-button');
   const status = document.getElementById('status');
 
   const encoder = new TextEncoder();
+  const KDF_PRESETS = {
+    160000: 'Fast is useful for quick drafts, but relies more heavily on passphrase strength.',
+    210000: 'Recommended balances unlock speed with resistance to offline password guessing.',
+    420000: 'Stronger makes each password guess slower, and may feel slower on mobile devices.'
+  };
   const setStatus = (message, kind = '') => {
     status.textContent = message;
     status.dataset.kind = kind;
@@ -840,11 +859,15 @@ ${scriptClose}
     }
   });
 
+  kdfStrength.addEventListener('change', () => {
+    kdfHelp.textContent = KDF_PRESETS[kdfStrength.value] || KDF_PRESETS[210000];
+  });
+
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     const file = sourceFile.files[0];
     const passphrase = password.value;
-    const iterationCount = Number(iterations.value);
+    const iterationCount = Number(kdfStrength.value);
 
     if (!file) {
       setStatus('Choose a file first.', 'error');
@@ -856,9 +879,9 @@ ${scriptClose}
       password.focus();
       return;
     }
-    if (!Number.isInteger(iterationCount) || iterationCount < 100000) {
-      setStatus('Use at least 100000 PBKDF2 iterations.', 'error');
-      iterations.focus();
+    if (!KDF_PRESETS[iterationCount]) {
+      setStatus('Choose a passphrase stretching level.', 'error');
+      kdfStrength.focus();
       return;
     }
     if (!crypto.subtle) {

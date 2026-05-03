@@ -14,6 +14,7 @@ The output contains:
 - PBKDF2-SHA256 key derivation
 - AES-GCM encrypted file payload
 - authenticated metadata binding with AES-GCM additional data
+- three browser-friendly PBKDF2 strength presets instead of arbitrary iteration input
 - chunked ciphertext so the generated file remains somewhat readable and tooling-friendly
 - a decrypt roundtrip check before writing the output
 - sandboxed browser preview for unlocked HTML
