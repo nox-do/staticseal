@@ -226,9 +226,12 @@ h1 {
   margin: 0 0 0.85rem;
   font-family: var(--serif);
   font-weight: 400;
-  font-size: clamp(2.1rem, 9vw, 4.2rem);
-  line-height: 0.98;
+  font-size: clamp(2rem, 8vw, 4rem);
+  line-height: 1;
   letter-spacing: -0.04em;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  hyphens: auto;
 }
 p {
   margin: 0;
