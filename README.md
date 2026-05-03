@@ -39,6 +39,8 @@ The browser app:
 
 The source file and passphrase are not uploaded to GitHub Pages or any backend.
 
+The web UI has no upload endpoint. It uses the browser File API to read the selected file locally, Web Crypto to seal it, and a Blob download to save the generated wrapper.
+
 Passphrase mode is for confidentiality. No-passphrase mode is a publishing veil: it keeps the original content out of plain static HTML, search indexes, and link-preview parsers, but anyone with the generated wrapper can open it.
 
 Unlocked behavior depends on the original file type:

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex,nofollow,noarchive">
-<title>self-encrypted</title>
+<title>Staticseal</title>
 <style>
 :root {
   --bg: #f6f4ee;
@@ -86,6 +86,28 @@ button, input {
   width: min(100%, 48rem);
   margin: 0 auto;
   padding: clamp(1.25rem, 4vw, 3rem);
+}
+.local-sticker {
+  display: grid;
+  gap: 0.45rem;
+  margin-bottom: 1rem;
+  padding: 0.95rem 1rem;
+  border: 1px solid rgba(31, 111, 112, 0.22);
+  border-radius: 8px;
+  background: rgba(237, 249, 246, 0.88);
+  color: #174d4e;
+}
+.local-sticker strong {
+  font-size: 0.9rem;
+}
+.local-sticker span {
+  color: #315f60;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+.local-sticker code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.78rem;
 }
 .panel {
   border: 1px solid var(--line);
@@ -221,7 +243,7 @@ button:disabled {
   <section class="intro" aria-labelledby="page-title">
     <div class="brand">
       <span class="mark" aria-hidden="true">#</span>
-      <span>self-encrypted</span>
+      <span>Staticseal</span>
     </div>
     <div>
       <h1 id="page-title">Seal and publish.</h1>
@@ -231,6 +253,10 @@ button:disabled {
   </section>
 
   <section class="tool" aria-label="File encryption tool">
+    <div class="local-sticker" aria-label="Local processing notice">
+      <strong>Your file stays in this browser.</strong>
+      <span>Staticseal uses the browser <code>File API</code> to read locally, <code>Web Crypto</code> to seal, and a <code>Blob</code> download to save. There is no upload endpoint in this page.</span>
+    </div>
     <form class="panel" id="encrypt-form">
       <div class="row">
         <div class="row-header">
