@@ -327,7 +327,9 @@ button:disabled {
   };
 
   const outputFilenameFor = (name) => {
-    const base = name.replace(/\.[^.]+$/, '') || 'file';
+    const base = (name.replace(/\.[^.]+$/, '') || 'file')
+      .trim()
+      .replace(/\s+/g, '_');
     return `${base}_encrypted.html`;
   };
 
