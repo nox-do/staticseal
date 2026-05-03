@@ -13,6 +13,7 @@ The output contains:
 
 - a generic password screen
 - a visible security note for maintainers
+- optional no-passphrase seal mode for crawler resistance only
 - PBKDF2-SHA256 key derivation
 - AES-GCM encrypted file payload
 - authenticated metadata binding with AES-GCM additional data
@@ -30,11 +31,13 @@ Open `index.html` in a browser, or publish this repository with GitHub Pages.
 The browser app:
 
 1. reads the selected file locally with the File API
-2. derives an encryption key from the passphrase with PBKDF2-SHA256
+2. derives an encryption key from the passphrase with PBKDF2-SHA256, or creates an embedded random key when no passphrase is used
 3. encrypts the file bytes with AES-GCM
 4. downloads a new self-contained encrypted `.html` file
 
 The source file and passphrase are not uploaded to GitHub Pages or any backend.
+
+Passphrase mode is for confidentiality. No-passphrase mode is a publishing veil: it keeps the original content out of plain static HTML, search indexes, and link-preview parsers, but anyone with the generated wrapper can open it.
 
 Unlocked behavior depends on the original file type:
 
@@ -62,13 +65,21 @@ For automation you can use stdin:
 printf '%s\n' "$PITCH_PASSWORD" | node ./bin/self-encrypt.mjs --in input.html --out locked.html --stdin-password
 ```
 
+For crawler resistance without a passphrase:
+
+```bash
+node ./bin/self-encrypt.mjs --in report.pdf --out report_sealed.html --no-password
+```
+
 ## Security boundary
 
 This is a static curiosity barrier, not server-side access control.
 
 Salt, IV, KDF parameters, and ciphertext are intentionally stored in the generated HTML because browser-side decryption needs them. Salt and IV are not secrets.
 
-Anyone who downloads the generated HTML can attempt offline password guesses. Use a strong passphrase for real confidentiality, and use server-side access control when access must be enforceable.
+Anyone who downloads a passphrase-protected wrapper can attempt offline password guesses. Use a strong passphrase for real confidentiality, and use server-side access control when access must be enforceable.
+
+No-passphrase wrappers embed their own unlock key. They are useful for keeping static content out of crawler-readable source, but they do not provide confidentiality.
 
 ## Suggested convention
 

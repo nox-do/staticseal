@@ -13,7 +13,8 @@ function parseArgs(argv) {
   const args = {
     iterations: DEFAULT_ITERATIONS,
     chunkSize: DEFAULT_CHUNK_SIZE,
-    stdinPassword: false
+    stdinPassword: false,
+    noPassword: false
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -44,6 +45,9 @@ function parseArgs(argv) {
       case '--stdin-password':
         args.stdinPassword = true;
         break;
+      case '--no-password':
+        args.noPassword = true;
+        break;
       case '--version':
         args.version = true;
         break;
@@ -72,6 +76,7 @@ Options:
   --iterations <number>    PBKDF2 iterations, default ${DEFAULT_ITERATIONS}
   --chunk-size <number>    Base64 payload chunk size, default ${DEFAULT_CHUNK_SIZE}
   --stdin-password         Read password from stdin instead of prompting
+  --no-password            Seal for crawler resistance only; no confidentiality
   --version                Show version
   --help                   Show this help
 `);
@@ -137,6 +142,8 @@ function authenticatedDataFor(payload) {
     encoding: payload.encoding,
     filename: payload.filename,
     contentType: payload.contentType,
+    access: payload.access,
+    unlockKey: payload.unlockKey,
     salt: payload.salt,
     iv: payload.iv
   }), 'utf8');
@@ -164,9 +171,10 @@ async function readPassword({ stdinPassword }) {
   }
 }
 
-function encryptBytes(bytes, password, { iterations, chunkSize, sourceName, contentType }) {
+function encryptBytes(bytes, password, { iterations, chunkSize, sourceName, contentType, access }) {
   const salt = randomBytes(16);
   const iv = randomBytes(12);
+  const unlockKey = access === 'sealed' ? password : undefined;
   const metadata = {
     v: 1,
     alg: 'AES-GCM',
@@ -175,6 +183,8 @@ function encryptBytes(bytes, password, { iterations, chunkSize, sourceName, cont
     encoding: 'bytes',
     filename: sourceName,
     contentType,
+    access,
+    ...(unlockKey ? { unlockKey } : {}),
     salt: salt.toString('base64'),
     iv: iv.toString('base64')
   };
@@ -216,6 +226,13 @@ function renderWrapper({ title, payload, sourceName }) {
   const generatedAt = new Date().toISOString();
   const payloadJson = JSON.stringify(payload, null, 2).replaceAll('</', '<\\/');
   const scriptClose = '</' + 'script>';
+  const hasPassphrase = payload.access !== 'sealed';
+  const lockCopy = hasPassphrase
+    ? 'This file contains encrypted content. The passphrase unlocks it locally in your browser.'
+    : 'This file is sealed for static publishing. Open it locally in your browser.';
+  const hintCopy = hasPassphrase
+    ? 'Static encryption is not a replacement for server-side access control.'
+    : 'No passphrase is required. This hides cleartext from crawlers, but it is not confidentiality or access control.';
 
   return `<!doctype html>
 <html lang="en">
@@ -403,14 +420,14 @@ button:disabled { cursor: wait; opacity: 0.72; }
   <main class="lock-shell">
     <p class="kicker">Protected file</p>
     <h1>${safeTitle}</h1>
-    <p>This file contains encrypted content. The passphrase unlocks it locally in your browser.</p>
+    <p>${lockCopy}</p>
     <form id="unlock-form" autocomplete="off">
       <label for="password">Passphrase</label>
       <input id="password" name="password" type="password" placeholder="Passphrase" autofocus>
       <button id="unlock-button" type="submit">Open</button>
     </form>
     <div class="status" id="status" role="status" aria-live="polite"></div>
-    <p class="hint">Static encryption is not a replacement for server-side access control.</p>
+    <p class="hint">${hintCopy}</p>
   </main>
 
 <!--
@@ -461,6 +478,8 @@ ${scriptClose}
     encoding: payload.encoding,
     filename: payload.filename,
     contentType: payload.contentType,
+    access: payload.access,
+    unlockKey: payload.unlockKey,
     salt: payload.salt,
     iv: payload.iv
   }));
@@ -541,8 +560,9 @@ ${scriptClose}
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
-    const passphrase = input.value;
-    if (!passphrase) {
+    const sealedMode = payload.access === 'sealed';
+    const passphrase = sealedMode ? payload.unlockKey : input.value;
+    if (!sealedMode && !passphrase) {
       status.textContent = 'Enter the passphrase.';
       input.focus();
       return;
@@ -560,6 +580,13 @@ ${scriptClose}
       input.focus();
     }
   });
+
+  if (payload.access === 'sealed') {
+    input.remove();
+    form.querySelector('label')?.remove();
+    button.textContent = 'Open sealed file';
+    status.textContent = 'No passphrase required.';
+  }
 })();
 ${scriptClose}
 </body>
@@ -589,9 +616,13 @@ async function main() {
   if (!Number.isInteger(args.chunkSize) || args.chunkSize < 40) {
     throw new Error('--chunk-size must be an integer >= 40.');
   }
+  if (args.noPassword && args.stdinPassword) {
+    throw new Error('--no-password cannot be combined with --stdin-password.');
+  }
 
-  const password = await readPassword(args);
-  if (!password) {
+  const access = args.noPassword ? 'sealed' : 'passphrase';
+  const password = args.noPassword ? randomBytes(32).toString('base64') : await readPassword(args);
+  if (!password && !args.noPassword) {
     throw new Error('Password must not be empty.');
   }
 
@@ -600,7 +631,8 @@ async function main() {
     iterations: args.iterations,
     chunkSize: args.chunkSize,
     sourceName,
-    contentType: inferContentType(inputPath)
+    contentType: inferContentType(inputPath),
+    access
   });
   verifyPayload(payload, password, bytes);
 
@@ -613,7 +645,8 @@ async function main() {
   await mkdir(dirname(outputPath), { recursive: true });
   await writeFile(outputPath, wrapper, 'utf8');
 
-  output.write(`Encrypted ${inputPath} -> ${outputPath}\n`);
+  output.write(`${access === 'sealed' ? 'Sealed' : 'Encrypted'} ${inputPath} -> ${outputPath}\n`);
+  output.write(`Access: ${access === 'sealed' ? 'no passphrase, crawler barrier only' : 'passphrase'}\n`);
   output.write(`Content type: ${payload.contentType}\n`);
   output.write(`Payload chunks: ${payload.ciphertext.length}\n`);
 }

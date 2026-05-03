@@ -155,6 +155,9 @@ select:focus {
   grid-template-columns: 1fr 1fr;
   gap: 0.8rem;
 }
+.grid-note {
+  grid-column: 1 / -1;
+}
 .actions {
   display: flex;
   align-items: center;
@@ -221,10 +224,10 @@ button:disabled {
       <span>self-encrypted</span>
     </div>
     <div>
-      <h1 id="page-title">Seal a static file.</h1>
-      <p>Publish static pages, PDFs, and images without leaving crawler-readable content in public. Choose a local file, add a passphrase, and download a self-contained encrypted HTML wrapper.</p>
+      <h1 id="page-title">Seal and publish.</h1>
+      <p>Wrap pages, PDFs, and images in a static HTML shell that keeps the content out of plain crawler view. No backend, accounts, or extra tooling.</p>
     </div>
-    <p class="security">Useful for drafts, pitches, demos, and reports that should not be parsed by search engines, link-preview bots, or casual AI ingestion. Anyone with the generated file can try offline password guesses, so this is a privacy layer for static publishing, not access control.</p>
+    <p class="security">Add a passphrase for confidentiality, or leave it blank for a lightweight publishing veil against crawlers and link-preview bots. Either way, this is a static visibility layer, not access control.</p>
   </section>
 
   <section class="tool" aria-label="File encryption tool">
@@ -239,13 +242,14 @@ button:disabled {
 
       <div class="row grid">
         <div>
-          <label for="password">Passphrase</label>
-          <input id="password" name="password" type="password" autocomplete="new-password" placeholder="Use a long phrase">
+          <label for="password">Passphrase optional</label>
+          <input id="password" name="password" type="password" autocomplete="new-password" placeholder="Optional passphrase">
         </div>
         <div>
           <label for="password-repeat">Repeat passphrase</label>
           <input id="password-repeat" name="password-repeat" type="password" autocomplete="new-password" placeholder="Repeat passphrase">
         </div>
+        <p class="meta grid-note">Leave both fields blank to seal for publishing without a password. This hides cleartext from crawlers, but anyone with the file can open it.</p>
       </div>
 
       <div class="row grid">
@@ -335,6 +339,11 @@ button:disabled {
     return chunks;
   };
 
+  const randomSealKey = () => {
+    const bytes = crypto.getRandomValues(new Uint8Array(32));
+    return toBase64(bytes);
+  };
+
   const fromBase64Chunks = (chunks) => joinBytes(...chunks.map(fromBase64));
 
   const joinBytes = (...parts) => {
@@ -390,6 +399,8 @@ button:disabled {
     encoding: payload.encoding,
     filename: payload.filename,
     contentType: payload.contentType,
+    access: payload.access,
+    unlockKey: payload.unlockKey,
     salt: payload.salt,
     iv: payload.iv
   }));
@@ -416,9 +427,10 @@ button:disabled {
     );
   }
 
-  async function encryptBytes(bytes, passphrase, iterationCount, file) {
+  async function encryptBytes(bytes, passphrase, iterationCount, file, access) {
     const salt = crypto.getRandomValues(new Uint8Array(16));
     const iv = crypto.getRandomValues(new Uint8Array(12));
+    const unlockKey = access === 'sealed' ? passphrase : undefined;
     const metadata = {
       v: 1,
       alg: 'AES-GCM',
@@ -427,6 +439,8 @@ button:disabled {
       encoding: 'bytes',
       filename: file.name,
       contentType: inferContentType(file),
+      access,
+      ...(unlockKey ? { unlockKey } : {}),
       salt: toBase64(salt),
       iv: toBase64(iv)
     };
@@ -476,6 +490,14 @@ button:disabled {
     const generatedAt = new Date().toISOString();
     const payloadJson = JSON.stringify(payload, null, 2).replaceAll('</', '<\\/');
     const scriptClose = '</' + 'script>';
+
+    const hasPassphrase = payload.access !== 'sealed';
+    const lockCopy = hasPassphrase
+      ? 'This file contains encrypted content. The passphrase unlocks it locally in your browser.'
+      : 'This file is sealed for static publishing. Open it locally in your browser.';
+    const hintCopy = hasPassphrase
+      ? 'Static encryption is not a replacement for server-side access control.'
+      : 'No passphrase is required. This hides cleartext from crawlers, but it is not confidentiality or access control.';
 
     return `<!doctype html>
 <html lang="en">
@@ -663,14 +685,14 @@ button:disabled { cursor: wait; opacity: 0.72; }
   <main class="lock-shell">
     <p class="kicker">Protected file</p>
     <h1>${safeTitle}</h1>
-    <p>This file contains encrypted content. The passphrase unlocks it locally in your browser.</p>
+    <p>${lockCopy}</p>
     <form id="unlock-form" autocomplete="off">
       <label for="password">Passphrase</label>
       <input id="password" name="password" type="password" placeholder="Passphrase" autofocus>
       <button id="unlock-button" type="submit">Open</button>
     </form>
     <div class="status" id="status" role="status" aria-live="polite"></div>
-    <p class="hint">Static encryption is not a replacement for server-side access control.</p>
+    <p class="hint">${hintCopy}</p>
   </main>
 
 <!--
@@ -721,6 +743,8 @@ ${scriptClose}
     encoding: payload.encoding,
     filename: payload.filename,
     contentType: payload.contentType,
+    access: payload.access,
+    unlockKey: payload.unlockKey,
     salt: payload.salt,
     iv: payload.iv
   }));
@@ -805,8 +829,9 @@ ${scriptClose}
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
-    const passphrase = input.value;
-    if (!passphrase) {
+    const sealedMode = payload.access === 'sealed';
+    const passphrase = sealedMode ? payload.unlockKey : input.value;
+    if (!sealedMode && !passphrase) {
       status.textContent = 'Enter the passphrase.';
       input.focus();
       return;
@@ -825,6 +850,13 @@ ${scriptClose}
       input.focus();
     }
   });
+
+  if (payload.access === 'sealed') {
+    input.remove();
+    form.querySelector('label')?.remove();
+    button.textContent = 'Open sealed file';
+    status.textContent = 'No passphrase required.';
+  }
 })();
 ${scriptClose}
 </body>
@@ -872,21 +904,18 @@ ${scriptClose}
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     const file = sourceFile.files[0];
-    const passphrase = password.value;
+    const enteredPassphrase = password.value;
     const repeatedPassphrase = passwordRepeat.value;
     const iterationCount = Number(kdfStrength.value);
+    const access = enteredPassphrase ? 'passphrase' : 'sealed';
+    const passphrase = enteredPassphrase || randomSealKey();
 
     if (!file) {
       setStatus('Choose a file first.', 'error');
       sourceFile.focus();
       return;
     }
-    if (!passphrase) {
-      setStatus('Enter a passphrase.', 'error');
-      password.focus();
-      return;
-    }
-    if (passphrase !== repeatedPassphrase) {
+    if (enteredPassphrase !== repeatedPassphrase) {
       setStatus('Passphrases do not match.', 'error');
       passwordRepeat.focus();
       return;
@@ -909,15 +938,15 @@ ${scriptClose}
     setStatus('Reading local file ...');
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
-      setStatus('Encrypting locally ...');
-      const payload = await encryptBytes(bytes, passphrase, iterationCount, file);
+      setStatus(access === 'sealed' ? 'Sealing locally ...' : 'Encrypting locally ...');
+      const payload = await encryptBytes(bytes, passphrase, iterationCount, file, access);
       await verifyPayload(payload, passphrase, bytes);
 
       const title = outputTitle.value || 'Protected file';
       const filename = outputName.value || outputFilenameFor(file.name);
       const wrapper = renderWrapper({ title, payload, sourceName: file.name });
       downloadHtml(filename, wrapper);
-      setStatus('Encrypted HTML downloaded.', 'success');
+      setStatus(access === 'sealed' ? 'Sealed HTML downloaded.' : 'Encrypted HTML downloaded.', 'success');
     } catch (error) {
       console.error(error);
       setStatus(error.message || 'Encryption failed.', 'error');
