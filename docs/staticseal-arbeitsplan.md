@@ -4,7 +4,18 @@ Stand: 19. Oktober 2026. Grundlage ist der aktuelle Arbeitsstand im Repository e
 
 Staticseal soll einzelne Dokumente lokal in eine eigenständige, offline nutzbare HTML-Datei verpacken. Für kleine bis mittlere Dateien bleibt diese Architektur sinnvoll. Vorrang haben eine ehrliche Beschreibung der Schutzwirkung, weniger Schlüsselableitungen und Speicherduplikate sowie Browser-Validierung. Ein Streaming-Dateiformat oder interaktive HTML-Ausführung wären eigenständige Erweiterungen.
 
-## Geprüfte neue Befunde
+## Aktueller Stand
+
+Die folgenden Befunde und Entscheidungen dokumentieren auch den historischen Verlauf.
+Maßgeblich sind die späteren Aktualisierungen: Dateinamen und MIME-Typ können
+mitverschlüsselt werden; App und CLI teilen sich Format- und Wrapperquellen.
+Die Vorschau zeigt automatisch nur PNG, JPEG, GIF und WebP. PDFs erfordern eine
+Warnung mit Bestätigung; HTML und andere Formate bieten ausschließlich Download.
+Die frühere Entscheidung in F2, die HTML-Vorschau beizubehalten, ist damit abgelöst.
+Die Erstellungsoberfläche wurde gestrafft; die Vorschau-Regel steht in der README.
+Die noch offenen Browser- und Speicherprüfungen bleiben offen.
+
+## Ursprüngliche Befunde und Anforderungen
 
 ### F1 Sichtbare Dateinamen und Metadaten
 
@@ -169,7 +180,7 @@ wurde zusätzlich der CLI-PDF-Dialog mit Abbruch (kein iframe) und Zustimmung
 (iframe wird angelegt) geprüft. Das war ein Test des Freigabeablaufs mit einer
 synthetischen PDF-Datei, kein Nachweis der PDF-Rendering-Kompatibilität.
 Die Positivliste ist keine Prüfung auf Schadsoftware und keine Zusage risikofreier
-Decoder. Die Erstellungsoberfläche und README erklären die Vorschau-Regel.
+Decoder. Die README erklärt die Vorschau-Regel.
 
 ### Gemeinsame Quellen und Build
 

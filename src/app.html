@@ -15,6 +15,9 @@
   --line: #dce5e3;
   --accent: #27665d;
   --accent-strong: #1c5049;
+  --sidebar-width: 265px;
+  --column-gap: 40px;
+  --mascot-size: 180px;
 }
 * {
   box-sizing: border-box;
@@ -33,25 +36,20 @@ button, input, select, summary {
   -webkit-tap-highlight-color: transparent;
 }
 .site-header {
-  max-width: 1120px;
+  max-width: 1060px;
   margin: auto;
-  padding: 26px 32px;
+  padding: 26px 32px 20px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 18px;
 }
 .brand {
   display: flex;
   align-items: center;
-  gap: 11px;
   font-size: 23px;
   font-weight: 750;
   letter-spacing: -.8px;
-}
-.brand svg {
-  width: 50px;
-  height: 50px;
 }
 .local-label {
   display: flex;
@@ -73,11 +71,30 @@ button, input, select, summary {
 .page {
   max-width: 1060px;
   margin: 0 auto;
-  padding: 25px 32px 56px;
+  padding: 8px 32px 56px;
 }
 .intro {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--sidebar-width);
+  align-items: center;
+  gap: var(--column-gap);
   margin-bottom: 34px;
 }
+.mascot {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.site-header .local-label { width: var(--sidebar-width); justify-content: flex-start; }
+.mobile-brand { display: none; }
+.mascot .brand { width: var(--mascot-size); justify-content: center; }
+.mascot svg {
+  display: block;
+  width: var(--mascot-size);
+  height: var(--mascot-size);
+}
+.mascot svg > circle { fill: #e3ebe8; }
 .eyebrow {
   color: var(--accent);
   font-size: 11px;
@@ -99,7 +116,7 @@ h1 em {
   font-family: Georgia, serif;
   font-weight: 400;
 }
-.intro > p:last-child {
+.intro-copy > p:last-child {
   max-width: 620px;
   margin: 16px 0 0;
   color: var(--muted);
@@ -108,8 +125,8 @@ h1 em {
 }
 .workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 265px;
-  gap: 40px;
+  grid-template-columns: minmax(0, 1fr) var(--sidebar-width);
+  gap: var(--column-gap);
   align-items: start;
 }
 .tool {
@@ -124,19 +141,11 @@ h1 em {
 }
 .panel-heading {
   padding: 24px 28px 0;
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 16px;
 }
 .panel-heading h2 {
   font-size: 19px;
   letter-spacing: -.4px;
   margin: 0;
-}
-.panel-heading span {
-  font-size: 12px;
-  color: var(--muted);
 }
 .row {
   display: grid;
@@ -181,7 +190,7 @@ label, .field-heading {
   flex-direction: column;
   justify-content: center;
   gap: 5px;
-  min-height: 156px;
+  min-height: 84px;
   padding: 20px;
   background: #f8faf9;
   border: 1.5px dashed #b7cbc5;
@@ -197,12 +206,6 @@ label, .field-heading {
   outline: 3px solid #27665d25;
   outline-offset: 3px;
 }
-.file-picker svg {
-  width: 29px;
-  height: 29px;
-  color: var(--accent);
-  margin-bottom: 5px;
-}
 .file-picker strong {
   font-size: 14px;
   font-weight: 600;
@@ -211,10 +214,6 @@ label, .field-heading {
   text-decoration: underline;
   text-underline-offset: 3px;
   color: var(--accent);
-}
-.file-picker small {
-  color: var(--muted);
-  font-size: 12px;
 }
 input[type="file"] {
   position: absolute;
@@ -338,12 +337,6 @@ button:disabled {
   min-height: 49px;
   font-size: 14px;
 }
-.action-note {
-  text-align: center;
-  font-size: 11px;
-  color: var(--muted);
-  margin: 0;
-}
 .status {
   color: var(--muted);
   font-size: 12px;
@@ -355,9 +348,6 @@ button:disabled {
 }
 .status[data-kind="error"] {
   color: #a13c2e;
-}
-.status[data-kind="success"] {
-  color: var(--accent);
 }
 #generator-panel, #generator-result {
   margin-top: 12px;
@@ -465,16 +455,9 @@ button:disabled {
   color: #4e6962;
   line-height: 1.7;
 }
-.security {
-  font-size: 11px;
-  color: var(--muted);
-  line-height: 1.7;
-  margin: 18px 2px 0;
-}
 .site-footer {
   display: flex;
-  justify-content: space-between;
-  gap: 16px;
+  justify-content: flex-end;
   border-top: 1px solid var(--line);
   margin-top: 36px;
   padding-top: 19px;
@@ -486,6 +469,11 @@ button:disabled {
   text-underline-offset: 3px;
 }
 @media (max-width: 800px) {
+  .intro { grid-template-columns: 1fr; }
+  .mascot { display: none; }
+  .mobile-brand { display: block; }
+  .site-header { justify-content: space-between; }
+  .site-header .local-label { width: auto; }
   .workspace {
     grid-template-columns: 1fr;
     gap: 30px;
@@ -501,19 +489,19 @@ button:disabled {
   .local-sticker {
     margin: 0;
   }
-  .security {
-    grid-column: 2;
-  }
 }
 @media (max-width: 480px) {
   .site-header {
-    padding: 18px 20px;
+    padding: 22px 20px 18px;
   }
+  .brand { font-size: 21px; }
+  .file-picker { padding: 12px 8px; }
+  .file-picker strong { font-size: 12px; }
   .local-label {
     font-size: 10px;
   }
   .page {
-    padding: 20px 16px 32px;
+    padding: 8px 16px 32px;
   }
   h1 {
     letter-spacing: -1.4px;
@@ -522,7 +510,7 @@ button:disabled {
     padding: 0 4px;
     margin-bottom: 26px;
   }
-  .intro > p:last-child {
+  .intro-copy > p:last-child {
     font-size: 14px;
   }
   .panel-heading {
@@ -550,7 +538,6 @@ button:disabled {
   }
   .site-footer {
     flex-direction: column;
-    gap: 8px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -562,29 +549,29 @@ button:disabled {
 </head>
 <body>
 <header class="site-header">
-  <div class="brand"><!-- STATICSEAL_LOGO --><span>staticseal</span></div>
-  <span class="local-label">Made to stay local</span>
+  <div class="brand mobile-brand">staticseal</div>
+  <span class="local-label">No account needed</span>
 </header>
 <main class="page">
   <section class="intro" aria-labelledby="page-title">
+    <div class="intro-copy">
     <p class="eyebrow">A little privacy goes a long way</p>
-    <h1>Your files. <em>Safely sealed.</em></h1>
+    <h1 id="page-title">Your files. <em>Safely sealed.</em></h1>
     <p>Turn a file into a self-contained, encrypted HTML file.<br>Add a passphrase, download it, and share it your way.</p>
+    </div>
+    <div class="mascot"><div aria-hidden="true"><!-- STATICSEAL_LOGO --></div><span class="brand">staticseal</span></div>
   </section>
   <div class="workspace">
   <section class="tool" aria-label="File encryption tool">
     <form class="panel" id="encrypt-form">
-      <div class="panel-heading"><h2>Seal a file</h2><span>No account needed</span></div>
+      <div class="panel-heading"><h2>Seal a file</h2></div>
       <div class="row">
         <div class="row-header"><span class="step" aria-hidden="true">1</span><label for="source-file">Choose your file</label></div>
         <div class="file-picker">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8Z"/><path d="M14 3v5h5M12 17v-6m-3 3 3-3 3 3"/></svg>
-          <strong><span>Choose a file</span> or drop it here</strong>
-          <small>PDF, images, HTML, or any other file · up to 25 MiB</small>
+          <strong><span>Choose your file</span> or drop it here</strong>
           <input id="source-file" name="source-file" type="file" aria-describedby="file-meta">
         </div>
         <p class="meta" id="file-meta" aria-live="polite">No file selected</p>
-        <p class="meta">After unlocking: PNG, JPEG, GIF and WebP show a preview. PDFs ask first. HTML and other files are download-only.</p>
       </div>
       <div class="row">
         <div class="row-header"><span class="step" aria-hidden="true">2</span><span class="field-heading">Add a passphrase<span class="optional">optional</span></span></div>
@@ -594,7 +581,7 @@ button:disabled {
         </div>
         <div class="passphrase-note">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></svg>
-          <p class="meta" id="passphrase-note">A passphrase keeps the contents private. Leave both fields blank for a crawler barrier only — anyone with the file can open it.</p>
+          <p class="meta" id="passphrase-note">Leave both fields blank for a crawler barrier only.</p>
         </div>
       </div>
 
@@ -655,26 +642,23 @@ button:disabled {
       <div class="row actions">
         <div class="status" id="status" role="status" aria-live="polite"></div>
         <button id="encrypt-button" type="submit">Seal &amp; download file <span aria-hidden="true">↓</span></button>
-        <p class="action-note">Created on your device. Ready to share as a single HTML file.</p>
       </div>
     </form>
   </section>
   <aside class="guide" aria-label="How Staticseal works">
     <h2>One file in.<br>One sealed file out.</h2>
     <ol>
-      <li><strong>Pick something to protect</strong><p>A document, an image, a little HTML page. Your original stays unchanged.</p></li>
+      <li><strong>Pick something to protect</strong><p>A document, an image, a little HTML page.</p></li>
       <li><strong>Seal it on your device</strong><p>Staticseal packages your file with everything needed to unlock it.</p></li>
-      <li><strong>Send it your way</strong><p>Share the HTML file. The recipient opens it in a browser. Send the passphrase separately.</p></li>
     </ol>
     <div class="local-sticker" aria-label="Local processing notice">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4m-4-11 3 3 5-5"/></svg>
       <strong>Your file stays in this browser.</strong>
       <p>No upload. No server processing. You can also save this page and use it offline.</p>
     </div>
-    <p class="security">Keep your passphrase safe: there’s no password reset. Encrypted files can still be guessed offline, so use a strong secret.</p>
   </aside>
   </div>
-  <footer class="site-footer"><span>A small tool for files you’d rather keep to yourself.</span><a href="https://github.com/nox-do/staticseal" target="_blank" rel="noopener noreferrer">View source ↗</a></footer>
+  <footer class="site-footer"><a href="https://github.com/nox-do/staticseal" target="_blank" rel="noopener noreferrer">View source ↗</a></footer>
 </main>
 
 <script>
@@ -699,7 +683,7 @@ button:disabled {
 
   const encoder = new TextEncoder();
   /* STATICSEAL_FORMAT */
-  const { escapeHtml, fromBase64, fromBase64Chunks, unpackContent, authenticatedDataFor } = createFormat();
+  const { fromBase64, fromBase64Chunks, unpackContent, authenticatedDataFor } = createFormat();
   const KDF_PRESETS = {
     160000: 'Fast is useful for quick drafts, but relies more heavily on passphrase strength.',
     210000: 'Default: 210k rounds. Higher values slow password guessing and unlocking; they do not replace a strong passphrase.',
@@ -1083,7 +1067,7 @@ button:disabled {
 
       const wrapper = renderWrapper({ title, payload, sourceName: file.name });
       downloadHtml(output, wrapper);
-      setStatus(access === 'sealed' ? 'Sealed HTML downloaded.' : 'Encrypted HTML downloaded.', 'success');
+      setStatus('');
     } catch (error) {
       console.error(error);
       setStatus(error.message || 'Encryption failed.', 'error');
