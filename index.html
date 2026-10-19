@@ -125,6 +125,22 @@ button, input {
 .row:last-child {
   border-bottom: 0;
 }
+.advanced {
+  border-bottom: 1px solid var(--line);
+}
+.advanced > summary {
+  padding: 1.1rem;
+  color: var(--ink);
+  font-weight: 800;
+  cursor: pointer;
+}
+.advanced > summary:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: -3px;
+}
+.advanced[open] > summary {
+  border-bottom: 1px solid var(--line);
+}
 .row-header {
   display: flex;
   align-items: baseline;
@@ -203,6 +219,13 @@ button:disabled {
   cursor: wait;
   opacity: 0.66;
 }
+#generator-panel { margin-top: 1rem; }
+#generator-result { margin-top: 1rem; }
+.generator-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
+#cancel-generator { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+#entropy-pad { position: relative; overflow: hidden; min-height: 110px; border: 1px dashed currentColor; padding: 24px; touch-action: none; user-select: none; border-radius: 8px; }
+#entropy-pad svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; color: var(--accent); opacity: 0.65; }
+#entropy-pad:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .status {
   min-height: 1.35rem;
   color: var(--muted);
@@ -278,28 +301,59 @@ button:disabled {
         <p class="meta grid-note">Leave both fields blank to seal for publishing without a password. This hides cleartext from crawlers, but anyone with the file can open it.</p>
       </div>
 
-      <div class="row grid">
-        <div>
-          <label for="output-title">Protected page title optional</label>
-          <input id="output-title" name="output-title" type="text" placeholder="Optional display title">
+      <details class="advanced">
+        <summary>Advanced</summary>
+        <div class="row">
+          <button id="generate-password" type="button">Generate a strong passphrase</button>
+          <div id="generator-panel" hidden>
+            <p class="meta">Move inside the area, draw with your finger, or focus it and press keys. Your input is mixed with secure browser randomness and stays on this device.</p>
+            <div id="entropy-pad" tabindex="0" role="group" aria-label="Randomness input: move, draw or press keys">Move, draw or press keys here<svg aria-hidden="true"><polyline id="entropy-trail" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" /></svg></div>
+            <p id="generator-status" class="meta" role="status" aria-live="polite"></p>
+            <div id="generator-result" hidden>
+              <label for="generated-password">Generated passphrase (keep a copy before sending)</label>
+              <input id="generated-password" type="text" readonly autocomplete="off" spellcheck="false">
+              <div class="generator-actions">
+                <button id="copy-generated" type="button" disabled>Copy</button>
+                <button id="use-generated" type="button" disabled>Use passphrase</button>
+              </div>
+            </div>
+            <div class="generator-actions">
+              <button id="finish-generator" type="button" disabled>Create passphrase</button>
+              <button id="cancel-generator" type="button">Cancel</button>
+            </div>
+          </div>
         </div>
-        <div>
-          <label for="output-name">Output filename</label>
-          <input id="output-name" name="output-name" type="text" placeholder="page_encrypted.html">
-        </div>
-      </div>
 
-      <div class="row">
-        <div>
-          <label for="kdf-strength">Passphrase stretching</label>
-          <select id="kdf-strength" name="kdf-strength">
-            <option value="160000">Fast - 160k PBKDF2 rounds</option>
-            <option value="210000" selected>Recommended - 210k PBKDF2 rounds</option>
-            <option value="420000">Stronger - 420k PBKDF2 rounds</option>
-          </select>
-          <p class="meta" id="kdf-help">Recommended balances unlock speed with resistance to offline password guessing.</p>
+        <div class="row">
+          <label><input id="private-filename" type="checkbox"> Encrypt filename and file type too</label>
+          <p class="meta">Uses a neutral public title and download name. Without this option, the original name and type remain visible. In no-passphrase mode anyone can still recover them.</p>
         </div>
-      </div>
+
+        <div class="row grid">
+          <div>
+            <label for="output-title">Protected page title optional</label>
+            <input id="output-title" name="output-title" type="text" placeholder="Optional display title">
+          </div>
+          <div>
+            <label for="output-name">Output filename</label>
+            <input id="output-name" name="output-name" type="text" placeholder="page_encrypted.html">
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label for="kdf-strength">Passphrase stretching</label>
+            <select id="kdf-strength" name="kdf-strength">
+              <option value="160000">Fast - 160k PBKDF2 rounds</option>
+              <option value="210000" selected>Default - 210k PBKDF2 rounds</option>
+              <option value="420000">420k PBKDF2 rounds</option>
+              <option value="600000">600k PBKDF2 rounds - OWASP reference</option>
+              <option value="1200000">1.2M PBKDF2 rounds - highest cost</option>
+            </select>
+            <p class="meta" id="kdf-help">Default: 210k rounds. Higher values slow password guessing and unlocking; they do not replace a strong passphrase.</p>
+          </div>
+        </div>
+      </details>
 
       <div class="row actions">
         <div class="status" id="status" role="status" aria-live="polite"></div>
@@ -311,15 +365,17 @@ button:disabled {
 
 <script>
 (() => {
-  const DEFAULT_CHUNK_SIZE = 92;
+  const DEFAULT_CHUNK_SIZE = 64 * 1024;
   const FILE_WARN_BYTES = 5 * 1024 * 1024;
-  const FILE_CONFIRM_BYTES = 25 * 1024 * 1024;
+  const FILE_CONFIRM_BYTES = 10 * 1024 * 1024;
+  const FILE_MAX_BYTES = 25 * 1024 * 1024;
 
   const form = document.getElementById('encrypt-form');
   const sourceFile = document.getElementById('source-file');
   const fileMeta = document.getElementById('file-meta');
   const password = document.getElementById('password');
   const passwordRepeat = document.getElementById('password-repeat');
+  const privateFilename = document.getElementById('private-filename');
   const outputTitle = document.getElementById('output-title');
   const outputName = document.getElementById('output-name');
   const kdfStrength = document.getElementById('kdf-strength');
@@ -343,8 +399,10 @@ button:disabled {
   ];
   const KDF_PRESETS = {
     160000: 'Fast is useful for quick drafts, but relies more heavily on passphrase strength.',
-    210000: 'Recommended balances unlock speed with resistance to offline password guessing.',
-    420000: 'Stronger makes each password guess slower, and may feel slower on mobile devices.'
+    210000: 'Default: 210k rounds. Higher values slow password guessing and unlocking; they do not replace a strong passphrase.',
+    420000: '420k rounds increase the cost of each password guess and unlock.',
+    600000: '600k is the OWASP reference for PBKDF2-HMAC-SHA256. Unlocking takes longer, especially on mobile.',
+    1200000: '1.2M rounds double the KDF work compared with 600k. Expect longer waits on mobile.'
   };
   const setStatus = (message, kind = '') => {
     status.textContent = message;
@@ -361,7 +419,7 @@ button:disabled {
     const parts = [];
     const rawChunkSize = 0x8000;
     for (let index = 0; index < bytes.byteLength; index += rawChunkSize) {
-      parts.push(String.fromCharCode(...bytes.slice(index, index + rawChunkSize)));
+      parts.push(String.fromCharCode(...bytes.subarray(index, index + rawChunkSize)));
     }
     return btoa(parts.join(''));
   };
@@ -373,7 +431,7 @@ button:disabled {
     let rawChunkSize = Math.floor((size * 3) / 4);
     rawChunkSize -= rawChunkSize % 3;
     for (let index = 0; index < bytes.byteLength; index += rawChunkSize) {
-      chunks.push(toBase64(bytes.slice(index, index + rawChunkSize)));
+      chunks.push(toBase64(bytes.subarray(index, index + rawChunkSize)));
     }
     return chunks;
   };
@@ -383,16 +441,19 @@ button:disabled {
     return toBase64(bytes);
   };
 
-  const fromBase64Chunks = (chunks) => joinBytes(...chunks.map(fromBase64));
-
-  const joinBytes = (...parts) => {
-    const total = parts.reduce((sum, part) => sum + part.byteLength, 0);
+  // Payload chunks are independently encoded Base64.
+  // Allocate once; keep only one decoded chunk alive and append the GCM tag in place.
+  const fromBase64Chunks = (chunks, tail = new Uint8Array(0)) => {
+    const total = chunks.reduce((sum, chunk) => sum + Math.floor(chunk.length * 3 / 4)
+      - (chunk.endsWith('==') ? 2 : chunk.endsWith('=') ? 1 : 0), tail.byteLength);
     const out = new Uint8Array(total);
     let offset = 0;
-    for (const part of parts) {
+    for (const chunk of chunks) {
+      const part = fromBase64(chunk);
       out.set(part, offset);
       offset += part.byteLength;
     }
+    out.set(tail, offset);
     return out;
   };
 
@@ -456,37 +517,62 @@ button:disabled {
     );
   }
 
-  async function encryptBytes(bytes, passphrase, iterationCount, file, access) {
+  const packContent = (bytes, file) => {
+    const header = encoder.encode(JSON.stringify({ filename: file.name, contentType: inferContentType(file) }));
+    if (header.byteLength > 65536) throw new Error('Filename metadata is too large.');
+    const packed = new Uint8Array(4 + header.byteLength + bytes.byteLength);
+    new DataView(packed.buffer).setUint32(0, header.byteLength);
+    packed.set(header, 4);
+    packed.set(bytes, 4 + header.byteLength);
+    return packed;
+  };
+
+  const unpackContent = (bytes, metadata) => {
+    if (metadata.v !== 2 || metadata.encoding !== 'metadata') {
+      throw new Error('Unsupported payload format.');
+    }
+    if (bytes.byteLength < 4) throw new Error('Invalid file metadata.');
+    const length = new DataView(bytes.buffer, bytes.byteOffset, 4).getUint32(0);
+    if (length > 65536 || length > bytes.byteLength - 4) throw new Error('Invalid file metadata.');
+    const inner = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes.subarray(4, 4 + length)));
+    if (typeof inner.filename !== 'string' || typeof inner.contentType !== 'string') {
+      throw new Error('Invalid file metadata.');
+    }
+    return { bytes: bytes.subarray(4 + length), filename: inner.filename, contentType: inner.contentType };
+  };
+
+  async function encryptBytes(bytes, passphrase, iterationCount, file, access, privateName = false) {
     const salt = crypto.getRandomValues(new Uint8Array(16));
     const iv = crypto.getRandomValues(new Uint8Array(12));
     const unlockKey = access === 'sealed' ? passphrase : undefined;
     const metadata = {
-      v: 1,
+      v: 2,
       alg: 'AES-GCM',
       kdf: 'PBKDF2-SHA256',
       iterations: iterationCount,
-      encoding: 'bytes',
-      filename: file.name,
-      contentType: inferContentType(file),
+      encoding: 'metadata',
+      ...(!privateName ? { filename: file.name, contentType: inferContentType(file) } : {}),
       access,
       ...(unlockKey ? { unlockKey } : {}),
       salt: toBase64(salt),
       iv: toBase64(iv)
     };
-    const key = await deriveKey(passphrase, salt, iterationCount, ['encrypt']);
+    const key = await deriveKey(passphrase, salt, iterationCount, ['encrypt', 'decrypt']);
     const encrypted = new Uint8Array(await crypto.subtle.encrypt(
       { name: 'AES-GCM', iv, additionalData: authenticatedDataFor(metadata) },
       key,
-      bytes
+      packContent(bytes, file)
     ));
-    const tag = encrypted.slice(encrypted.byteLength - 16);
-    const ciphertext = encrypted.slice(0, encrypted.byteLength - 16);
+    const tag = encrypted.subarray(encrypted.byteLength - 16);
+    const ciphertext = encrypted.subarray(0, encrypted.byteLength - 16);
 
-    return {
+    const payload = {
       ...metadata,
       tag: toBase64(tag),
       ciphertext: toBase64Chunks(ciphertext, DEFAULT_CHUNK_SIZE)
     };
+    await verifyPayload(payload, passphrase, bytes, key, file);
+    return payload;
   }
 
   const equalBytes = (left, right) => {
@@ -501,23 +587,28 @@ button:disabled {
     return true;
   };
 
-  async function verifyPayload(payload, passphrase, expectedBytes) {
-    const key = await deriveKey(passphrase, fromBase64(payload.salt), payload.iterations, ['decrypt']);
+  async function verifyPayload(payload, passphrase, expectedBytes, existingKey, expectedFile) {
+    const key = existingKey || await deriveKey(passphrase, fromBase64(payload.salt), payload.iterations, ['decrypt']);
     const decrypted = new Uint8Array(await crypto.subtle.decrypt(
       { name: 'AES-GCM', iv: fromBase64(payload.iv), additionalData: authenticatedDataFor(payload) },
       key,
-      joinBytes(fromBase64Chunks(payload.ciphertext), fromBase64(payload.tag))
+      fromBase64Chunks(payload.ciphertext, fromBase64(payload.tag))
     ));
-    if (!equalBytes(decrypted, expectedBytes)) {
+    const content = unpackContent(decrypted, payload);
+    if (expectedFile && (content.filename !== expectedFile.name || content.contentType !== inferContentType(expectedFile))) {
+      throw new Error('Metadata roundtrip failed.');
+    }
+    if (!equalBytes(content.bytes, expectedBytes)) {
       throw new Error('Decrypt roundtrip failed.');
     }
   }
 
   function renderWrapper({ title, payload, sourceName }) {
-    const safeTitle = escapeHtml(title);
-    const safeSource = escapeHtml(sourceName);
+    const safeTitle = escapeHtml(payload.filename === undefined ? 'Protected file' : title);
+    const safeSource = escapeHtml(payload.filename === undefined ? 'Private file' : sourceName);
     const generatedAt = new Date().toISOString();
-    const payloadJson = JSON.stringify(payload, null, 2).replaceAll('</', '<\\/');
+    // Keep HTML script-parser control sequences out of the JSON data block.
+    const payloadJson = JSON.stringify(payload, null, 2).replaceAll('<', '\\u003c');
     const scriptClose = '</' + 'script>';
 
     const hasPassphrase = payload.access !== 'sealed';
@@ -765,18 +856,22 @@ ${scriptClose}
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;');
-  const joinBytes = (...parts) => {
-    const total = parts.reduce((sum, part) => sum + part.byteLength, 0);
+
+  // Payload chunks are independently encoded Base64.
+  // Allocate once; keep only one decoded chunk alive and append the GCM tag in place.
+  const fromBase64Chunks = (chunks, tail = new Uint8Array(0)) => {
+    const total = chunks.reduce((sum, chunk) => sum + Math.floor(chunk.length * 3 / 4)
+      - (chunk.endsWith('==') ? 2 : chunk.endsWith('=') ? 1 : 0), tail.byteLength);
     const out = new Uint8Array(total);
     let offset = 0;
-    for (const part of parts) {
+    for (const chunk of chunks) {
+      const part = fromBase64(chunk);
       out.set(part, offset);
       offset += part.byteLength;
     }
+    out.set(tail, offset);
     return out;
   };
-
-  const fromBase64Chunks = (chunks) => joinBytes(...chunks.map(fromBase64));
 
   const authenticatedDataFor = (payload) => encoder.encode(JSON.stringify(
     Object.fromEntries(AUTHENTICATED_METADATA.map((key) => [key, payload[key]]))
@@ -804,18 +899,36 @@ ${scriptClose}
     );
   }
 
+  const unpackContent = (bytes, metadata) => {
+    if (metadata.v !== 2 || metadata.encoding !== 'metadata') {
+      throw new Error('Unsupported payload format.');
+    }
+    if (bytes.byteLength < 4) throw new Error('Invalid file metadata.');
+    const length = new DataView(bytes.buffer, bytes.byteOffset, 4).getUint32(0);
+    if (length > 65536 || length > bytes.byteLength - 4) throw new Error('Invalid file metadata.');
+    const inner = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes.subarray(4, 4 + length)));
+    if (typeof inner.filename !== 'string' || typeof inner.contentType !== 'string') {
+      throw new Error('Invalid file metadata.');
+    }
+    return { bytes: bytes.subarray(4 + length), filename: inner.filename, contentType: inner.contentType };
+  };
+
+  let unlockedContent;
+
   async function unlock(password) {
     const key = await deriveKey(password);
-    return new Uint8Array(await crypto.subtle.decrypt(
+    const decrypted = new Uint8Array(await crypto.subtle.decrypt(
       { name: 'AES-GCM', iv: fromBase64(payload.iv), additionalData: authenticatedDataFor(payload) },
       key,
-      joinBytes(fromBase64Chunks(payload.ciphertext), fromBase64(payload.tag))
+      fromBase64Chunks(payload.ciphertext, fromBase64(payload.tag))
     ));
+    unlockedContent = unpackContent(decrypted, payload);
+    return unlockedContent.bytes;
   }
 
   function renderBlobViewer(bytes) {
-    const contentType = payload.contentType || 'application/octet-stream';
-    const filename = payload.filename || 'sealed-file';
+    const contentType = unlockedContent.contentType || 'application/octet-stream';
+    const filename = unlockedContent.filename || 'sealed-file';
     const isHtml = contentType === 'text/html' || contentType === 'application/xhtml+xml';
     const isSvg = contentType === 'image/svg+xml';
     const canOpen = !isHtml && !isSvg;
@@ -906,6 +1019,130 @@ ${scriptClose}
     URL.revokeObjectURL(url);
   }
 
+  // Creation UI only: none of this generator code is emitted in the wrapper.
+  const generatorPanel = document.getElementById('generator-panel');
+  const generatorResult = document.getElementById('generator-result');
+  const entropyPad = document.getElementById('entropy-pad');
+  const generatorStatus = document.getElementById('generator-status');
+  const generatedPassword = document.getElementById('generated-password');
+  const finishGenerator = document.getElementById('finish-generator');
+  const copyGenerated = document.getElementById('copy-generated');
+  const useGenerated = document.getElementById('use-generated');
+  const entropyTrail = document.getElementById('entropy-trail');
+  let trail = [];
+  const clearTrail = () => { trail = []; entropyTrail.setAttribute('points', ''); };
+  let samples = [];
+  let generatorSession = 0;
+  let collecting = false;
+
+  const generateSecret = async (events) => {
+    // User events are supplemental; security must not depend on their unpredictability.
+    const random = crypto.getRandomValues(new Uint8Array(32));
+    const extra = encoder.encode(JSON.stringify(events));
+    const input = new Uint8Array(random.length + extra.length);
+    input.set(random);
+    input.set(extra, random.length);
+    const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', input));
+    random.fill(0);
+    input.fill(0);
+    return toBase64(digest.subarray(0, 16)).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
+  };
+  const resetGenerator = () => {
+    generatorSession += 1;
+    clearTrail();
+    collecting = false;
+    samples = [];
+    generatedPassword.value = '';
+    generatorResult.hidden = true;
+    finishGenerator.hidden = false;
+    finishGenerator.disabled = true;
+    copyGenerated.disabled = true;
+    useGenerated.disabled = true;
+  };
+  document.getElementById('generate-password').addEventListener('click', () => {
+    resetGenerator();
+    generatorPanel.hidden = false;
+    if (!crypto.subtle || !crypto.getRandomValues) {
+      generatorStatus.textContent = 'Secure browser randomness is unavailable. Enter your own passphrase.';
+      return;
+    }
+    collecting = true;
+    generatorStatus.textContent = 'Add some movement or key presses (0/24). This measures interaction, not entropy.';
+    entropyPad.focus();
+  });
+  const collectSample = (event) => {
+    if (!collecting || samples.length >= 24 || event.repeat) return;
+    if (event.type === 'keydown' && (event.key === 'Tab' || event.key === 'Escape')) return;
+    if (event.type === 'keydown') event.preventDefault?.();
+    samples.push([event.timeStamp, event.clientX ?? 0, event.clientY ?? 0]);
+    generatorStatus.textContent = 'Input collected: ' + samples.length + '/24. Secure browser randomness is always included.';
+    finishGenerator.disabled = samples.length < 24;
+  };
+  const collectPointer = (event) => {
+    if (!collecting) return;
+    const bounds = entropyPad.getBoundingClientRect();
+    trail.push((event.clientX - bounds.left) + ',' + (event.clientY - bounds.top));
+    if (trail.length > 48) trail.shift();
+    entropyTrail.setAttribute('points', trail.join(' '));
+    collectSample(event);
+  };
+  entropyPad.addEventListener('pointerleave', clearTrail);
+  entropyPad.addEventListener('pointercancel', clearTrail);
+  entropyPad.addEventListener('pointermove', collectPointer);
+  entropyPad.addEventListener('pointerdown', (event) => { clearTrail(); collectPointer(event); });
+  entropyPad.addEventListener('keydown', collectSample);
+  finishGenerator.addEventListener('click', async () => {
+    if (samples.length < 24 || !collecting) return;
+    collecting = false;
+    finishGenerator.disabled = true;
+    const session = generatorSession;
+    try {
+      const secret = await generateSecret(samples);
+      if (session !== generatorSession) return;
+      generatedPassword.value = secret;
+      generatorResult.hidden = false;
+      finishGenerator.hidden = true;
+      copyGenerated.disabled = false;
+      useGenerated.disabled = false;
+      generatorStatus.textContent = 'Ready. Save the passphrase separately; it is not included in the protected file.';
+    } catch {
+      if (session === generatorSession) generatorStatus.textContent = 'Generation failed. Try again or enter your own passphrase.';
+    } finally {
+      if (session === generatorSession) samples = [];
+    }
+  });
+  copyGenerated.addEventListener('click', async () => {
+    if (!generatedPassword.value) return;
+    try {
+      await navigator.clipboard.writeText(generatedPassword.value);
+      generatorStatus.textContent = 'Passphrase copied to clipboard.';
+    } catch {
+      generatedPassword.focus();
+      generatedPassword.select();
+      generatorStatus.textContent = 'Copy the selected passphrase manually.';
+    }
+  });
+  useGenerated.addEventListener('click', () => {
+    if (!generatedPassword.value) return;
+    password.value = generatedPassword.value;
+    passwordRepeat.value = generatedPassword.value;
+    resetGenerator();
+    generatorPanel.hidden = true;
+    password.focus();
+  });
+  document.getElementById('cancel-generator').addEventListener('click', () => {
+    resetGenerator();
+    generatorPanel.hidden = true;
+    document.getElementById('generate-password').focus();
+  });
+  privateFilename.addEventListener('change', () => {
+    outputTitle.disabled = privateFilename.checked;
+    outputName.disabled = privateFilename.checked;
+    const file = sourceFile.files[0];
+    outputTitle.value = privateFilename.checked ? 'Protected file' : (file?.name.replace(/\.[^.]+$/, '') || '');
+    outputName.value = privateFilename.checked ? 'protected_file.html' : (file ? outputFilenameFor(file.name) : '');
+  });
+
   sourceFile.addEventListener('change', () => {
     const file = sourceFile.files[0];
     if (!file) {
@@ -914,10 +1151,16 @@ ${scriptClose}
     }
     const type = inferContentType(file);
     fileMeta.textContent = `${file.name} · ${formatBytes(file.size)} · ${type}`;
-    if (file.size >= FILE_WARN_BYTES) {
-      setStatus('Large files can make the browser slow and produce very large HTML wrappers.', 'error');
+    if (file.size > FILE_MAX_BYTES) {
+      setStatus('Files above 25 MiB exceed the provisional browser limit.', 'error');
+    } else if (file.size >= FILE_WARN_BYTES) {
+      setStatus('Files from 5 MiB can use substantial browser memory. Above 10 MiB, confirmation is required; maximum 25 MiB. Mobile limits are not validated.', 'error');
     } else {
       setStatus('');
+    }
+    if (privateFilename.checked) {
+      outputTitle.value = 'Protected file';
+      outputName.value = 'protected_file.html';
     }
     if (!outputTitle.value) {
       outputTitle.value = file.name.replace(/\.[^.]+$/, '');
@@ -937,6 +1180,9 @@ ${scriptClose}
     const enteredPassphrase = password.value;
     const repeatedPassphrase = passwordRepeat.value;
     const iterationCount = Number(kdfStrength.value);
+    const privateName = privateFilename.checked;
+    const title = privateName ? 'Protected file' : (outputTitle.value || 'Protected file');
+    const output = privateName ? 'protected_file.html' : (outputName.value || (file ? outputFilenameFor(file.name) : ''));
     const access = enteredPassphrase ? 'passphrase' : 'sealed';
     const passphrase = enteredPassphrase || randomSealKey();
 
@@ -959,7 +1205,11 @@ ${scriptClose}
       setStatus('This browser does not expose Web Crypto on this page.', 'error');
       return;
     }
-    if (file.size >= FILE_CONFIRM_BYTES && !window.confirm('This file is larger than 25 MB. Encryption may be slow and the output HTML will be much larger. Continue?')) {
+    if (file.size > FILE_MAX_BYTES) {
+      setStatus('Files above 25 MiB exceed the provisional browser limit.', 'error');
+      return;
+    }
+    if (file.size > FILE_CONFIRM_BYTES && !window.confirm('This file exceeds 10 MiB (maximum 25 MiB). Creating and opening it may use substantial memory or freeze the browser, especially on mobile. These provisional limits are not browser-validated. Continue?')) {
       setStatus('Encryption cancelled.', 'error');
       return;
     }
@@ -969,13 +1219,10 @@ ${scriptClose}
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
       setStatus(access === 'sealed' ? 'Sealing locally ...' : 'Encrypting locally ...');
-      const payload = await encryptBytes(bytes, passphrase, iterationCount, file, access);
-      await verifyPayload(payload, passphrase, bytes);
+      const payload = await encryptBytes(bytes, passphrase, iterationCount, file, access, privateName);
 
-      const title = outputTitle.value || 'Protected file';
-      const filename = outputName.value || outputFilenameFor(file.name);
       const wrapper = renderWrapper({ title, payload, sourceName: file.name });
-      downloadHtml(filename, wrapper);
+      downloadHtml(output, wrapper);
       setStatus(access === 'sealed' ? 'Sealed HTML downloaded.' : 'Encrypted HTML downloaded.', 'success');
     } catch (error) {
       console.error(error);

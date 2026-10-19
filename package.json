@@ -8,7 +8,8 @@
   },
   "scripts": {
     "encrypt": "node ./bin/self-encrypt.mjs",
-    "check": "node ./bin/self-encrypt.mjs --help"
+    "check": "node ./bin/self-encrypt.mjs --help && npm test",
+    "test": "node --test test/large-files.test.mjs"
   },
   "engines": {
     "node": ">=20"

@@ -7,7 +7,7 @@ import { stdin as input, stdout as output } from 'node:process';
 
 const VERSION = '0.9.0';
 const DEFAULT_ITERATIONS = 210_000;
-const DEFAULT_CHUNK_SIZE = 92;
+const DEFAULT_CHUNK_SIZE = 64 * 1024;
 const AUTHENTICATED_METADATA = [
   'v',
   'alg',
@@ -58,6 +58,9 @@ function parseArgs(argv) {
       case '--stdin-password':
         args.stdinPassword = true;
         break;
+      case '--private-filename':
+        args.privateFilename = true;
+        break;
       case '--no-password':
         args.noPassword = true;
         break;
@@ -88,6 +91,7 @@ Options:
   --title <text>           Browser title and lock-screen context
   --iterations <number>    PBKDF2 iterations, default ${DEFAULT_ITERATIONS}
   --chunk-size <number>    Base64 payload chunk size, default ${DEFAULT_CHUNK_SIZE}
+  --private-filename       Encrypt original name/type; use a neutral --out path
   --stdin-password         Read password from stdin instead of prompting
   --no-password            Seal for crawler resistance only; no confidentiality
   --version                Show version
@@ -222,18 +226,17 @@ async function readPassword({ stdinPassword }) {
   return password;
 }
 
-function encryptBytes(bytes, password, { iterations, chunkSize, sourceName, contentType, access }) {
+function encryptBytes(bytes, password, { iterations, chunkSize, sourceName, contentType, access, privateFilename = false }) {
   const salt = randomBytes(16);
   const iv = randomBytes(12);
   const unlockKey = access === 'sealed' ? password : undefined;
   const metadata = {
-    v: 1,
+    v: 2,
     alg: 'AES-GCM',
     kdf: 'PBKDF2-SHA256',
     iterations,
-    encoding: 'bytes',
-    filename: sourceName,
-    contentType,
+    encoding: 'metadata',
+    ...(!privateFilename ? { filename: sourceName, contentType } : {}),
     access,
     ...(unlockKey ? { unlockKey } : {}),
     salt: salt.toString('base64'),
@@ -242,40 +245,65 @@ function encryptBytes(bytes, password, { iterations, chunkSize, sourceName, cont
   const key = pbkdf2Sync(password, salt, iterations, 32, 'sha256');
   const cipher = createCipheriv('aes-256-gcm', key, iv);
   cipher.setAAD(authenticatedDataFor(metadata));
-  const ciphertext = Buffer.concat([cipher.update(bytes), cipher.final()]);
+  const header = Buffer.from(JSON.stringify({ filename: sourceName, contentType }));
+  if (header.length > 65536) throw new Error('Filename metadata is too large.');
+  const length = Buffer.alloc(4);
+  length.writeUInt32BE(header.length);
+  // Feed the header separately rather than allocating a second full plaintext buffer.
+  const ciphertext = Buffer.concat([cipher.update(length), cipher.update(header), cipher.update(bytes), cipher.final()]);
   const tag = cipher.getAuthTag();
 
-  return {
+  const payload = {
     ...metadata,
     tag: tag.toString('base64'),
     ciphertext: toBase64Chunks(ciphertext, chunkSize)
   };
+  verifyPayload(payload, password, bytes, key, { name: sourceName, type: contentType });
+  return payload;
 }
 
-function decryptPayload(payload, password) {
+const unpackContent = (bytes, metadata) => {
+  if (metadata.v !== 2 || metadata.encoding !== 'metadata') {
+    throw new Error('Unsupported payload format.');
+  }
+  if (bytes.byteLength < 4) throw new Error('Invalid file metadata.');
+  const length = new DataView(bytes.buffer, bytes.byteOffset, 4).getUint32(0);
+  if (length > 65536 || length > bytes.byteLength - 4) throw new Error('Invalid file metadata.');
+  const inner = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes.subarray(4, 4 + length)));
+  if (typeof inner.filename !== 'string' || typeof inner.contentType !== 'string') {
+    throw new Error('Invalid file metadata.');
+  }
+  return { bytes: bytes.subarray(4 + length), filename: inner.filename, contentType: inner.contentType };
+};
+
+function decryptPayload(payload, password, existingKey) {
   const salt = Buffer.from(payload.salt, 'base64');
   const iv = Buffer.from(payload.iv, 'base64');
   const tag = Buffer.from(payload.tag, 'base64');
   const ciphertext = fromBase64Chunks(payload.ciphertext);
-  const key = pbkdf2Sync(password, salt, payload.iterations, 32, 'sha256');
+  const key = existingKey || pbkdf2Sync(password, salt, payload.iterations, 32, 'sha256');
   const decipher = createDecipheriv('aes-256-gcm', key, iv);
   decipher.setAAD(authenticatedDataFor(payload));
   decipher.setAuthTag(tag);
   return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
 }
 
-function verifyPayload(payload, password, expectedBytes) {
-  const decoded = decryptPayload(payload, password);
-  if (!decoded.equals(expectedBytes)) {
+function verifyPayload(payload, password, expectedBytes, existingKey, expectedFile) {
+  const content = unpackContent(decryptPayload(payload, password, existingKey), payload);
+  if (expectedFile && (content.filename !== expectedFile.name || content.contentType !== expectedFile.type)) {
+    throw new Error('Metadata roundtrip failed.');
+  }
+  if (!content.bytes.equals(expectedBytes)) {
     throw new Error('Decrypt roundtrip failed.');
   }
 }
 
 function renderWrapper({ title, payload, sourceName }) {
-  const safeTitle = escapeHtml(title);
-  const safeSource = escapeHtml(sourceName);
+  const safeTitle = escapeHtml(payload.filename === undefined ? 'Protected file' : title);
+  const safeSource = escapeHtml(payload.filename === undefined ? 'Private file' : sourceName);
   const generatedAt = new Date().toISOString();
-  const payloadJson = JSON.stringify(payload, null, 2).replaceAll('</', '<\\/');
+  // Keep HTML script-parser control sequences out of the JSON data block.
+  const payloadJson = JSON.stringify(payload, null, 2).replaceAll('<', '\\u003c');
   const scriptClose = '</' + 'script>';
   const hasPassphrase = payload.access !== 'sealed';
   const lockCopy = hasPassphrase
@@ -522,18 +550,22 @@ ${scriptClose}
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;');
-  const joinBytes = (...parts) => {
-    const total = parts.reduce((sum, part) => sum + part.byteLength, 0);
+
+  // Payload chunks are independently encoded Base64.
+  // Allocate once; keep only one decoded chunk alive and append the GCM tag in place.
+  const fromBase64Chunks = (chunks, tail = new Uint8Array(0)) => {
+    const total = chunks.reduce((sum, chunk) => sum + Math.floor(chunk.length * 3 / 4)
+      - (chunk.endsWith('==') ? 2 : chunk.endsWith('=') ? 1 : 0), tail.byteLength);
     const out = new Uint8Array(total);
     let offset = 0;
-    for (const part of parts) {
+    for (const chunk of chunks) {
+      const part = fromBase64(chunk);
       out.set(part, offset);
       offset += part.byteLength;
     }
+    out.set(tail, offset);
     return out;
   };
-
-  const fromBase64Chunks = (chunks) => joinBytes(...chunks.map(fromBase64));
 
   const authenticatedDataFor = (payload) => encoder.encode(JSON.stringify(
     Object.fromEntries(AUTHENTICATED_METADATA.map((key) => [key, payload[key]]))
@@ -561,18 +593,36 @@ ${scriptClose}
     );
   }
 
+  const unpackContent = (bytes, metadata) => {
+    if (metadata.v !== 2 || metadata.encoding !== 'metadata') {
+      throw new Error('Unsupported payload format.');
+    }
+    if (bytes.byteLength < 4) throw new Error('Invalid file metadata.');
+    const length = new DataView(bytes.buffer, bytes.byteOffset, 4).getUint32(0);
+    if (length > 65536 || length > bytes.byteLength - 4) throw new Error('Invalid file metadata.');
+    const inner = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes.subarray(4, 4 + length)));
+    if (typeof inner.filename !== 'string' || typeof inner.contentType !== 'string') {
+      throw new Error('Invalid file metadata.');
+    }
+    return { bytes: bytes.subarray(4 + length), filename: inner.filename, contentType: inner.contentType };
+  };
+
+  let unlockedContent;
+
   async function unlock(password) {
     const key = await deriveKey(password);
-    return new Uint8Array(await crypto.subtle.decrypt(
+    const decrypted = new Uint8Array(await crypto.subtle.decrypt(
       { name: 'AES-GCM', iv: fromBase64(payload.iv), additionalData: authenticatedDataFor(payload) },
       key,
-      joinBytes(fromBase64Chunks(payload.ciphertext), fromBase64(payload.tag))
+      fromBase64Chunks(payload.ciphertext, fromBase64(payload.tag))
     ));
+    unlockedContent = unpackContent(decrypted, payload);
+    return unlockedContent.bytes;
   }
 
   function renderBlobViewer(bytes) {
-    const contentType = payload.contentType || 'application/octet-stream';
-    const filename = payload.filename || 'sealed-file';
+    const contentType = unlockedContent.contentType || 'application/octet-stream';
+    const filename = unlockedContent.filename || 'sealed-file';
     const isHtml = contentType === 'text/html' || contentType === 'application/xhtml+xml';
     const isSvg = contentType === 'image/svg+xml';
     const canOpen = !isHtml && !isSvg;
@@ -689,9 +739,9 @@ async function main() {
     chunkSize: args.chunkSize,
     sourceName,
     contentType: inferContentType(inputPath),
-    access
+    access,
+    privateFilename: args.privateFilename
   });
-  verifyPayload(payload, password, bytes);
 
   const wrapper = renderWrapper({
     title,
@@ -704,7 +754,7 @@ async function main() {
 
   output.write(`${access === 'sealed' ? 'Sealed' : 'Encrypted'} ${inputPath} -> ${outputPath}\n`);
   output.write(`Access: ${access === 'sealed' ? 'no passphrase, crawler barrier only' : 'passphrase'}\n`);
-  output.write(`Content type: ${payload.contentType}\n`);
+  output.write(`Content type: ${args.privateFilename ? 'private' : payload.contentType}\n`);
   output.write(`Payload chunks: ${payload.ciphertext.length}\n`);
 }
 
