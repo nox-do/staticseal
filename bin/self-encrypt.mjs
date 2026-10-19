@@ -5,23 +5,14 @@ import { basename, dirname, extname, resolve } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 
+import { createFormat } from '../src/format.mjs';
+import { renderWrapper } from '../src/wrapper.mjs';
+
+const { fromBase64Chunks, unpackContent, authenticatedDataFor } = createFormat(value => Buffer.from(value, 'base64'));
+
 const VERSION = '0.9.0';
 const DEFAULT_ITERATIONS = 210_000;
 const DEFAULT_CHUNK_SIZE = 64 * 1024;
-const AUTHENTICATED_METADATA = [
-  'v',
-  'alg',
-  'kdf',
-  'iterations',
-  'encoding',
-  'filename',
-  'contentType',
-  'access',
-  'unlockKey',
-  'salt',
-  'iv'
-];
-
 function parseArgs(argv) {
   const args = {
     iterations: DEFAULT_ITERATIONS,
@@ -106,14 +97,6 @@ function requiredString(value, name) {
   return value;
 }
 
-function escapeHtml(value) {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;');
-}
-
 function rawChunkSizeFor(base64ChunkSize) {
   let rawSize = Math.floor((base64ChunkSize * 3) / 4);
   rawSize -= rawSize % 3;
@@ -127,10 +110,6 @@ function toBase64Chunks(bytes, size) {
     chunks.push(bytes.subarray(index, index + rawSize).toString('base64'));
   }
   return chunks;
-}
-
-function fromBase64Chunks(chunks) {
-  return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk, 'base64')));
 }
 
 function inferContentType(filePath) {
@@ -148,12 +127,6 @@ function inferContentType(filePath) {
     '.txt': 'text/plain'
   };
   return types[extname(filePath).toLowerCase()] || 'application/octet-stream';
-}
-
-function authenticatedDataFor(payload) {
-  return Buffer.from(JSON.stringify(
-    Object.fromEntries(AUTHENTICATED_METADATA.map((key) => [key, payload[key]]))
-  ), 'utf8');
 }
 
 function stripFinalLineEnding(value) {
@@ -262,20 +235,6 @@ function encryptBytes(bytes, password, { iterations, chunkSize, sourceName, cont
   return payload;
 }
 
-const unpackContent = (bytes, metadata) => {
-  if (metadata.v !== 2 || metadata.encoding !== 'metadata') {
-    throw new Error('Unsupported payload format.');
-  }
-  if (bytes.byteLength < 4) throw new Error('Invalid file metadata.');
-  const length = new DataView(bytes.buffer, bytes.byteOffset, 4).getUint32(0);
-  if (length > 65536 || length > bytes.byteLength - 4) throw new Error('Invalid file metadata.');
-  const inner = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes.subarray(4, 4 + length)));
-  if (typeof inner.filename !== 'string' || typeof inner.contentType !== 'string') {
-    throw new Error('Invalid file metadata.');
-  }
-  return { bytes: bytes.subarray(4 + length), filename: inner.filename, contentType: inner.contentType };
-};
-
 function decryptPayload(payload, password, existingKey) {
   const salt = Buffer.from(payload.salt, 'base64');
   const iv = Buffer.from(payload.iv, 'base64');
@@ -296,409 +255,6 @@ function verifyPayload(payload, password, expectedBytes, existingKey, expectedFi
   if (!content.bytes.equals(expectedBytes)) {
     throw new Error('Decrypt roundtrip failed.');
   }
-}
-
-function renderWrapper({ title, payload, sourceName }) {
-  const safeTitle = escapeHtml(payload.filename === undefined ? 'Protected file' : title);
-  const safeSource = escapeHtml(payload.filename === undefined ? 'Private file' : sourceName);
-  const generatedAt = new Date().toISOString();
-  // Keep HTML script-parser control sequences out of the JSON data block.
-  const payloadJson = JSON.stringify(payload, null, 2).replaceAll('<', '\\u003c');
-  const scriptClose = '</' + 'script>';
-  const hasPassphrase = payload.access !== 'sealed';
-  const lockCopy = hasPassphrase
-    ? 'This file contains encrypted content. The passphrase unlocks it locally in your browser.'
-    : 'This file is sealed for static publishing. Open it locally in your browser.';
-  const hintCopy = hasPassphrase
-    ? 'Static encryption is not a replacement for server-side access control.'
-    : 'No passphrase is required. This hides cleartext from crawlers, but it is not confidentiality or access control.';
-
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="robots" content="noindex,nofollow,noarchive">
-<title>${safeTitle}</title>
-<style>
-:root {
-  --bg: #faf7f0;
-  --ink: #211c17;
-  --muted: #686057;
-  --line: #b82f26;
-  --border: rgba(33, 28, 23, 0.14);
-  --shadow: 0 22px 70px rgba(56, 42, 24, 0.14);
-  --serif: Georgia, "Times New Roman", serif;
-}
-* { box-sizing: border-box; }
-html, body { min-height: 100%; }
-body {
-  margin: 0;
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: clamp(1.25rem, 5vw, 4rem);
-  background: #faf7f0;
-  color: var(--ink);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-}
-.lock-shell {
-  width: min(100%, 34rem);
-  padding: clamp(1.4rem, 5vw, 2.4rem);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: rgba(255, 253, 248, 0.92);
-  box-shadow: var(--shadow);
-}
-.kicker {
-  margin: 0 0 0.85rem;
-  color: var(--line);
-  font-size: 0.78rem;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-h1 {
-  margin: 0 0 0.85rem;
-  font-family: var(--serif);
-  font-weight: 400;
-  font-size: clamp(2rem, 8vw, 4.2rem);
-  line-height: 1;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-  hyphens: auto;
-}
-p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 1rem;
-  line-height: 1.55;
-}
-form {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0.7rem;
-  margin-top: 1.6rem;
-}
-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-input, button {
-  min-height: 3rem;
-  border-radius: 8px;
-  font: inherit;
-}
-input {
-  width: 100%;
-  border: 1px solid var(--border);
-  padding: 0 1rem;
-  background: #fffdf8;
-  color: var(--ink);
-}
-button {
-  border: 0;
-  padding: 0 1.15rem;
-  background: var(--line);
-  color: white;
-  font-weight: 800;
-  cursor: pointer;
-}
-button:disabled { cursor: wait; opacity: 0.72; }
-.status {
-  min-height: 1.4rem;
-  margin-top: 0.9rem;
-  color: #8f211b;
-  font-size: 0.9rem;
-  font-weight: 700;
-}
-.hint {
-  margin-top: 1rem;
-  font-size: 0.86rem;
-}
-.viewer-page {
-  display: block;
-  padding: 0;
-  background: #1f1f1c;
-}
-.viewer-shell {
-  min-height: 100vh;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-}
-.viewer-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.75rem;
-  background: #fffdf8;
-  border-bottom: 1px solid var(--border);
-}
-.viewer-title {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--ink);
-  font-weight: 800;
-}
-.viewer-title small {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--muted);
-  font-size: 0.78rem;
-  font-weight: 700;
-}
-.viewer-actions {
-  display: flex;
-  gap: 0.5rem;
-}
-.viewer-actions a {
-  min-height: 2.55rem;
-  display: inline-grid;
-  place-items: center;
-  border-radius: 8px;
-  padding: 0 0.85rem;
-  background: var(--line);
-  color: white;
-  font-size: 0.92rem;
-  font-weight: 800;
-  text-decoration: none;
-}
-.viewer-frame,
-.image-frame {
-  width: 100%;
-  min-height: calc(100vh - 4.1rem);
-}
-.viewer-frame {
-  height: 100%;
-  border: 0;
-  background: white;
-}
-.image-frame {
-  height: calc(100vh - 4.1rem);
-  object-fit: contain;
-  background: #1f1f1c;
-}
-.download-only {
-  width: min(100%, 34rem);
-  align-self: center;
-  justify-self: center;
-  margin: 2rem;
-  padding: 1.25rem;
-  border-radius: 8px;
-  background: #fffdf8;
-}
-@media (max-width: 520px) {
-  form { grid-template-columns: 1fr; }
-  button { width: 100%; }
-  .viewer-bar { align-items: stretch; flex-direction: column; }
-  .viewer-actions a { width: 100%; }
-}
-</style>
-</head>
-<body>
-  <main class="lock-shell">
-    <p class="kicker">Protected file</p>
-    <h1>${safeTitle}</h1>
-    <p>${lockCopy}</p>
-    <form id="unlock-form" autocomplete="off">
-      <label for="password">Passphrase</label>
-      <input id="password" name="password" type="password" placeholder="Passphrase" autofocus>
-      <button id="unlock-button" type="submit">Open</button>
-    </form>
-    <div class="status" id="status" role="status" aria-live="polite"></div>
-    <p class="hint">${hintCopy}</p>
-  </main>
-
-<!--
-  Security note:
-  This static wrapper intentionally exposes salt, IV, KDF parameters, and ciphertext.
-  Salt and IV are not secrets; browser-side decryption needs them.
-  Anyone who downloads this file can attempt offline password guesses.
-
-  Generated from: ${safeSource}
-  Generated at: ${generatedAt}
--->
-<script id="encrypted-payload" type="application/json">
-${payloadJson}
-${scriptClose}
-<script>
-(() => {
-  const form = document.getElementById('unlock-form');
-  const input = document.getElementById('password');
-  const button = document.getElementById('unlock-button');
-  const status = document.getElementById('status');
-  const payload = JSON.parse(document.getElementById('encrypted-payload').textContent);
-  const encoder = new TextEncoder();
-  const AUTHENTICATED_METADATA = [
-    'v',
-    'alg',
-    'kdf',
-    'iterations',
-    'encoding',
-    'filename',
-    'contentType',
-    'access',
-    'unlockKey',
-    'salt',
-    'iv'
-  ];
-
-  const fromBase64 = (value) => Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
-  const escapeHtml = (value) => value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;');
-
-  // Payload chunks are independently encoded Base64.
-  // Allocate once; keep only one decoded chunk alive and append the GCM tag in place.
-  const fromBase64Chunks = (chunks, tail = new Uint8Array(0)) => {
-    const total = chunks.reduce((sum, chunk) => sum + Math.floor(chunk.length * 3 / 4)
-      - (chunk.endsWith('==') ? 2 : chunk.endsWith('=') ? 1 : 0), tail.byteLength);
-    const out = new Uint8Array(total);
-    let offset = 0;
-    for (const chunk of chunks) {
-      const part = fromBase64(chunk);
-      out.set(part, offset);
-      offset += part.byteLength;
-    }
-    out.set(tail, offset);
-    return out;
-  };
-
-  const authenticatedDataFor = (payload) => encoder.encode(JSON.stringify(
-    Object.fromEntries(AUTHENTICATED_METADATA.map((key) => [key, payload[key]]))
-  ));
-
-  async function deriveKey(password) {
-    const baseKey = await crypto.subtle.importKey(
-      'raw',
-      new TextEncoder().encode(password),
-      'PBKDF2',
-      false,
-      ['deriveKey']
-    );
-    return crypto.subtle.deriveKey(
-      {
-        name: 'PBKDF2',
-        salt: fromBase64(payload.salt),
-        iterations: payload.iterations,
-        hash: 'SHA-256'
-      },
-      baseKey,
-      { name: 'AES-GCM', length: 256 },
-      false,
-      ['decrypt']
-    );
-  }
-
-  const unpackContent = (bytes, metadata) => {
-    if (metadata.v !== 2 || metadata.encoding !== 'metadata') {
-      throw new Error('Unsupported payload format.');
-    }
-    if (bytes.byteLength < 4) throw new Error('Invalid file metadata.');
-    const length = new DataView(bytes.buffer, bytes.byteOffset, 4).getUint32(0);
-    if (length > 65536 || length > bytes.byteLength - 4) throw new Error('Invalid file metadata.');
-    const inner = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes.subarray(4, 4 + length)));
-    if (typeof inner.filename !== 'string' || typeof inner.contentType !== 'string') {
-      throw new Error('Invalid file metadata.');
-    }
-    return { bytes: bytes.subarray(4 + length), filename: inner.filename, contentType: inner.contentType };
-  };
-
-  let unlockedContent;
-
-  async function unlock(password) {
-    const key = await deriveKey(password);
-    const decrypted = new Uint8Array(await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: fromBase64(payload.iv), additionalData: authenticatedDataFor(payload) },
-      key,
-      fromBase64Chunks(payload.ciphertext, fromBase64(payload.tag))
-    ));
-    unlockedContent = unpackContent(decrypted, payload);
-    return unlockedContent.bytes;
-  }
-
-  function renderBlobViewer(bytes) {
-    const contentType = unlockedContent.contentType || 'application/octet-stream';
-    const filename = unlockedContent.filename || 'sealed-file';
-    const isHtml = contentType === 'text/html' || contentType === 'application/xhtml+xml';
-    const isSvg = contentType === 'image/svg+xml';
-    const canOpen = !isHtml && !isSvg;
-    const blob = new Blob([bytes], { type: contentType });
-    const url = URL.createObjectURL(blob);
-    const safeName = escapeHtml(filename);
-    const safeType = escapeHtml(contentType);
-    const previewLabel = isHtml ? 'Sandboxed preview' : isSvg ? 'Image preview' : safeType;
-    const openAction = canOpen ? '<a href="' + url + '" target="_blank" rel="noopener">Open</a>' : '';
-
-    document.body.className = 'viewer-page';
-    document.body.innerHTML = '<main class="viewer-shell">' +
-      '<header class="viewer-bar">' +
-      '<div class="viewer-title">' + safeName + '<small>' + previewLabel + '</small></div>' +
-      '<div class="viewer-actions">' +
-      openAction +
-      '<a href="' + url + '" download="' + safeName + '">Download</a>' +
-      '</div>' +
-      '</header>' +
-      '<section id="viewer-content"></section>' +
-      '</main>';
-
-    const viewer = document.getElementById('viewer-content');
-    if (isHtml) {
-      viewer.innerHTML = '<iframe class="viewer-frame" sandbox="" title="' + safeName + '" src="' + url + '"></iframe>';
-      return;
-    }
-    if (contentType === 'application/pdf') {
-      viewer.innerHTML = '<iframe class="viewer-frame" title="' + safeName + '" src="' + url + '"></iframe>';
-      return;
-    }
-    if (contentType.startsWith('image/')) {
-      viewer.innerHTML = '<img class="image-frame" alt="' + safeName + '" src="' + url + '">';
-      return;
-    }
-    viewer.innerHTML = '<div class="download-only">' +
-      '<p class="kicker">Download</p>' +
-      '<h1>' + safeName + '</h1>' +
-      '<p>This browser may not preview ' + safeType + ' here. Use Open or Download.</p>' +
-      '</div>';
-  }
-
-  form.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const sealedMode = payload.access === 'sealed';
-    const passphrase = sealedMode ? payload.unlockKey : input.value;
-    if (!sealedMode && !passphrase) {
-      status.textContent = 'Enter the passphrase.';
-      input.focus();
-      return;
-    }
-
-    button.disabled = true;
-    status.textContent = 'Decrypting locally in this browser ...';
-    try {
-      renderBlobViewer(await unlock(passphrase));
-    } catch (error) {
-      console.warn('Unlock failed', error);
-      status.textContent = 'Wrong passphrase or damaged file.';
-      button.disabled = false;
-      input.select();
-      input.focus();
-    }
-  });
-
-  if (payload.access === 'sealed') {
-    input.remove();
-    form.querySelector('label')?.remove();
-    button.textContent = 'Open sealed file';
-    status.textContent = 'No passphrase required.';
-  }
-})();
-${scriptClose}
-</body>
-</html>
-`;
 }
 
 async function main() {

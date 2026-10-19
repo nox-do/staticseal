@@ -150,3 +150,36 @@ Der aktualisierte Harness bestand nach dieser Korrektur im eingebetteten Chromiu
 10/25 MiB × Passphrase/Sealed mit privaten Namen und 600k Runden. Dieser Lauf prüft
 das aktuelle vereinheitlichte Format. Die übrigen Browser-, Mobil-, Vorschau- und
 Speichermessungen aus F5/F6 bleiben offen.
+
+### Aktualisierte Produktentscheidung: eingeschränkte Vorschau
+
+Die bisherige HTML-Sandbox-Vorschau entfällt in neu erzeugten Wrappern. Automatisch
+angezeigt werden nur PNG, JPEG, GIF und WebP anhand des entschlüsselten MIME-Typs.
+HTML, XHTML, SVG und andere Formate bieten ausschließlich Download, ohne direkte
+Open-Aktion. PDF bietet zunächst ebenfalls Download; ein separater Vorschauknopf
+zeigt eine Warnung und verlangt ausdrückliche Bestätigung, bevor der iframe mit
+der PDF-Datei angelegt wird. Abbruch lädt keine Vorschau. Es gibt kein Script-Flag
+und keine Änderung des verschlüsselten Formats. Bereits verteilte Wrapper behalten
+ihr bisheriges Verhalten.
+
+Beide Generatoren verwenden dieselbe Regel. Ein Regressionstest führt die echten
+generierten Viewer unter Node/Web Crypto mit DOM-Stubs für zehn Dateitypen aus,
+prüft unveränderte Blob-Daten und beide PDF-Entscheidungen. Im eingebetteten Browser
+wurde zusätzlich der CLI-PDF-Dialog mit Abbruch (kein iframe) und Zustimmung
+(iframe wird angelegt) geprüft. Das war ein Test des Freigabeablaufs mit einer
+synthetischen PDF-Datei, kein Nachweis der PDF-Rendering-Kompatibilität.
+Die Positivliste ist keine Prüfung auf Schadsoftware und keine Zusage risikofreier
+Decoder. Die Erstellungsoberfläche und README erklären die Vorschau-Regel.
+
+### Gemeinsame Quellen und Build
+
+App und CLI verwenden jetzt `src/wrapper.mjs` und `src/format.mjs` als gemeinsame
+Quellen. `src/app.html` und `src/seal.svg` sind die UI-/Logoquellen. Der kleine
+abhängigkeitsfreie Build erzeugt weiterhin eine eigenständige `index.html` sowie
+das Logo-Modul für die CLI. `npm run check` prüft den Build-Stand. Logo-Markup wird
+pro HTML-Datei nur einmal eingebettet und beim Wechsel zum Viewer wiederverwendet.
+Redundante CSS-Regeln und die ungenutzte Variable `--focus` sind entfernt. Auch die
+CLI dekodiert Base64-Blöcke nun sequenziell in einen Zielpuffer. Das reduziert die
+hier gleichzeitig gehaltenen Puffer, ersetzt jedoch keine Messung des gesamten
+Spitzenspeichers. Ein zusätzlicher Test vergleicht den vollständigen Wrapper aus
+gebauter App und CLI-Renderer (nur der Erstellungszeitpunkt wird normalisiert).

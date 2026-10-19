@@ -1,0 +1,1097 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<title>Staticseal</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f5f7f5;
+  --panel: #fff;
+  --ink: #233d46;
+  --muted: #5c7077;
+  --line: #dce5e3;
+  --accent: #27665d;
+  --accent-strong: #1c5049;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.5;
+}
+button, input, select {
+  font: inherit;
+}
+button, input, select, summary {
+  -webkit-tap-highlight-color: transparent;
+}
+.site-header {
+  max-width: 1120px;
+  margin: auto;
+  padding: 26px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  font-size: 23px;
+  font-weight: 750;
+  letter-spacing: -.8px;
+}
+.brand svg {
+  width: 50px;
+  height: 50px;
+}
+.local-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .03em;
+}
+.local-label::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: #4c8573;
+}
+.page {
+  max-width: 1060px;
+  margin: 0 auto;
+  padding: 25px 32px 56px;
+}
+.intro {
+  margin-bottom: 34px;
+}
+.eyebrow {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  margin: 0 0 12px;
+}
+h1 {
+  margin: 0;
+  font-size: clamp(36px, 5vw, 54px);
+  font-weight: 650;
+  line-height: 1.13;
+  letter-spacing: -2px;
+}
+h1 em {
+  margin-left: .08em;
+  color: var(--accent);
+  font-family: Georgia, serif;
+  font-weight: 400;
+}
+.intro > p:last-child {
+  max-width: 620px;
+  margin: 16px 0 0;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.7;
+}
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 265px;
+  gap: 40px;
+  align-items: start;
+}
+.tool {
+  min-width: 0;
+}
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  box-shadow: 0 8px 32px #233d4606, 0 1px 3px #233d4604;
+  overflow: hidden;
+}
+.panel-heading {
+  padding: 24px 28px 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+.panel-heading h2 {
+  font-size: 19px;
+  letter-spacing: -.4px;
+  margin: 0;
+}
+.panel-heading span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.row {
+  display: grid;
+  gap: 10px;
+  padding: 22px 28px;
+  border-bottom: 1px solid var(--line);
+}
+.row:last-child {
+  border-bottom: 0;
+}
+.row-header {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.step {
+  display: inline-grid;
+  place-items: center;
+  width: 23px;
+  height: 23px;
+  border-radius: 50%;
+  background: #edf3f1;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  flex: none;
+}
+label, .field-heading {
+  font-size: 13px;
+  font-weight: 650;
+}
+.optional {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  margin-left: 6px;
+}
+.file-picker {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  min-height: 156px;
+  padding: 20px;
+  background: #f8faf9;
+  border: 1.5px dashed #b7cbc5;
+  border-radius: 12px;
+  text-align: center;
+  transition: background .15s, border-color .15s;
+}
+.file-picker:hover, .file-picker:focus-within {
+  background: #eef5f1;
+  border-color: var(--accent);
+}
+.file-picker:focus-within {
+  outline: 3px solid #27665d25;
+  outline-offset: 3px;
+}
+.file-picker svg {
+  width: 29px;
+  height: 29px;
+  color: var(--accent);
+  margin-bottom: 5px;
+}
+.file-picker strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+.file-picker strong span {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  color: var(--accent);
+}
+.file-picker small {
+  color: var(--muted);
+  font-size: 12px;
+}
+input[type="file"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.meta {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.6;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.fields, .grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.fields > div, .grid > div {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+}
+input[type="text"], input[type="password"], select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid #ccd9d5;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 14px;
+}
+input::placeholder {
+  color: #7d8d91;
+}
+input:disabled {
+  background: #f1f4f3;
+  color: var(--muted);
+}
+input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 16px;
+  height: 16px;
+  vertical-align: -3px;
+  margin-right: 7px;
+}
+input:focus-visible, select:focus-visible, button:focus-visible, summary:focus-visible {
+  outline: 3px solid #27665d40;
+  outline-offset: 3px;
+}
+.passphrase-note {
+  display: flex;
+  gap: 9px;
+  padding-top: 3px;
+}
+.passphrase-note svg {
+  width: 15px;
+  height: 18px;
+  flex: none;
+  margin-top: 2px;
+  color: var(--muted);
+}
+.advanced {
+  border-bottom: 1px solid var(--line);
+  background: #fbfcfb;
+}
+.advanced > summary {
+  padding: 17px 28px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.advanced > summary span {
+  font-weight: 400;
+  color: var(--muted);
+  font-size: 11px;
+  margin-left: 8px;
+}
+.advanced[open] > summary {
+  border-bottom: 1px solid var(--line);
+}
+button {
+  min-height: 44px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  padding: 11px 16px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background .15s;
+}
+button:hover {
+  background: var(--accent-strong);
+}
+button:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+#generate-password, #cancel-generator, #copy-generated {
+  background: #fff;
+  color: var(--accent);
+  border-color: #ccd9d5;
+}
+#generate-password:hover, #cancel-generator:hover, #copy-generated:hover {
+  background: #edf3f1;
+}
+.actions {
+  padding: 22px 28px;
+  gap: 12px;
+}
+#encrypt-button {
+  width: 100%;
+  min-height: 49px;
+  font-size: 14px;
+}
+.action-note {
+  text-align: center;
+  font-size: 11px;
+  color: var(--muted);
+  margin: 0;
+}
+.status {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.status:empty {
+  display: none;
+}
+.status[data-kind="error"] {
+  color: #a13c2e;
+}
+.status[data-kind="success"] {
+  color: var(--accent);
+}
+#generator-panel, #generator-result {
+  margin-top: 12px;
+}
+#generator-panel > .meta {
+  margin-bottom: 12px;
+}
+.generator-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+#entropy-pad {
+  position: relative;
+  overflow: hidden;
+  min-height: 110px;
+  border: 1px dashed #a2bbb4;
+  padding: 24px;
+  touch-action: none;
+  user-select: none;
+  border-radius: 8px;
+  background: #edf3f1;
+  font-size: 13px;
+}
+#entropy-pad svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  color: var(--accent);
+  opacity: .65;
+}
+#entropy-pad:focus-visible {
+  outline: 3px solid #27665d40;
+  outline-offset: 3px;
+}
+.guide {
+  padding-top: 12px;
+}
+.guide h2 {
+  font-size: 21px;
+  line-height: 1.35;
+  letter-spacing: -.5px;
+  font-weight: 600;
+  margin: 0 0 24px;
+}
+.guide ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.guide li {
+  position: relative;
+  padding: 0 0 25px 30px;
+  border-left: 1px solid #d1dfda;
+  margin-left: 7px;
+}
+.guide li:last-child {
+  border-left-color: transparent;
+  padding-bottom: 0;
+}
+.guide li::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: -4px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #8ca99e;
+  box-shadow: 0 0 0 5px var(--bg);
+}
+.guide li strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.guide li p {
+  margin: 5px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+.local-sticker {
+  margin-top: 30px;
+  padding: 18px;
+  background: #eaf1ed;
+  border-radius: 12px;
+}
+.local-sticker svg {
+  width: 21px;
+  height: 21px;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+.local-sticker strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 650;
+}
+.local-sticker p {
+  margin: 7px 0 0;
+  font-size: 12px;
+  color: #4e6962;
+  line-height: 1.7;
+}
+.security {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.7;
+  margin: 18px 2px 0;
+}
+.site-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  border-top: 1px solid var(--line);
+  margin-top: 36px;
+  padding-top: 19px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.site-footer a {
+  color: inherit;
+  text-underline-offset: 3px;
+}
+@media (max-width: 800px) {
+  .workspace {
+    grid-template-columns: 1fr;
+    gap: 30px;
+  }
+  .guide {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 30px;
+  }
+  .guide h2 {
+    grid-column: 1 / -1;
+  }
+  .local-sticker {
+    margin: 0;
+  }
+  .security {
+    grid-column: 2;
+  }
+}
+@media (max-width: 480px) {
+  .site-header {
+    padding: 18px 20px;
+  }
+  .local-label {
+    font-size: 10px;
+  }
+  .page {
+    padding: 20px 16px 32px;
+  }
+  h1 {
+    letter-spacing: -1.4px;
+  }
+  .intro {
+    padding: 0 4px;
+    margin-bottom: 26px;
+  }
+  .intro > p:last-child {
+    font-size: 14px;
+  }
+  .panel-heading {
+    padding: 22px 20px 0;
+  }
+  .row, .actions {
+    padding: 20px;
+  }
+  .advanced > summary {
+    padding: 17px 20px;
+  }
+  .advanced > summary span {
+    display: block;
+    margin: 4px 0 0 14px;
+  }
+  .fields, .grid {
+    grid-template-columns: 1fr;
+  }
+  .guide {
+    display: block;
+    padding: 4px;
+  }
+  .local-sticker {
+    margin-top: 25px;
+  }
+  .site-footer {
+    flex-direction: column;
+    gap: 8px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}
+</style>
+</head>
+<body>
+<header class="site-header">
+  <div class="brand"><!-- STATICSEAL_LOGO --><span>staticseal</span></div>
+  <span class="local-label">Made to stay local</span>
+</header>
+<main class="page">
+  <section class="intro" aria-labelledby="page-title">
+    <p class="eyebrow">A little privacy goes a long way</p>
+    <h1>Your files. <em>Safely sealed.</em></h1>
+    <p>Turn a file into a self-contained, encrypted HTML file.<br>Add a passphrase, download it, and share it your way.</p>
+  </section>
+  <div class="workspace">
+  <section class="tool" aria-label="File encryption tool">
+    <form class="panel" id="encrypt-form">
+      <div class="panel-heading"><h2>Seal a file</h2><span>No account needed</span></div>
+      <div class="row">
+        <div class="row-header"><span class="step" aria-hidden="true">1</span><label for="source-file">Choose your file</label></div>
+        <div class="file-picker">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8Z"/><path d="M14 3v5h5M12 17v-6m-3 3 3-3 3 3"/></svg>
+          <strong><span>Choose a file</span> or drop it here</strong>
+          <small>PDF, images, HTML, or any other file · up to 25 MiB</small>
+          <input id="source-file" name="source-file" type="file" aria-describedby="file-meta">
+        </div>
+        <p class="meta" id="file-meta" aria-live="polite">No file selected</p>
+        <p class="meta">After unlocking: PNG, JPEG, GIF and WebP show a preview. PDFs ask first. HTML and other files are download-only.</p>
+      </div>
+      <div class="row">
+        <div class="row-header"><span class="step" aria-hidden="true">2</span><span class="field-heading">Add a passphrase<span class="optional">optional</span></span></div>
+        <div class="fields">
+          <div><label for="password">Passphrase</label><input id="password" name="password" type="password" autocomplete="new-password" placeholder="Make it a good secret" aria-describedby="passphrase-note"></div>
+          <div><label for="password-repeat">Repeat passphrase</label><input id="password-repeat" name="password-repeat" type="password" autocomplete="new-password" placeholder="One more time"></div>
+        </div>
+        <div class="passphrase-note">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></svg>
+          <p class="meta" id="passphrase-note">A passphrase keeps the contents private. Leave both fields blank for a crawler barrier only — anyone with the file can open it.</p>
+        </div>
+      </div>
+
+      <details class="advanced">
+        <summary>Advanced options<span>Private filename, passphrase generator &amp; more</span></summary>
+        <div class="row">
+          <button id="generate-password" type="button">Generate a strong passphrase</button>
+          <div id="generator-panel" hidden>
+            <p class="meta">Move inside the area, draw with your finger, or focus it and press keys. Your input is mixed with secure browser randomness and stays on this device.</p>
+            <div id="entropy-pad" tabindex="0" role="group" aria-label="Randomness input: move, draw or press keys">Move, draw or press keys here<svg aria-hidden="true"><polyline id="entropy-trail" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" /></svg></div>
+            <p id="generator-status" class="meta" role="status" aria-live="polite"></p>
+            <div id="generator-result" hidden>
+              <label for="generated-password">Generated passphrase (keep a copy before sending)</label>
+              <input id="generated-password" type="text" readonly autocomplete="off" spellcheck="false">
+              <div class="generator-actions">
+                <button id="copy-generated" type="button" disabled>Copy</button>
+                <button id="use-generated" type="button" disabled>Use passphrase</button>
+              </div>
+            </div>
+            <div class="generator-actions">
+              <button id="finish-generator" type="button" disabled>Create passphrase</button>
+              <button id="cancel-generator" type="button">Cancel</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="row">
+          <label><input id="private-filename" type="checkbox"> Encrypt filename and file type too</label>
+          <p class="meta">Uses a neutral public title and download name. Without this option, the original name and type remain visible. In no-passphrase mode anyone can still recover them.</p>
+        </div>
+
+        <div class="row grid">
+          <div>
+            <label for="output-title">Protected page title optional</label>
+            <input id="output-title" name="output-title" type="text" placeholder="Optional display title">
+          </div>
+          <div>
+            <label for="output-name">Output filename</label>
+            <input id="output-name" name="output-name" type="text" placeholder="page_encrypted.html">
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label for="kdf-strength">Passphrase stretching</label>
+            <select id="kdf-strength" name="kdf-strength">
+              <option value="160000">Fast - 160k PBKDF2 rounds</option>
+              <option value="210000" selected>Default - 210k PBKDF2 rounds</option>
+              <option value="420000">420k PBKDF2 rounds</option>
+              <option value="600000">600k PBKDF2 rounds - OWASP reference</option>
+              <option value="1200000">1.2M PBKDF2 rounds - highest cost</option>
+            </select>
+            <p class="meta" id="kdf-help">Default: 210k rounds. Higher values slow password guessing and unlocking; they do not replace a strong passphrase.</p>
+          </div>
+        </div>
+      </details>
+
+      <div class="row actions">
+        <div class="status" id="status" role="status" aria-live="polite"></div>
+        <button id="encrypt-button" type="submit">Seal &amp; download file <span aria-hidden="true">↓</span></button>
+        <p class="action-note">Created on your device. Ready to share as a single HTML file.</p>
+      </div>
+    </form>
+  </section>
+  <aside class="guide" aria-label="How Staticseal works">
+    <h2>One file in.<br>One sealed file out.</h2>
+    <ol>
+      <li><strong>Pick something to protect</strong><p>A document, an image, a little HTML page. Your original stays unchanged.</p></li>
+      <li><strong>Seal it on your device</strong><p>Staticseal packages your file with everything needed to unlock it.</p></li>
+      <li><strong>Send it your way</strong><p>Share the HTML file. The recipient opens it in a browser. Send the passphrase separately.</p></li>
+    </ol>
+    <div class="local-sticker" aria-label="Local processing notice">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4m-4-11 3 3 5-5"/></svg>
+      <strong>Your file stays in this browser.</strong>
+      <p>No upload. No server processing. You can also save this page and use it offline.</p>
+    </div>
+    <p class="security">Keep your passphrase safe: there’s no password reset. Encrypted files can still be guessed offline, so use a strong secret.</p>
+  </aside>
+  </div>
+  <footer class="site-footer"><span>A small tool for files you’d rather keep to yourself.</span><a href="https://github.com/nox-do/staticseal" target="_blank" rel="noopener noreferrer">View source ↗</a></footer>
+</main>
+
+<script>
+(() => {
+  const DEFAULT_CHUNK_SIZE = 64 * 1024;
+  const FILE_WARN_BYTES = 5 * 1024 * 1024;
+  const FILE_CONFIRM_BYTES = 10 * 1024 * 1024;
+  const FILE_MAX_BYTES = 25 * 1024 * 1024;
+
+  const form = document.getElementById('encrypt-form');
+  const sourceFile = document.getElementById('source-file');
+  const fileMeta = document.getElementById('file-meta');
+  const password = document.getElementById('password');
+  const passwordRepeat = document.getElementById('password-repeat');
+  const privateFilename = document.getElementById('private-filename');
+  const outputTitle = document.getElementById('output-title');
+  const outputName = document.getElementById('output-name');
+  const kdfStrength = document.getElementById('kdf-strength');
+  const kdfHelp = document.getElementById('kdf-help');
+  const button = document.getElementById('encrypt-button');
+  const status = document.getElementById('status');
+
+  const encoder = new TextEncoder();
+  /* STATICSEAL_FORMAT */
+  const { escapeHtml, fromBase64, fromBase64Chunks, unpackContent, authenticatedDataFor } = createFormat();
+  const KDF_PRESETS = {
+    160000: 'Fast is useful for quick drafts, but relies more heavily on passphrase strength.',
+    210000: 'Default: 210k rounds. Higher values slow password guessing and unlocking; they do not replace a strong passphrase.',
+    420000: '420k rounds increase the cost of each password guess and unlock.',
+    600000: '600k is the OWASP reference for PBKDF2-HMAC-SHA256. Unlocking takes longer, especially on mobile.',
+    1200000: '1.2M rounds double the KDF work compared with 600k. Expect longer waits on mobile.'
+  };
+  const setStatus = (message, kind = '') => {
+    status.textContent = message;
+    status.dataset.kind = kind;
+  };
+
+  const toBase64 = (bytes) => {
+    const parts = [];
+    const rawChunkSize = 0x8000;
+    for (let index = 0; index < bytes.byteLength; index += rawChunkSize) {
+      parts.push(String.fromCharCode(...bytes.subarray(index, index + rawChunkSize)));
+    }
+    return btoa(parts.join(''));
+  };
+
+
+  const toBase64Chunks = (bytes, size) => {
+    const chunks = [];
+    let rawChunkSize = Math.floor((size * 3) / 4);
+    rawChunkSize -= rawChunkSize % 3;
+    for (let index = 0; index < bytes.byteLength; index += rawChunkSize) {
+      chunks.push(toBase64(bytes.subarray(index, index + rawChunkSize)));
+    }
+    return chunks;
+  };
+
+  const randomSealKey = () => {
+    const bytes = crypto.getRandomValues(new Uint8Array(32));
+    return toBase64(bytes);
+  };
+
+  const outputFilenameFor = (name) => {
+    const base = (name.replace(/\.[^.]+$/, '') || 'file')
+      .trim()
+      .replace(/\s+/g, '_');
+    return `${base}_encrypted.html`;
+  };
+
+  const formatBytes = (bytes) => {
+    if (bytes < 1024 * 1024) {
+      return `${Math.ceil(bytes / 1024)} KB`;
+    }
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  };
+
+  const inferContentType = (file) => {
+    if (file.type) {
+      return file.type;
+    }
+    const extension = file.name.toLowerCase().split('.').pop();
+    const types = {
+      html: 'text/html',
+      htm: 'text/html',
+      pdf: 'application/pdf',
+      png: 'image/png',
+      jpg: 'image/jpeg',
+      jpeg: 'image/jpeg',
+      gif: 'image/gif',
+      webp: 'image/webp',
+      svg: 'image/svg+xml',
+      txt: 'text/plain'
+    };
+    return types[extension] || 'application/octet-stream';
+  };
+
+  async function deriveKey(passphrase, salt, iterationCount, usages) {
+    const baseKey = await crypto.subtle.importKey(
+      'raw',
+      encoder.encode(passphrase),
+      'PBKDF2',
+      false,
+      ['deriveKey']
+    );
+    return crypto.subtle.deriveKey(
+      {
+        name: 'PBKDF2',
+        salt,
+        iterations: iterationCount,
+        hash: 'SHA-256'
+      },
+      baseKey,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      usages
+    );
+  }
+
+  const packContent = (bytes, file) => {
+    const header = encoder.encode(JSON.stringify({ filename: file.name, contentType: inferContentType(file) }));
+    if (header.byteLength > 65536) throw new Error('Filename metadata is too large.');
+    const packed = new Uint8Array(4 + header.byteLength + bytes.byteLength);
+    new DataView(packed.buffer).setUint32(0, header.byteLength);
+    packed.set(header, 4);
+    packed.set(bytes, 4 + header.byteLength);
+    return packed;
+  };
+
+  async function encryptBytes(bytes, passphrase, iterationCount, file, access, privateName = false) {
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const unlockKey = access === 'sealed' ? passphrase : undefined;
+    const metadata = {
+      v: 2,
+      alg: 'AES-GCM',
+      kdf: 'PBKDF2-SHA256',
+      iterations: iterationCount,
+      encoding: 'metadata',
+      ...(!privateName ? { filename: file.name, contentType: inferContentType(file) } : {}),
+      access,
+      ...(unlockKey ? { unlockKey } : {}),
+      salt: toBase64(salt),
+      iv: toBase64(iv)
+    };
+    const key = await deriveKey(passphrase, salt, iterationCount, ['encrypt', 'decrypt']);
+    const encrypted = new Uint8Array(await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv, additionalData: authenticatedDataFor(metadata) },
+      key,
+      packContent(bytes, file)
+    ));
+    const tag = encrypted.subarray(encrypted.byteLength - 16);
+    const ciphertext = encrypted.subarray(0, encrypted.byteLength - 16);
+
+    const payload = {
+      ...metadata,
+      tag: toBase64(tag),
+      ciphertext: toBase64Chunks(ciphertext, DEFAULT_CHUNK_SIZE)
+    };
+    await verifyPayload(payload, passphrase, bytes, key, file);
+    return payload;
+  }
+
+  const equalBytes = (left, right) => {
+    if (left.byteLength !== right.byteLength) {
+      return false;
+    }
+    for (let index = 0; index < left.byteLength; index += 1) {
+      if (left[index] !== right[index]) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  async function verifyPayload(payload, passphrase, expectedBytes, existingKey, expectedFile) {
+    const key = existingKey || await deriveKey(passphrase, fromBase64(payload.salt), payload.iterations, ['decrypt']);
+    const decrypted = new Uint8Array(await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: fromBase64(payload.iv), additionalData: authenticatedDataFor(payload) },
+      key,
+      fromBase64Chunks(payload.ciphertext, fromBase64(payload.tag))
+    ));
+    const content = unpackContent(decrypted, payload);
+    if (expectedFile && (content.filename !== expectedFile.name || content.contentType !== inferContentType(expectedFile))) {
+      throw new Error('Metadata roundtrip failed.');
+    }
+    if (!equalBytes(content.bytes, expectedBytes)) {
+      throw new Error('Decrypt roundtrip failed.');
+    }
+  }
+
+  /* STATICSEAL_WRAPPER */
+
+  function downloadHtml(filename, html) {
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  // Creation UI only: none of this generator code is emitted in the wrapper.
+  const generatorPanel = document.getElementById('generator-panel');
+  const generatorResult = document.getElementById('generator-result');
+  const entropyPad = document.getElementById('entropy-pad');
+  const generatorStatus = document.getElementById('generator-status');
+  const generatedPassword = document.getElementById('generated-password');
+  const finishGenerator = document.getElementById('finish-generator');
+  const copyGenerated = document.getElementById('copy-generated');
+  const useGenerated = document.getElementById('use-generated');
+  const entropyTrail = document.getElementById('entropy-trail');
+  let trail = [];
+  const clearTrail = () => { trail = []; entropyTrail.setAttribute('points', ''); };
+  let samples = [];
+  let generatorSession = 0;
+  let collecting = false;
+
+  const generateSecret = async (events) => {
+    // User events are supplemental; security must not depend on their unpredictability.
+    const random = crypto.getRandomValues(new Uint8Array(32));
+    const extra = encoder.encode(JSON.stringify(events));
+    const input = new Uint8Array(random.length + extra.length);
+    input.set(random);
+    input.set(extra, random.length);
+    const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', input));
+    random.fill(0);
+    input.fill(0);
+    return toBase64(digest.subarray(0, 16)).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
+  };
+  const resetGenerator = () => {
+    generatorSession += 1;
+    clearTrail();
+    collecting = false;
+    samples = [];
+    generatedPassword.value = '';
+    generatorResult.hidden = true;
+    finishGenerator.hidden = false;
+    finishGenerator.disabled = true;
+    copyGenerated.disabled = true;
+    useGenerated.disabled = true;
+  };
+  document.getElementById('generate-password').addEventListener('click', () => {
+    resetGenerator();
+    generatorPanel.hidden = false;
+    if (!crypto.subtle || !crypto.getRandomValues) {
+      generatorStatus.textContent = 'Secure browser randomness is unavailable. Enter your own passphrase.';
+      return;
+    }
+    collecting = true;
+    generatorStatus.textContent = 'Add some movement or key presses (0/24). This measures interaction, not entropy.';
+    entropyPad.focus();
+  });
+  const collectSample = (event) => {
+    if (!collecting || samples.length >= 24 || event.repeat) return;
+    if (event.type === 'keydown' && (event.key === 'Tab' || event.key === 'Escape')) return;
+    if (event.type === 'keydown') event.preventDefault?.();
+    samples.push([event.timeStamp, event.clientX ?? 0, event.clientY ?? 0]);
+    generatorStatus.textContent = 'Input collected: ' + samples.length + '/24. Secure browser randomness is always included.';
+    finishGenerator.disabled = samples.length < 24;
+  };
+  const collectPointer = (event) => {
+    if (!collecting) return;
+    const bounds = entropyPad.getBoundingClientRect();
+    trail.push((event.clientX - bounds.left) + ',' + (event.clientY - bounds.top));
+    if (trail.length > 48) trail.shift();
+    entropyTrail.setAttribute('points', trail.join(' '));
+    collectSample(event);
+  };
+  entropyPad.addEventListener('pointerleave', clearTrail);
+  entropyPad.addEventListener('pointercancel', clearTrail);
+  entropyPad.addEventListener('pointermove', collectPointer);
+  entropyPad.addEventListener('pointerdown', (event) => { clearTrail(); collectPointer(event); });
+  entropyPad.addEventListener('keydown', collectSample);
+  finishGenerator.addEventListener('click', async () => {
+    if (samples.length < 24 || !collecting) return;
+    collecting = false;
+    finishGenerator.disabled = true;
+    const session = generatorSession;
+    try {
+      const secret = await generateSecret(samples);
+      if (session !== generatorSession) return;
+      generatedPassword.value = secret;
+      generatorResult.hidden = false;
+      finishGenerator.hidden = true;
+      copyGenerated.disabled = false;
+      useGenerated.disabled = false;
+      generatorStatus.textContent = 'Ready. Save the passphrase separately; it is not included in the protected file.';
+    } catch {
+      if (session === generatorSession) generatorStatus.textContent = 'Generation failed. Try again or enter your own passphrase.';
+    } finally {
+      if (session === generatorSession) samples = [];
+    }
+  });
+  copyGenerated.addEventListener('click', async () => {
+    if (!generatedPassword.value) return;
+    try {
+      await navigator.clipboard.writeText(generatedPassword.value);
+      generatorStatus.textContent = 'Passphrase copied to clipboard.';
+    } catch {
+      generatedPassword.focus();
+      generatedPassword.select();
+      generatorStatus.textContent = 'Copy the selected passphrase manually.';
+    }
+  });
+  useGenerated.addEventListener('click', () => {
+    if (!generatedPassword.value) return;
+    password.value = generatedPassword.value;
+    passwordRepeat.value = generatedPassword.value;
+    resetGenerator();
+    generatorPanel.hidden = true;
+    password.focus();
+  });
+  document.getElementById('cancel-generator').addEventListener('click', () => {
+    resetGenerator();
+    generatorPanel.hidden = true;
+    document.getElementById('generate-password').focus();
+  });
+  privateFilename.addEventListener('change', () => {
+    outputTitle.disabled = privateFilename.checked;
+    outputName.disabled = privateFilename.checked;
+    const file = sourceFile.files[0];
+    outputTitle.value = privateFilename.checked ? 'Protected file' : (file?.name.replace(/\.[^.]+$/, '') || '');
+    outputName.value = privateFilename.checked ? 'protected_file.html' : (file ? outputFilenameFor(file.name) : '');
+  });
+
+  sourceFile.addEventListener('change', () => {
+    const file = sourceFile.files[0];
+    if (!file) {
+      fileMeta.textContent = 'No file selected';
+      return;
+    }
+    const type = inferContentType(file);
+    fileMeta.textContent = `${file.name} · ${formatBytes(file.size)} · ${type}`;
+    if (file.size > FILE_MAX_BYTES) {
+      setStatus('Files above 25 MiB exceed the provisional browser limit.', 'error');
+    } else if (file.size >= FILE_WARN_BYTES) {
+      setStatus('Files from 5 MiB can use substantial browser memory. Above 10 MiB, confirmation is required; maximum 25 MiB. Mobile limits are not validated.', 'error');
+    } else {
+      setStatus('');
+    }
+    if (privateFilename.checked) {
+      outputTitle.value = 'Protected file';
+      outputName.value = 'protected_file.html';
+    }
+    if (!outputTitle.value) {
+      outputTitle.value = file.name.replace(/\.[^.]+$/, '');
+    }
+    if (!outputName.value) {
+      outputName.value = outputFilenameFor(file.name);
+    }
+  });
+
+  kdfStrength.addEventListener('change', () => {
+    kdfHelp.textContent = KDF_PRESETS[kdfStrength.value] || KDF_PRESETS[210000];
+  });
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const file = sourceFile.files[0];
+    const enteredPassphrase = password.value;
+    const repeatedPassphrase = passwordRepeat.value;
+    const iterationCount = Number(kdfStrength.value);
+    const privateName = privateFilename.checked;
+    const title = privateName ? 'Protected file' : (outputTitle.value || 'Protected file');
+    const output = privateName ? 'protected_file.html' : (outputName.value || (file ? outputFilenameFor(file.name) : ''));
+    const access = enteredPassphrase ? 'passphrase' : 'sealed';
+    const passphrase = enteredPassphrase || randomSealKey();
+
+    if (!file) {
+      setStatus('Choose a file first.', 'error');
+      sourceFile.focus();
+      return;
+    }
+    if (enteredPassphrase !== repeatedPassphrase) {
+      setStatus('Passphrases do not match.', 'error');
+      passwordRepeat.focus();
+      return;
+    }
+    if (!KDF_PRESETS[iterationCount]) {
+      setStatus('Choose a passphrase stretching level.', 'error');
+      kdfStrength.focus();
+      return;
+    }
+    if (!crypto.subtle) {
+      setStatus('This browser does not expose Web Crypto on this page.', 'error');
+      return;
+    }
+    if (file.size > FILE_MAX_BYTES) {
+      setStatus('Files above 25 MiB exceed the provisional browser limit.', 'error');
+      return;
+    }
+    if (file.size > FILE_CONFIRM_BYTES && !window.confirm('This file exceeds 10 MiB (maximum 25 MiB). Creating and opening it may use substantial memory or freeze the browser, especially on mobile. These provisional limits are not browser-validated. Continue?')) {
+      setStatus('Encryption cancelled.', 'error');
+      return;
+    }
+
+    button.disabled = true;
+    setStatus('Reading local file ...');
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      setStatus(access === 'sealed' ? 'Sealing locally ...' : 'Encrypting locally ...');
+      const payload = await encryptBytes(bytes, passphrase, iterationCount, file, access, privateName);
+
+      const wrapper = renderWrapper({ title, payload, sourceName: file.name });
+      downloadHtml(output, wrapper);
+      setStatus(access === 'sealed' ? 'Sealed HTML downloaded.' : 'Encrypted HTML downloaded.', 'success');
+    } catch (error) {
+      console.error(error);
+      setStatus(error.message || 'Encryption failed.', 'error');
+    } finally {
+      button.disabled = false;
+    }
+  });
+})();
+</script>
+</body>
+</html>

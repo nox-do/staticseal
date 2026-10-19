@@ -18,6 +18,7 @@ function evaluate(script, exports, payload, crypto = webcrypto) {
     return { click() { downloads.push(this.download); }, remove() {} };
   }, getElementById(id) {
     if (!nodes.has(id)) nodes.set(id, { value: '', dataset: {},
+      outerHTML: id === 'seal-logo' ? source.match(/<svg id="seal-logo"[\s\S]*?<\/svg>/)[0] : '',
       textContent: id === 'encrypted-payload' ? JSON.stringify(payload) : '',
       attributes: {}, setAttribute(name, value) { this.attributes[name] = value; }, getBoundingClientRect() { return { left: 0, top: 0 }; },
       handlers: {}, addEventListener(type, handler) { this.handlers[type] = handler; }, focus() {}, select() {}, remove() {}, querySelector() { return null; } });
@@ -38,7 +39,7 @@ const app = evaluate(source.slice(source.indexOf('<script>') + 8, source.lastInd
 function wrapper(html, replacement) {
   const payload = replacement ?? JSON.parse(html.match(/<script id="encrypted-payload" type="application\/json">([\s\S]*?)<\/script>/)[1]);
   const script = html.slice(html.lastIndexOf('<script>') + 8, html.lastIndexOf('</script>'));
-  return { payload, ...evaluate(script, 'unlock, fromBase64Chunks, unpackContent, content: () => unlockedContent', payload) };
+  return { payload, ...evaluate(script, 'unlock, renderBlobViewer, fromBase64Chunks, unpackContent, content: () => unlockedContent, confirmWith: (fn) => { window.confirm = fn; }', payload) };
 }
 for (const size of [10, 25]) {
   for (const access of ['passphrase', 'sealed']) {
@@ -280,4 +281,60 @@ test('private filename UI neutralizes fields and captures privacy before asynchr
   const reader = wrapper(html);
   assert.deepEqual(Buffer.from(await reader.unlock('test')), Buffer.from([1,2,3]));
   assert.equal(reader.content().filename, file.name);
+});
+
+
+test('both generated viewers restrict previews and require PDF confirmation', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'staticseal-preview-'));
+  const bytes = Buffer.from('Original bytes remain unchanged.');
+  try {
+    for (const [extension, type, preview] of [
+      ['png', 'image/png', true], ['jpg', 'image/jpeg', true],
+      ['gif', 'image/gif', true], ['webp', 'image/webp', true],
+      ['html', 'text/html', false], ['xhtml', 'application/xhtml+xml', false],
+      ['svg', 'image/svg+xml', false], ['bmp', 'image/bmp', false],
+      ['txt', 'text/plain', false], ['pdf', 'application/pdf', false]
+    ]) {
+      const name = 'example.' + extension;
+      const payload = await app.encryptBytes(bytes, 'test', 210000, { name, type }, 'passphrase', true);
+      const appHtml = app.renderWrapper({ title: 'Test', payload, sourceName: name });
+      await writeFile(join(dir, name), bytes);
+      const cli = spawnSync(process.execPath, ['bin/self-encrypt.mjs', '--in', join(dir, name),
+        '--out', join(dir, 'locked.html'), '--private-filename', '--stdin-password'],
+        { cwd: new URL('..', import.meta.url), input: 'test\n', encoding: 'utf8' });
+      assert.equal(cli.status, 0, cli.stderr);
+      for (const html of [appHtml, await readFile(join(dir, 'locked.html'), 'utf8')]) {
+        const reader = wrapper(html);
+        reader.renderBlobViewer(await reader.unlock('test'));
+        const viewer = reader.nodes.get('viewer-content');
+        assert.equal(viewer.innerHTML.includes('<img '), preview, extension);
+        assert.ok(!viewer.innerHTML.includes('<iframe'), extension);
+        assert.ok(!html.includes('target="_blank"'), 'No direct Open action');
+        assert.deepEqual(Buffer.from(await reader.blobs[0].arrayBuffer()), bytes);
+        if (extension === 'pdf') {
+          let confirmations = 0;
+          reader.confirmWith(() => { confirmations++; return false; });
+          reader.nodes.get('preview-pdf').handlers.click();
+          assert.equal(confirmations, 1);
+          assert.ok(!viewer.innerHTML.includes('<iframe'));
+          reader.confirmWith(() => { confirmations++; return true; });
+          reader.nodes.get('preview-pdf').handlers.click();
+          assert.equal(confirmations, 2);
+          assert.ok(viewer.innerHTML.includes('<iframe'));
+        }
+      }
+    }
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('built app and CLI renderer emit the same standalone wrapper with one logo', async () => {
+  const { renderWrapper } = await import('../src/wrapper.mjs');
+  const payload = await app.encryptBytes(new Uint8Array([1, 2, 3]), 'test', 210000,
+    { name: '<!--<script>.txt', type: 'text/plain' }, 'passphrase');
+  const options = { title: 'Test', sourceName: '<!--<script>.txt', payload };
+  const normalize = html => html.replace(/Generated at: [^\n]+/, 'Generated at: TIME');
+  const appHtml = app.renderWrapper(options);
+  assert.equal(normalize(appHtml), normalize(renderWrapper(options)));
+  assert.equal((appHtml.match(/<svg id="seal-logo"/g) || []).length, 1);
+  assert.equal((source.match(/<svg id="seal-logo"/g) || []).length, 1);
 });

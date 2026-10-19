@@ -24,8 +24,8 @@ The output contains:
 - five browser-friendly PBKDF2 strength presets instead of arbitrary iteration input
 - chunked ciphertext so the generated file remains somewhat readable and tooling-friendly
 - a decrypt roundtrip check before writing the output
-- sandboxed browser preview for unlocked HTML
-- direct browser rendering for unlocked PDF and images
+- automatic previews only for PNG, JPEG, GIF and WebP
+- optional PDF preview after a warning and explicit confirmation
 - a download/open fallback for other file types
 
 ## Web UI
@@ -47,12 +47,14 @@ Passphrase mode is for confidentiality. No-passphrase mode is a publishing veil:
 
 Unlocked behavior depends on the original file type:
 
-- HTML renders in a sandboxed preview
-- PDF opens in an embedded browser PDF view
-- images render inline; SVG gets image preview plus download only
-- other files get Open and Download actions
+- PNG, JPEG, GIF and WebP render inline
+- PDF offers a download and an optional browser preview after a warning and explicit confirmation
+- HTML, XHTML, SVG and all other types offer Download only, with no direct Open action
 
-Active HTML and SVG are not opened directly from the wrapper because Blob URLs inherit the wrapper page's origin. Download those files if you need to inspect or run them outside the sandboxed preview.
+The preview allowlist uses the restored MIME type. It is not a malware scan or a
+promise that image decoders are risk-free. PDF preview uses the browser's viewer;
+only preview trusted files. Downloading preserves the original bytes and does not
+make the original file safe to open. No script-execution option is provided.
 
 The browser app is designed for small to medium static artifacts. It warns for larger files because browser memory use and the generated wrapper size both grow with the source file.
 
@@ -163,7 +165,7 @@ Before treating the proposed range as supported, test Chrome, Firefox and Safari
 on desktop, plus Safari/iOS and Chrome/Android on memory-constrained devices:
 
 - Create and reopen 5, 10 and 25 MiB files in both access modes with both generators.
-- Check byte-exact downloads, PDF/image previews and sandboxed HTML previews.
+- Check byte-exact downloads, allowlisted image previews, PDF consent/cancellation and download-only HTML.
 - Confirm wrong passwords and metadata tampering never display plaintext.
 - Check warning/confirmation boundaries and rejection above 25 MiB before file reads.
 - Record browser/device versions, peak process memory, creation/unlock time,
@@ -249,7 +251,22 @@ This removes the legacy decoding branch and the split creation path. The small
 metadata header is now present for public-name files too. In the app this requires
 a contiguous header-plus-file plaintext buffer; the CLI feeds the header and file
 separately into the cipher to avoid that additional full copy. Generator code stays
-in the creation UI; preview sandbox restrictions remain unchanged.
+in the creation UI; preview follows the restricted image/PDF policy described above.
 
 The movement area shows a bounded SVG trail (up to 48 points), solely as input
 feedback. It is not an entropy meter and adds no code to generated wrappers.
+
+## Development and standalone build
+
+Edit `src/app.html` for the creation UI, `src/wrapper.mjs` for both generated
+wrappers, `src/format.mjs` for shared metadata/decoding helpers, and `src/seal.svg`
+for the logo. Run `npm run build` after source edits. The dependency-free build
+updates the committed `index.html` and `src/logo.mjs`; do not edit those generated
+files directly. `npm run check` rejects stale generated files before running tests.
+
+The CLI imports the same wrapper and format modules. Deploying or saving the built
+`index.html` still requires only that one file, with no runtime imports or external
+assets. Generated wrappers also remain standalone. The logo is included once per
+HTML document and reused when the lock screen becomes the viewer. CLI Base64
+decoding now fills one destination buffer sequentially rather than retaining all
+decoded chunks before concatenation.
