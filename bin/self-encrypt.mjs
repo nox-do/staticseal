@@ -287,8 +287,7 @@ async function main() {
 
   const wrapper = renderWrapper({
     title,
-    payload,
-    sourceName
+    payload
   });
 
   await mkdir(dirname(outputPath), { recursive: true });

@@ -36,7 +36,7 @@ body {
   height: 48px;
   flex: none;
 }
-.lock-shell, .download-only {
+.lock-shell, .dl {
   width: min(100%, 520px);
   padding: clamp(24px, 5vw, 40px);
   background: var(--panel);
@@ -91,7 +91,7 @@ input {
   background: var(--panel);
   color: var(--ink);
 }
-button, .viewer-actions a {
+button, .va a {
   display: inline-grid;
   place-items: center;
   min-height: 46px;
@@ -105,7 +105,7 @@ button, .viewer-actions a {
   text-decoration: none;
   cursor: pointer;
 }
-button:hover, .viewer-actions a:hover {
+button:hover, .va a:hover {
   background: var(--accent-strong);
 }
 button:disabled {
@@ -134,7 +134,7 @@ input:focus-visible, button:focus-visible, a:focus-visible {
   border-top: 1px solid var(--line);
   font-size: 12px;
 }
-.viewer-page {
+.vp {
   display: block;
   place-items: normal;
   height: 100vh;
@@ -143,13 +143,13 @@ input:focus-visible, button:focus-visible, a:focus-visible {
   padding: 0;
   overflow: hidden;
 }
-.viewer-shell {
+.vs {
   width: 100%;
   height: 100%;
   display: flex;
   flex-direction: column;
 }
-.viewer-bar {
+.vb {
   display: flex;
   flex: none;
   align-items: center;
@@ -158,15 +158,15 @@ input:focus-visible, button:focus-visible, a:focus-visible {
   background: var(--panel);
   border-bottom: 1px solid var(--line);
 }
-.viewer-bar .brand {
+.vb .brand {
   gap: 6px;
   font-size: 18px;
 }
-.viewer-bar .brand svg {
+.vb .brand svg {
   width: 32px;
   height: 32px;
 }
-.viewer-title {
+.vt {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -175,22 +175,22 @@ input:focus-visible, button:focus-visible, a:focus-visible {
   font-size: 13px;
   font-weight: 650;
 }
-.viewer-title small {
+.vt small {
   display: block;
   color: var(--muted);
   font-size: 12px;
   font-weight: 400;
 }
-.viewer-actions {
+.va {
   flex: none;
 }
-.viewer-actions a {
+.va a {
   min-height: 36px;
   padding: 6px 12px;
   border-radius: 6px;
   font-size: 12px;
 }
-#viewer-content {
+#vc {
   flex: 1;
   min-width: 0;
   min-height: 0;
@@ -198,25 +198,25 @@ input:focus-visible, button:focus-visible, a:focus-visible {
   grid-template: minmax(0, 1fr) / minmax(0, 1fr);
   place-items: center;
 }
-.download-only {
+.dl {
   width: min(calc(100% - 32px), 520px);
   max-height: calc(100% - 32px);
   margin: 16px;
   overflow: auto;
 }
-.download-only p + p {
+.dl p + p {
   margin-top: 16px;
 }
-#preview-pdf {
+#pdf {
   margin-top: 24px;
 }
-.image-frame {
+.im {
   display: block;
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
 }
-.viewer-frame {
+.vf {
   display: block;
   width: 100%;
   height: 100%;
@@ -224,54 +224,54 @@ input:focus-visible, button:focus-visible, a:focus-visible {
   border: 0;
   background: var(--panel);
 }
-.text-frame {
+.tf {
   width: 100%;
   height: 100%;
   overflow: auto;
   padding: clamp(16px, 4vw, 40px);
   background: var(--panel);
 }
-.text-frame pre, .text-frame code {
+.tf pre, .tf code {
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   font-size: 13px;
 }
-.text-frame > pre {
+.tf > pre {
   margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   tab-size: 4;
 }
-.markdown-frame > article { max-width: 80ch; margin: auto; overflow-wrap: anywhere; }
-.markdown-frame p { color: inherit; font-size: inherit; }
-.markdown-frame p, .markdown-frame pre, .markdown-frame blockquote { margin: 0 0 1em; }
-.markdown-frame h1, .markdown-frame h2, .markdown-frame h3 { margin: 1em 0 .5em; }
-.markdown-frame pre { overflow: auto; padding: 16px; background: var(--bg); }
-.markdown-frame :not(pre) > code { padding: 2px 4px; background: var(--bg); }
-.markdown-frame blockquote { margin-left: 0; padding-left: 16px; border-left: 3px solid var(--line); }
-.markdown-frame a { color: var(--accent); }
-.preview-note { margin-bottom: 16px; color: var(--muted); font-size: 13px; }
-.preview-end { margin: 24px 0 0; padding: 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
-.syntax-comment { color: #64736a; font-style: italic; }
-.syntax-string { color: #21633c; }
-.syntax-number { color: #995014; }
-.syntax-keyword, .syntax-tag { color: #7043a0; }
-.syntax-key { color: #1d638e; }
+.md > article { max-width: 80ch; margin: auto; overflow-wrap: anywhere; }
+.md p { color: inherit; font-size: inherit; }
+.md p, .md pre, .md blockquote { margin: 0 0 1em; }
+.md h1, .md h2, .md h3 { margin: 1em 0 .5em; }
+.md pre { overflow: auto; padding: 16px; background: var(--bg); }
+.md :not(pre) > code { padding: 2px 4px; background: var(--bg); }
+.md blockquote { margin-left: 0; padding-left: 16px; border-left: 3px solid var(--line); }
+.md a { color: var(--accent); }
+.pn { margin-bottom: 16px; color: var(--muted); font-size: 13px; }
+.pe { margin: 24px 0 0; padding: 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+.s-comment { color: #64736a; font-style: italic; }
+.s-string { color: #21633c; }
+.s-number { color: #995014; }
+.s-keyword, .s-tag { color: #7043a0; }
+.s-key { color: #1d638e; }
 @media (max-width: 560px) {
   body {
     padding: 16px;
   }
-  .viewer-bar {
+  .vb {
     gap: 8px;
     padding: 6px 8px;
   }
-  .viewer-bar .brand span {
+  .vb .brand span {
     display: none;
   }
-  .viewer-bar .brand svg {
+  .vb .brand svg {
     width: 28px;
     height: 28px;
   }
-  .viewer-actions a {
+  .va a {
     min-height: 40px;
   }
 }

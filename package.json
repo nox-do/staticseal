@@ -17,6 +17,8 @@
   },
   "license": "MIT",
   "devDependencies": {
-    "clean-css": "5.3.3"
+    "clean-css": "5.3.3",
+    "html-minifier-terser": "7.2.0",
+    "terser": "5.51.2"
   }
 }

@@ -9,7 +9,7 @@ import { spawnSync } from 'node:child_process';
 import { createPreview } from '../src/preview.mjs';
 
 function previewText(node) {
-  return node.textContent || (node.innerHTML || '').replace(/<span class="syntax-[a-z]+">|<\/span>/g, '')
+  return node.textContent || (node.innerHTML || '').replace(/<span class="s-[a-z]+">|<\/span>/g, '')
     .replace(/&(?:amp|lt|gt|quot|#39);/g, value => ({ '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'" })[value]);
 }
 
@@ -36,7 +36,7 @@ function evaluate(script, exports, payload, crypto = webcrypto) {
     window: { confirm() { return true; } } });
   const end = script.lastIndexOf('})();');
   assert.ok(end >= 0);
-  script = script.slice(0, end) + `globalThis.api = { ${exports} };\n` + script.slice(end);
+  script = script.slice(0, end) + `;globalThis.api = { ${exports} };\n` + script.slice(end);
   vm.runInContext(script, context);
   return Object.assign(context.api, { nodes, downloads, blobs });
 }
@@ -121,6 +121,22 @@ test('public metadata with HTML control sequences survives JSON embedding and wr
     assert.equal(reader.content().filename, name);
   }
   // Full HTML parsing for both generators is covered by build-browser-smoke.mjs.
+});
+
+test('compact JSON preserves every payload value and template-like user text', async () => {
+  const { renderWrapper } = await import('../src/wrapper.mjs');
+  const name = 'STATICSEAL_TITLE_STATICSEAL_READER_$&_$`_内部.txt';
+  const bytes = new Uint8Array([0, 1, 128, 255]);
+  const payload = await app.encryptBytes(bytes, 'test', 210000,
+    { name, type: 'text/plain' }, 'passphrase');
+  for (const render of [app.renderWrapper, renderWrapper]) {
+    const html = render({ title: name, payload });
+    const json = html.match(/<script id="encrypted-payload" type="application\/json">([\s\S]*?)<\/script>/)[1].trim();
+    assert.ok(!json.includes('\n'), 'Payload JSON has no formatting line breaks');
+    assert.deepEqual(JSON.parse(json), JSON.parse(JSON.stringify(payload)));
+    assert.ok(html.includes('<title>' + name.replace('&', '&amp;') + '</title>'));
+    assert.deepEqual(Buffer.from(await wrapper(html).unlock('test')), Buffer.from(bytes));
+  }
 });
 
 test('chunk boundaries, empty input, independently padded chunks and tag', () => {
@@ -314,23 +330,23 @@ test('both generated viewers restrict previews and require PDF confirmation', as
       for (const html of [appHtml, await readFile(join(dir, 'locked.html'), 'utf8')]) {
         const reader = wrapper(html);
         reader.renderBlobViewer(await reader.unlock('test'));
-        const viewer = reader.nodes.get('viewer-content');
+        const viewer = reader.nodes.get('vc');
         assert.equal(viewer.innerHTML.includes('<img '), preview, extension);
         assert.ok(!viewer.innerHTML.includes('<iframe'), extension);
-        assert.ok(!reader.nodes.get('viewer-content').innerHTML.includes('<object'), 'No document embedding');
+        assert.ok(!reader.nodes.get('vc').innerHTML.includes('<object'), 'No document embedding');
         if (['txt', 'html', 'xhtml', 'json', 'ts'].includes(extension)) {
-          assert.equal(previewText(reader.nodes.get('text-preview')), bytes.toString());
+          assert.equal(previewText(reader.nodes.get('tp')), bytes.toString());
         }
         if (extension === 'md') assert.ok(viewer.innerHTML.includes('<article><p>Original bytes remain unchanged.</p></article>'));
         assert.deepEqual(Buffer.from(await reader.blobs[0].arrayBuffer()), bytes);
         if (extension === 'pdf') {
           let confirmations = 0;
           reader.confirmWith(() => { confirmations++; return false; });
-          reader.nodes.get('preview-pdf').handlers.click();
+          reader.nodes.get('pdf').handlers.click();
           assert.equal(confirmations, 1);
           assert.ok(!viewer.innerHTML.includes('<iframe'));
           reader.confirmWith(() => { confirmations++; return true; });
-          reader.nodes.get('preview-pdf').handlers.click();
+          reader.nodes.get('pdf').handlers.click();
           assert.equal(confirmations, 2);
           assert.ok(viewer.innerHTML.includes('<iframe'));
         }
@@ -344,7 +360,7 @@ test('compact Markdown escapes HTML and permits only explicit safe link schemes'
   const rendered = renderMarkdown('# Title\n\n**bold** and *italic* and `code`\n\n- One\n- Two\n\n1. First\n2. Second\n\n> Quote\n\n```html\n<script>alert(1)</script>\n```\n\n[Safe](https://example.com) [Mail](mailto:a@example.com) [Bad](javascript:alert)\n\n<img src=x onerror=alert(1)>\n\n![Remote](https://example.com/track.png)');
   for (const part of ['<h1>Title</h1>', '<strong>bold</strong>', '<em>italic</em>', '<code>code</code>',
     '<ul><li>One</li><li>Two</li></ul>', '<ol><li>First</li><li>Second</li></ol>', '<blockquote><p>Quote</p></blockquote>',
-    '&lt;script&gt;', '&lt;img', 'href="https://example.com"', 'href="mailto:a@example.com"']) assert.ok(rendered.replace(/<span class="syntax-[a-z]+">|<\/span>/g, '').includes(part), part);
+    '&lt;script&gt;', '&lt;img', 'href="https://example.com"', 'href="mailto:a@example.com"']) assert.ok(rendered.replace(/<span class="s-[a-z]+">|<\/span>/g, '').includes(part), part);
   for (const part of ['<script', '<img', 'href="javascript:', 'src="https:']) assert.ok(!rendered.includes(part), part);
   for (const href of ['data:text/html,test', 'file:///tmp/test', '//example.com', 'javascript&#58;alert', 'java\tscript:alert', 'https://example.com/"onclick="alert']) {
     const result = renderMarkdown('[click](' + href + ')');
@@ -372,14 +388,14 @@ test('generated text/Markdown previews preserve bytes, bound output and handle e
     const payload = await app.encryptBytes(bytes, 'test', 160000, { name, type: 'application/octet-stream' }, 'sealed', true);
     const reader = wrapper(app.renderWrapper({ title: 'Test', payload, sourceName: name }));
     reader.renderBlobViewer(await reader.unlock('test'));
-    const html = reader.nodes.get('viewer-content').innerHTML;
+    const html = reader.nodes.get('vc').innerHTML;
     assert.deepEqual(Buffer.from(await reader.blobs[0].arrayBuffer()), bytes);
-    if (expected !== null) assert.equal(previewText(reader.nodes.get('text-preview')), expected);
+    if (expected !== null) assert.equal(previewText(reader.nodes.get('tp')), expected);
     if (name.startsWith('large.')) {
       assert.ok(html.includes('first 128 KiB'));
       assert.ok(html.includes('Preview ends here — the file continues.'));
-      assert.ok(html.indexOf('class="preview-note preview-end"') > html.indexOf(name.endsWith('.md') ? '</article>' : '</pre>'));
-    } else assert.ok(!html.includes('preview-end'));
+      assert.ok(html.indexOf('class="pn pe"') > html.indexOf(name.endsWith('.md') ? '</article>' : '</pre>'));
+    } else assert.ok(!html.includes('class="pn pe"'));
     if (name === 'invalid.txt') assert.ok(html.includes('Unsupported text encoding'));
     if (name === 'note.md') {
       assert.ok(html.includes('<h1>Hello</h1>'));
@@ -402,18 +418,18 @@ test('small highlighter preserves source text and escapes active content in supp
     const highlighted = highlightCode(text, codeLanguage(name, type));
     assert.equal(previewText({ innerHTML: highlighted }), text);
     assert.ok(!/<(script|img|div)\b/i.test(highlighted));
-    for (const kind of kinds) assert.ok(highlighted.includes('class="syntax-' + kind + '"'), name + ': ' + kind);
+    for (const kind of kinds) assert.ok(highlighted.includes('class="s-' + kind + '"'), name + ': ' + kind);
     const bytes = Buffer.from(text);
     const payload = await app.encryptBytes(bytes, 'test', 160000, { name, type }, 'sealed');
     const reader = wrapper(app.renderWrapper({ title: 'Test', payload, sourceName: name }));
     reader.renderBlobViewer(await reader.unlock('test'));
-    assert.equal(previewText(reader.nodes.get('text-preview')), text);
-    assert.ok(reader.nodes.get('text-preview').innerHTML.includes('syntax-'));
+    assert.equal(previewText(reader.nodes.get('tp')), text);
+    assert.ok(reader.nodes.get('tp').innerHTML.includes('s-'));
     assert.deepEqual(Buffer.from(await reader.blobs[0].arrayBuffer()), bytes);
   }
   assert.equal(highlightCode('<img src=x> & "text"', 'python'), '&lt;img src=x&gt; &amp; &quot;text&quot;');
   const fenced = renderMarkdown('```js\nconst count = 42;\n```');
-  assert.ok(fenced.includes('<span class="syntax-keyword">const</span>'));
+  assert.ok(fenced.includes('<span class="s-keyword">const</span>'));
   assert.equal(previewText({ innerHTML: fenced.replace('<pre><code>', '').replace('</code></pre>', '') }), 'const count = 42;');
   // Long incomplete tokens can occur at the preview boundary.
   for (const language of ['html', 'json', 'javascript']) {
@@ -440,18 +456,20 @@ test('preview review regressions: arbitrary filenames, heading text and bounded 
   }
   for (const text of ['- a\n'.repeat(32768), '*a* '.repeat(32768)]) {
     const output = renderMarkdown(text);
-    assert.ok(output.startsWith('<p class="preview-note">Formatting simplified'));
+    assert.ok(output.startsWith('<p class="pn">Formatting simplified'));
     assert.ok(output.includes('<pre>' + text + '</pre>'));
     assert.ok(!output.includes('<li>') && !output.includes('<em>'));
   }
 });
 
-test('built app and CLI renderer emit the same standalone wrapper with one logo', async () => {
+test('built app and CLI renderer emit matching markup and payload with one logo', async () => {
   const { renderWrapper } = await import('../src/wrapper.mjs');
   const payload = await app.encryptBytes(new Uint8Array([1, 2, 3]), 'test', 210000,
     { name: '<!--<script>.txt', type: 'text/plain' }, 'passphrase');
   const options = { title: 'Test', sourceName: '<!--<script>.txt', payload };
-  const normalize = html => html.replace(/Generated at: [^\n]+/, 'Generated at: TIME');
+  // Factory-local names can differ after minifying the app and CLI modules.
+  // Both actual reader scripts are exercised above; compare their surrounding HTML.
+  const normalize = html => html.replace(/<script>[\s\S]*?<\/script>/, '<script>READER</script>');
   const appHtml = app.renderWrapper(options);
   assert.equal(normalize(appHtml), normalize(renderWrapper(options)));
   assert.equal((appHtml.match(/<svg id="seal-logo"/g) || []).length, 1);

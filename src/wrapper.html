@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<title>STATICSEAL_TITLE</title>
+<style>STATICSEAL_STYLES</style>
+</head>
+<body>
+  <main class="lock-shell">
+    <div class="brand" id="wrapper-brand">STATICSEAL_LOGO<span>staticseal</span></div>
+    <p class="kicker">STATICSEAL_KICKER</p>
+    <h1>STATICSEAL_TITLE</h1>
+    <p>STATICSEAL_COPY</p>
+    <form id="unlock-form" autocomplete="off">
+      <label for="password">Passphrase</label>
+      <input id="password" name="password" type="password" placeholder="Passphrase" autofocus>
+      <button id="unlock-button" type="submit">Unlock file</button>
+    </form>
+    <div class="status" id="status" role="status" aria-live="polite"></div>
+    <p class="hint">STATICSEAL_HINT</p>
+  </main>
+
+
+<script id="encrypted-payload" type="application/json">
+STATICSEAL_PAYLOAD
+</script>
+<script>STATICSEAL_READER</script>
+</body>
+</html>

@@ -77,13 +77,16 @@ npm run build
 npm run check
 ```
 
-Edit `src/app.html` for the browser UI, `src/wrapper.mjs` for generated wrappers,
-`src/wrapper.css` for their styles,
-`src/format.mjs` for shared format helpers, and `src/seal.svg` for the logo.
-The build generates `index.html`, `src/logo.mjs` and `src/wrapper-styles.mjs`; do not edit them directly.
-CSS is compacted only during the build using clean-css at level 0, preserving
-property values and rule order. Build dependencies are not needed to run the CLI
-or the generated HTML files.
+Edit `src/app.html` for the browser UI, `src/wrapper.mjs` for wrapper generation,
+`src/wrapper.html` and `src/wrapper.css` for its layout, `src/reader.js` for the
+unlock/viewer script, `src/format.mjs` and `src/preview.mjs` for shared helpers,
+and `src/seal.svg` for the logo.
+The build generates `index.html`, `src/logo.mjs`, `src/wrapper-template.mjs`
+and `src/reader-factories.mjs`; do not edit them directly.
+CSS, HTML and JavaScript are minified only during the build. Terser preserves
+function scopes so the serialized preview and format helpers remain standalone.
+Generated wrappers use compact JSON; encryption and original file bytes are
+unchanged. Build dependencies are not needed to run the CLI or the generated files.
 The browser app and generated wrappers remain standalone HTML files.
 
 `npm run check` checks generated files, CLI help, and the regression suite.

@@ -34,7 +34,7 @@ export function createPreview() {
     language = codeLanguage(language);
     if (!language) return escape(text);
     let tokens = 0;
-    const span = (kind, value) => { tokens++; return '<span class="syntax-' + kind + '">' + escape(value) + '</span>'; };
+    const span = (kind, value) => { tokens++; return '<span class="s-' + kind + '">' + escape(value) + '</span>'; };
     const pattern = language === 'html'
       ? /<!--[\s\S]*?(?:-->|$)|<![^<>]*>|<\/?[a-zA-Z][^<>]*>/g
       : /\/\/[^\n]*|\/\*[\s\S]*?(?:\*\/|$)|"(?:\\[\s\S]|[^"\\])*"?|'(?:\\[\s\S]|[^'\\])*'?|`(?:\\[\s\S]|[^`\\])*`?|\b(?:0[xX][\da-fA-F]+|\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\b|[a-zA-Z_$][\w$]*/g;
@@ -91,7 +91,7 @@ export function createPreview() {
   function renderMarkdown(text, depth = 0) {
     if (depth > 8) return '<pre>' + escape(text) + '</pre>';
     const lines = text.replace(/\r\n?/g, '\n').split('\n');
-    const plain = () => '<p class="preview-note">Formatting simplified for this large document.</p><pre>' + escape(text) + '</pre>';
+    const plain = () => '<p class="pn">Formatting simplified for this large document.</p><pre>' + escape(text) + '</pre>';
     if (lines.length > 4096) return plain();
     let output = '', paragraph = [], list = '';
     const flush = () => {

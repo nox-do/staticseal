@@ -23,7 +23,7 @@ const cli = spawnSync(process.execPath, [fileURLToPath(new URL('../bin/self-encr
 if (cli.status !== 0) throw new Error(cli.stderr || 'CLI fixture generation failed.');
 let html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 const end = html.lastIndexOf('})();');
-html = html.slice(0, end) + 'window.smoke = { encryptBytes, renderWrapper };\n' + html.slice(end);
+html = html.slice(0, end) + ';window.smoke = { encryptBytes, renderWrapper };\n' + html.slice(end);
 const runner = `
 (async () => {
   const results = document.createElement('pre');
@@ -44,7 +44,7 @@ const runner = `
       const end = html.lastIndexOf('})();');
       const frame = document.createElement('iframe');
       const loaded = new Promise(resolve => frame.onload = resolve);
-      frame.srcdoc = html.slice(0, end) + 'window.reader = { unlock, renderBlobViewer };' + html.slice(end);
+      frame.srcdoc = html.slice(0, end) + ';window.reader = { unlock, renderBlobViewer };' + html.slice(end);
       document.body.append(frame);
       await loaded;
       try {
@@ -65,7 +65,7 @@ const runner = `
       const payload = await smoke.encryptBytes(bytes, 'preview-test', 210000, { name, type }, 'sealed', true);
       let wrapped = smoke.renderWrapper({ title: name, sourceName: name, payload });
       const end = wrapped.lastIndexOf('})();');
-      wrapped = wrapped.slice(0, end) + 'window.reader = { unlock, renderBlobViewer };' + wrapped.slice(end);
+      wrapped = wrapped.slice(0, end) + ';window.reader = { unlock, renderBlobViewer };' + wrapped.slice(end);
       const frame = document.createElement('iframe');
       const loaded = new Promise(resolve => frame.onload = resolve);
       frame.srcdoc = wrapped;
@@ -75,20 +75,20 @@ const runner = `
         const reader = frame.contentWindow.reader;
         reader.renderBlobViewer(await reader.unlock('preview-test'));
         const doc = frame.contentDocument;
-        const pre = doc.getElementById('text-preview');
+        const pre = doc.getElementById('tp');
         if (kind === 'html' || kind === 'json' || kind === 'dense') {
           check(pre.textContent === text, name + ': source text changed');
           check(!pre.querySelector('script, img, div'), name + ': active source became DOM');
-          check(kind === 'dense' ? !pre.querySelector('span') : !!pre.querySelector('.syntax-' + (kind === 'html' ? 'tag' : 'key')), name + ': highlighting/fallback');
+          check(kind === 'dense' ? !pre.querySelector('span') : !!pre.querySelector('.s-' + (kind === 'html' ? 'tag' : 'key')), name + ': highlighting/fallback');
         } else if (kind === 'markdown') {
           check(doc.querySelector('article h1').textContent === 'C#', name + ': heading changed');
           check(doc.querySelector('article strong').textContent === 'Bold', name + ': emphasis');
-          check(!!doc.querySelector('article code .syntax-keyword'), name + ': fenced code colors');
+          check(!!doc.querySelector('article code .s-keyword'), name + ': fenced code colors');
         } else if (kind === 'truncated') {
           check(pre.textContent === text.slice(0, 65536), name + ': truncation boundary');
-          check(pre.nextElementSibling.classList.contains('preview-end'), name + ': missing end notice');
+          check(pre.nextElementSibling.classList.contains('pe'), name + ': missing end notice');
         } else {
-          const image = doc.querySelector('.image-frame');
+          const image = doc.querySelector('.im');
           await image.decode();
           check(image.naturalWidth === 40, name + ': SVG image did not render');
         }
@@ -104,7 +104,7 @@ const runner = `
       let wrapped = smoke.renderWrapper({ title: file.name, sourceName: file.name, payload });
       check(!wrapped.includes(file.name), 'filename leaked');
       const end = wrapped.lastIndexOf('})();');
-      wrapped = wrapped.slice(0, end) + 'window.reader = { unlock, renderBlobViewer };' + wrapped.slice(end);
+      wrapped = wrapped.slice(0, end) + ';window.reader = { unlock, renderBlobViewer };' + wrapped.slice(end);
       const frame = document.createElement('iframe');
       const loaded = new Promise(resolve => frame.onload = resolve);
       frame.srcdoc = wrapped;

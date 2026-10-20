@@ -631,7 +631,7 @@ button:disabled {
               <option value="600000">600k PBKDF2 rounds - OWASP reference</option>
               <option value="1200000">1.2M PBKDF2 rounds - highest cost</option>
             </select>
-            <p class="meta" id="kdf-help">Default: 210k rounds. Higher values slow password guessing and unlocking; they do not replace a strong passphrase.</p>
+            <p class="meta" id="kdf-help"></p>
           </div>
         </div>
       </details>
@@ -666,18 +666,19 @@ button:disabled {
   const FILE_CONFIRM_BYTES = 10 * 1024 * 1024;
   const FILE_MAX_BYTES = 25 * 1024 * 1024;
 
-  const form = document.getElementById('encrypt-form');
-  const sourceFile = document.getElementById('source-file');
-  const fileMeta = document.getElementById('file-meta');
-  const password = document.getElementById('password');
-  const passwordRepeat = document.getElementById('password-repeat');
-  const privateFilename = document.getElementById('private-filename');
-  const outputTitle = document.getElementById('output-title');
-  const outputName = document.getElementById('output-name');
-  const kdfStrength = document.getElementById('kdf-strength');
-  const kdfHelp = document.getElementById('kdf-help');
-  const button = document.getElementById('encrypt-button');
-  const status = document.getElementById('status');
+  const $ = id => document.getElementById(id);
+  const form = $('encrypt-form');
+  const sourceFile = $('source-file');
+  const fileMeta = $('file-meta');
+  const password = $('password');
+  const passwordRepeat = $('password-repeat');
+  const privateFilename = $('private-filename');
+  const outputTitle = $('output-title');
+  const outputName = $('output-name');
+  const kdfStrength = $('kdf-strength');
+  const kdfHelp = $('kdf-help');
+  const button = $('encrypt-button');
+  const status = $('status');
 
   const encoder = new TextEncoder();
   /* STATICSEAL_FORMAT */
@@ -689,6 +690,7 @@ button:disabled {
     600000: '600k is the OWASP reference for PBKDF2-HMAC-SHA256. Unlocking takes longer, especially on mobile.',
     1200000: '1.2M rounds double the KDF work compared with 600k. Expect longer waits on mobile.'
   };
+  kdfHelp.textContent = KDF_PRESETS[kdfStrength.value];
   const setStatus = (message, kind = '') => {
     status.textContent = message;
     status.dataset.kind = kind;
@@ -845,15 +847,15 @@ button:disabled {
   }
 
   // Creation UI only: none of this generator code is emitted in the wrapper.
-  const generatorPanel = document.getElementById('generator-panel');
-  const generatorResult = document.getElementById('generator-result');
-  const entropyPad = document.getElementById('entropy-pad');
-  const generatorStatus = document.getElementById('generator-status');
-  const generatedPassword = document.getElementById('generated-password');
-  const finishGenerator = document.getElementById('finish-generator');
-  const copyGenerated = document.getElementById('copy-generated');
-  const useGenerated = document.getElementById('use-generated');
-  const entropyTrail = document.getElementById('entropy-trail');
+  const generatorPanel = $('generator-panel');
+  const generatorResult = $('generator-result');
+  const entropyPad = $('entropy-pad');
+  const generatorStatus = $('generator-status');
+  const generatedPassword = $('generated-password');
+  const finishGenerator = $('finish-generator');
+  const copyGenerated = $('copy-generated');
+  const useGenerated = $('use-generated');
+  const entropyTrail = $('entropy-trail');
   let trail = [];
   const clearTrail = () => { trail = []; entropyTrail.setAttribute('points', ''); };
   let samples = [];
@@ -884,7 +886,7 @@ button:disabled {
     copyGenerated.disabled = true;
     useGenerated.disabled = true;
   };
-  document.getElementById('generate-password').addEventListener('click', () => {
+  $('generate-password').addEventListener('click', () => {
     resetGenerator();
     generatorPanel.hidden = false;
     if (!crypto.subtle || !crypto.getRandomValues) {
@@ -955,10 +957,10 @@ button:disabled {
     generatorPanel.hidden = true;
     password.focus();
   });
-  document.getElementById('cancel-generator').addEventListener('click', () => {
+  $('cancel-generator').addEventListener('click', () => {
     resetGenerator();
     generatorPanel.hidden = true;
-    document.getElementById('generate-password').focus();
+    $('generate-password').focus();
   });
   privateFilename.addEventListener('change', () => {
     outputTitle.disabled = privateFilename.checked;
@@ -1046,7 +1048,7 @@ button:disabled {
       setStatus(access === 'sealed' ? 'Sealing locally ...' : 'Encrypting locally ...');
       const payload = await encryptBytes(bytes, passphrase, iterationCount, file, access, privateName);
 
-      const wrapper = renderWrapper({ title, payload, sourceName: file.name });
+      const wrapper = renderWrapper({ title, payload });
       downloadHtml(output, wrapper);
       setStatus('');
     } catch (error) {
