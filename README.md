@@ -1,7 +1,7 @@
 # Staticseal
 
-Package a file as a self-contained HTML file. Share it as an attachment or link.
-Add a passphrase if needed.
+Package a file as a self-contained HTML file. Send it as an attachment or host it
+on your website. Add a passphrase if needed.
 
 **[Open Staticseal](https://nox-do.github.io/staticseal/)** · [MIT license](LICENSE)
 
