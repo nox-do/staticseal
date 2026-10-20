@@ -26,6 +26,9 @@ jobs:
           node-version: '24'
           package-manager-cache: false
 
+      - name: Install build dependencies
+        run: npm ci
+
       - name: Build standalone browser app
         run: npm run build
 

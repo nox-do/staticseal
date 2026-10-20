@@ -73,11 +73,13 @@ button, input, select, summary {
   margin: 0 auto;
   padding: 8px 32px 56px;
 }
-.intro {
+.intro, .workspace {
   display: grid;
   grid-template-columns: minmax(0, 1fr) var(--sidebar-width);
-  align-items: center;
   gap: var(--column-gap);
+}
+.intro {
+  align-items: center;
   margin-bottom: 16px;
 }
 .mascot {
@@ -124,9 +126,6 @@ h1 em {
   line-height: 1.7;
 }
 .workspace {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--sidebar-width);
-  gap: var(--column-gap);
   align-items: start;
 }
 .tool {
@@ -223,19 +222,21 @@ input[type="file"] {
   opacity: 0;
   cursor: pointer;
 }
-.meta {
+.meta, .status {
   font-size: 12px;
   color: var(--muted);
   line-height: 1.6;
-  margin: 0;
   overflow-wrap: anywhere;
 }
-.fields, .grid {
+.meta {
+  margin: 0;
+}
+.fields {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 14px;
 }
-.fields > div, .grid > div {
+.fields > div {
   display: grid;
   align-content: start;
   gap: 7px;
@@ -265,7 +266,7 @@ input[type="checkbox"] {
   vertical-align: -3px;
   margin-right: 7px;
 }
-input:focus-visible, select:focus-visible, button:focus-visible, summary:focus-visible, a:focus-visible {
+input:focus-visible, select:focus-visible, button:focus-visible, summary:focus-visible, a:focus-visible, #entropy-pad:focus-visible {
   outline: 3px solid #27665d40;
   outline-offset: 3px;
 }
@@ -329,19 +330,12 @@ button:disabled {
   background: #edf3f1;
 }
 .actions {
-  padding: 22px 28px;
   gap: 12px;
 }
 #encrypt-button {
   width: 100%;
   min-height: 49px;
   font-size: 14px;
-}
-.status {
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.6;
-  overflow-wrap: anywhere;
 }
 .status:empty {
   display: none;
@@ -381,10 +375,6 @@ button:disabled {
   pointer-events: none;
   color: var(--accent);
   opacity: .65;
-}
-#entropy-pad:focus-visible {
-  outline: 3px solid #27665d40;
-  outline-offset: 3px;
 }
 .guide {
   padding-top: 12px;
@@ -477,13 +467,12 @@ button:disabled {
   text-underline-offset: 3px;
 }
 @media (max-width: 800px) {
-  .intro { grid-template-columns: 1fr; }
+  .intro, .workspace { grid-template-columns: 1fr; }
   .mascot { display: none; }
   .mobile-brand { display: block; }
   .site-header { justify-content: space-between; }
   .site-header .local-label { width: auto; }
   .workspace {
-    grid-template-columns: 1fr;
     gap: 30px;
   }
   .guide {
@@ -524,7 +513,7 @@ button:disabled {
   .panel-heading {
     padding: 22px 20px 0;
   }
-  .row, .actions {
+  .row {
     padding: 20px;
   }
   .advanced > summary {
@@ -534,7 +523,7 @@ button:disabled {
     display: block;
     margin: 4px 0 0 14px;
   }
-  .fields, .grid {
+  .fields {
     grid-template-columns: 1fr;
   }
   .guide {
@@ -621,7 +610,7 @@ button:disabled {
           <p class="meta">Uses a neutral public title and download name. Without this option, the original name and type remain visible. In no-passphrase mode anyone can still recover them.</p>
         </div>
 
-        <div class="row grid">
+        <div class="row fields">
           <div>
             <label for="output-title">Protected page title optional</label>
             <input id="output-title" name="output-title" type="text" placeholder="Optional display title">

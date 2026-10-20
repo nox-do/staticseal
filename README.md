@@ -72,13 +72,18 @@ Run `node bin/self-encrypt.mjs --help` for all options.
 ## Development
 
 ```sh
+npm ci
 npm run build
 npm run check
 ```
 
 Edit `src/app.html` for the browser UI, `src/wrapper.mjs` for generated wrappers,
+`src/wrapper.css` for their styles,
 `src/format.mjs` for shared format helpers, and `src/seal.svg` for the logo.
-The build generates `index.html` and `src/logo.mjs`; do not edit them directly.
+The build generates `index.html`, `src/logo.mjs` and `src/wrapper-styles.mjs`; do not edit them directly.
+CSS is compacted only during the build using clean-css at level 0, preserving
+property values and rule order. Build dependencies are not needed to run the CLI
+or the generated HTML files.
 The browser app and generated wrappers remain standalone HTML files.
 
 `npm run check` checks generated files, CLI help, and the regression suite.
