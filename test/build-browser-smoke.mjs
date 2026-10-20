@@ -116,11 +116,17 @@ const runner = `
       for (let i=0; i<bytes.length; i++) check(decoded[i] === bytes[i], 'byte mismatch');
       reader.renderBlobViewer(decoded);
       check(frame.contentDocument.body.textContent.includes(file.name), 'name not restored');
-      let rejected = false;
-      try { await reader.unlock('wrong'); } catch { rejected = true; }
-      check(rejected, 'wrong password accepted');
+      if (access === 'passphrase') {
+        let rejected = false;
+        try { await reader.unlock('wrong'); } catch { rejected = true; }
+        check(rejected, 'wrong password accepted');
+      } else {
+        check(!wrapped.includes('crypto.subtle') && !wrapped.includes('PBKDF2'), 'plain reader contains crypto');
+        const opened = await reader.unlock('');
+        check(opened.length === bytes.length && opened.every((value, i) => value === bytes[i]), 'plain reader needs a password');
+      }
       frame.remove();
-      log('PASS: ' + size + ' MiB / ' + access + ' / private filename / 600k / wrapper roundtrip + viewer + wrong password');
+      log('PASS: ' + size + ' MiB / ' + access + ' / private filename / ' + (access === 'sealed' ? 'no crypto / exact roundtrip + viewer' : '600k / wrapper roundtrip + viewer + wrong password'));
     }
     log('DONE');
   } catch (error) { log('FAIL: ' + error.stack); }

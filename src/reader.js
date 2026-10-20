@@ -5,42 +5,16 @@
   const button = $('unlock-button');
   const status = $('status');
   const payload = JSON.parse($('encrypted-payload').textContent);
-  const { escapeHtml, fromBase64, fromBase64Chunks, unpackContent, authenticatedDataFor } = (STATICSEAL_FORMAT)();
+  const { escapeHtml, fromBase64, fromBase64Chunks, unpackContent } = (STATICSEAL_FORMAT)();
   const { inferContentType, previewKind, renderMarkdown, codeLanguage, highlightCode } = (STATICSEAL_PREVIEW)();
+  const decodeContent = STATICSEAL_DECODER;
   const brand = $('wrapper-brand').outerHTML;
-
-  async function deriveKey(password) {
-    const baseKey = await crypto.subtle.importKey(
-      'raw',
-      new TextEncoder().encode(password),
-      'PBKDF2',
-      false,
-      ['deriveKey']
-    );
-    return crypto.subtle.deriveKey(
-      {
-        name: 'PBKDF2',
-        salt: fromBase64(payload.salt),
-        iterations: payload.iterations,
-        hash: 'SHA-256'
-      },
-      baseKey,
-      { name: 'AES-GCM', length: 256 },
-      false,
-      ['decrypt']
-    );
-  }
 
   let unlockedContent;
 
   async function unlock(password) {
-    const key = await deriveKey(password);
-    const decrypted = new Uint8Array(await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: fromBase64(payload.iv), additionalData: authenticatedDataFor(payload) },
-      key,
-      fromBase64Chunks(payload.ciphertext, fromBase64(payload.tag))
-    ));
-    unlockedContent = unpackContent(decrypted, payload);
+    unlockedContent = unpackContent(await decodeContent(payload, password, fromBase64, fromBase64Chunks), payload);
+    STATICSEAL_RESTORE;
     return unlockedContent.bytes;
   }
 
@@ -110,7 +84,7 @@
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     const sealedMode = payload.access === 'sealed';
-    const passphrase = sealedMode ? payload.unlockKey : input.value;
+    const passphrase = sealedMode ? '' : input.value;
     if (!sealedMode && !passphrase) {
       status.dataset.kind = 'error';
       status.textContent = 'Enter the passphrase.';
@@ -120,13 +94,14 @@
 
     button.disabled = true;
     status.dataset.kind = '';
-    status.textContent = 'Decrypting locally in this browser ...';
+    status.textContent = sealedMode ? 'Opening locally in this browser ...' : 'Decrypting locally in this browser ...';
     try {
       renderBlobViewer(await unlock(passphrase));
     } catch (error) {
       console.warn('Unlock failed', error);
       status.dataset.kind = 'error';
-      status.textContent = 'Wrong passphrase or damaged file.';
+      status.textContent = error.name === 'NotSupportedError' ? error.message
+        : sealedMode ? 'Damaged file or unsupported format.' : 'Wrong passphrase or damaged file.';
       button.disabled = false;
       input.select();
       input.focus();

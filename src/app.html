@@ -606,7 +606,7 @@ button:disabled {
         </div>
 
         <div class="row">
-          <label><input id="private-filename" type="checkbox"> Encrypt filename and file type too</label>
+          <label><input id="private-filename" type="checkbox"> Hide original filename and file type</label>
           <p class="meta">Uses a neutral public title and download name. Without this option, the original name and type remain visible. In no-passphrase mode anyone can still recover them.</p>
         </div>
 
@@ -682,7 +682,8 @@ button:disabled {
 
   const encoder = new TextEncoder();
   /* STATICSEAL_FORMAT */
-  const { fromBase64, fromBase64Chunks, unpackContent, authenticatedDataFor } = createFormat();
+  const { fromBase64, fromBase64Chunks, unpackContent } = createFormat();
+  const { authenticatedDataFor, deriveKey, decryptPayload } = createCrypto();
   const KDF_PRESETS = {
     160000: 'Fast is useful for quick drafts, but relies more heavily on passphrase strength.',
     210000: 'Default: 210k rounds. Higher values slow password guessing and unlocking; they do not replace a strong passphrase.',
@@ -716,11 +717,6 @@ button:disabled {
     return chunks;
   };
 
-  const randomSealKey = () => {
-    const bytes = crypto.getRandomValues(new Uint8Array(32));
-    return toBase64(bytes);
-  };
-
   const outputFilenameFor = (name) => {
     const base = (name.replace(/\.[^.]+$/, '') || 'file')
       .trim()
@@ -738,30 +734,7 @@ button:disabled {
   const fileType = createPreview().inferContentType;
   const inferContentType = (file) => fileType(file.name, file.type);
 
-  async function deriveKey(passphrase, salt, iterationCount, usages) {
-    const baseKey = await crypto.subtle.importKey(
-      'raw',
-      encoder.encode(passphrase),
-      'PBKDF2',
-      false,
-      ['deriveKey']
-    );
-    return crypto.subtle.deriveKey(
-      {
-        name: 'PBKDF2',
-        salt,
-        iterations: iterationCount,
-        hash: 'SHA-256'
-      },
-      baseKey,
-      { name: 'AES-GCM', length: 256 },
-      false,
-      usages
-    );
-  }
-
-  const packContent = (bytes, file) => {
-    const header = encoder.encode(JSON.stringify({ filename: file.name, contentType: inferContentType(file) }));
+  const packContent = (bytes, file, header = encoder.encode(JSON.stringify({ filename: file.name, contentType: inferContentType(file) }))) => {
     if (header.byteLength > 65536) throw new Error('Filename metadata is too large.');
     const packed = new Uint8Array(4 + header.byteLength + bytes.byteLength);
     new DataView(packed.buffer).setUint32(0, header.byteLength);
@@ -771,9 +744,20 @@ button:disabled {
   };
 
   async function encryptBytes(bytes, passphrase, iterationCount, file, access, privateName = false) {
+    if (access === 'sealed') {
+      const metadata = {
+        v: 4, encoding: 'metadata', access,
+        ...(!privateName ? { filename: file.name, contentType: inferContentType(file) } : {})
+      };
+      const content = await prepareContent(bytes,
+        { filename: file.name, contentType: inferContentType(file) }, metadata, DEFAULT_CHUNK_SIZE);
+      const payload = { ...metadata, v: content.v,
+        content: toBase64Chunks(packContent(content.bytes, file, content.header), DEFAULT_CHUNK_SIZE) };
+      await verifyPayload(payload, '', bytes, undefined, file);
+      return payload;
+    }
     const salt = crypto.getRandomValues(new Uint8Array(16));
     const iv = crypto.getRandomValues(new Uint8Array(12));
-    const unlockKey = access === 'sealed' ? passphrase : undefined;
     const metadata = {
       v: 2,
       alg: 'AES-GCM',
@@ -782,15 +766,17 @@ button:disabled {
       encoding: 'metadata',
       ...(!privateName ? { filename: file.name, contentType: inferContentType(file) } : {}),
       access,
-      ...(unlockKey ? { unlockKey } : {}),
       salt: toBase64(salt),
       iv: toBase64(iv)
     };
+    const content = await prepareContent(bytes,
+      { filename: file.name, contentType: inferContentType(file) }, metadata, DEFAULT_CHUNK_SIZE);
+    metadata.v = content.v;
     const key = await deriveKey(passphrase, salt, iterationCount, ['encrypt', 'decrypt']);
     const encrypted = new Uint8Array(await crypto.subtle.encrypt(
       { name: 'AES-GCM', iv, additionalData: authenticatedDataFor(metadata) },
       key,
-      packContent(bytes, file)
+      packContent(content.bytes, file, content.header)
     ));
     const tag = encrypted.subarray(encrypted.byteLength - 16);
     const ciphertext = encrypted.subarray(0, encrypted.byteLength - 16);
@@ -817,13 +803,11 @@ button:disabled {
   };
 
   async function verifyPayload(payload, passphrase, expectedBytes, existingKey, expectedFile) {
-    const key = existingKey || await deriveKey(passphrase, fromBase64(payload.salt), payload.iterations, ['decrypt']);
-    const decrypted = new Uint8Array(await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: fromBase64(payload.iv), additionalData: authenticatedDataFor(payload) },
-      key,
-      fromBase64Chunks(payload.ciphertext, fromBase64(payload.tag))
-    ));
-    const content = unpackContent(decrypted, payload);
+    const decrypted = payload.v >= 4
+      ? fromBase64Chunks(payload.content)
+      : await decryptPayload(payload, passphrase, fromBase64, fromBase64Chunks, existingKey);
+    let content = unpackContent(decrypted, payload);
+    if (payload.v === 3 || payload.v === 5) content = await inflateContent(content);
     if (expectedFile && (content.filename !== expectedFile.name || content.contentType !== inferContentType(expectedFile))) {
       throw new Error('Metadata roundtrip failed.');
     }
@@ -1011,7 +995,7 @@ button:disabled {
     const title = privateName ? 'Protected file' : (outputTitle.value || 'Protected file');
     const output = privateName ? 'protected_file.html' : (outputName.value || (file ? outputFilenameFor(file.name) : ''));
     const access = enteredPassphrase ? 'passphrase' : 'sealed';
-    const passphrase = enteredPassphrase || randomSealKey();
+    const passphrase = enteredPassphrase;
 
     if (!file) {
       setStatus('Choose a file first.', 'error');
@@ -1028,7 +1012,7 @@ button:disabled {
       kdfStrength.focus();
       return;
     }
-    if (!crypto.subtle) {
+    if (access === 'passphrase' && !crypto.subtle) {
       setStatus('This browser does not expose Web Crypto on this page.', 'error');
       return;
     }
@@ -1050,7 +1034,7 @@ button:disabled {
 
       const wrapper = renderWrapper({ title, payload });
       downloadHtml(output, wrapper);
-      setStatus('');
+      setStatus('Original: ' + formatBytes(bytes.byteLength) + ' → HTML package: ' + formatBytes(new Blob([wrapper]).size) + '.');
     } catch (error) {
       console.error(error);
       setStatus(error.message || 'Encryption failed.', 'error');

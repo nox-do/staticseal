@@ -15,9 +15,17 @@ Your file and passphrase stay in your browser. No upload, account, or backend is
 required. [Download the latest release](https://github.com/nox-do/staticseal/releases/latest/download/staticseal.html)
 and open `staticseal.html` in your browser to use it offline.
 
-Under **Advanced options**, you can generate a passphrase, encrypt the original
+Under **Advanced options**, you can generate a passphrase, hide the original
 filename and file type, or adjust the PBKDF2 settings. Share the passphrase
 separately from the generated file.
+
+Files from 4 KiB up to 25 MiB are automatically tried with gzip before packaging.
+Compression is used only when the complete HTML package, including its unpacker,
+is smaller. This works for any file type and restores the original bytes exactly.
+Uncompressed packages contain no gzip unpacker. The result shows original and
+HTML package sizes. The CLI uses the same policy; larger CLI files stay uncompressed.
+Compression needs native Compression Streams support during creation and
+Decompression Streams support when opening a compressed package; no library is bundled.
 
 After unlocking, PNG, JPEG, GIF, WebP and SVG display inline. SVG uses an image
 element. Text and source code (including HTML) display as escaped text, and
@@ -59,10 +67,13 @@ Run `node bin/self-encrypt.mjs --help` for all options.
   can attempt offline password guesses. There is no password reset or server-side
   access control.
 - **Without a passphrase, contents are not private.** Leaving both browser fields
-  blank, or using `--no-password`, embeds the unlock key. This only obstructs simple
-  crawlers; anyone with the file can recover its contents.
-- **Names are public by default.** Enable private filenames to encrypt the name
-  and MIME type too. File size remains observable. Publish only the protected
+  blank, or using `--no-password`, stores Base64-encoded content, optionally gzip
+  compressed. These packages contain no encryption or decryption code. This only
+  obstructs simple crawlers; anyone with the file can recover its contents.
+  They have no AES-GCM integrity check; creation still verifies the original bytes.
+- **Names are public by default.** Enable private filenames to put the name
+  and MIME type inside the encoded content. With a passphrase they are encrypted;
+  without one, they remain recoverable. File size remains observable. Publish only the protected
   output if the original should stay private.
 - **Browser sizes are provisional.** Warning from 5 MiB, confirmation above 10 MiB,
   maximum 25 MiB. These are product limits, not validated browser capacities.
@@ -79,14 +90,15 @@ npm run check
 
 Edit `src/app.html` for the browser UI, `src/wrapper.mjs` for wrapper generation,
 `src/wrapper.html` and `src/wrapper.css` for its layout, `src/reader.js` for the
-unlock/viewer script, `src/format.mjs` and `src/preview.mjs` for shared helpers,
-and `src/seal.svg` for the logo.
+unlock/viewer script, `src/format.mjs`, `src/crypto.mjs` and `src/preview.mjs` for shared helpers,
+`src/compression.mjs` for compression selection, `src/gzip.mjs` for the optional
+unpacker, and `src/seal.svg` for the logo.
 The build generates `index.html`, `src/logo.mjs`, `src/wrapper-template.mjs`
 and `src/reader-factories.mjs`; do not edit them directly.
 CSS, HTML and JavaScript are minified only during the build. Terser preserves
 function scopes so the serialized preview and format helpers remain standalone.
-Generated wrappers use compact JSON; encryption and original file bytes are
-unchanged. Build dependencies are not needed to run the CLI or the generated files.
+Generated wrappers use compact JSON; original file bytes are restored exactly.
+Build dependencies are not needed to run the CLI or the generated files.
 The browser app and generated wrappers remain standalone HTML files.
 
 `npm run check` checks generated files, CLI help, and the regression suite.

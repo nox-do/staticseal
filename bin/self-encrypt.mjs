@@ -7,11 +7,15 @@ import { stdin as input, stdout as output } from 'node:process';
 
 import { createPreview } from '../src/preview.mjs';
 import { createFormat } from '../src/format.mjs';
+import { createCrypto } from '../src/crypto.mjs';
 import { renderWrapper } from '../src/wrapper.mjs';
+import { prepareContent } from '../src/compression.mjs';
+import { inflateContent } from '../src/gzip.mjs';
 
-const { fromBase64Chunks, unpackContent, authenticatedDataFor } = createFormat(value => Buffer.from(value, 'base64'));
+const { fromBase64Chunks, unpackContent } = createFormat(value => Buffer.from(value, 'base64'));
+const { authenticatedDataFor } = createCrypto();
 
-const VERSION = '1.0.3';
+const VERSION = '1.1.0';
 const DEFAULT_ITERATIONS = 210_000;
 const DEFAULT_CHUNK_SIZE = 64 * 1024;
 function parseArgs(argv) {
@@ -83,7 +87,7 @@ Options:
   --title <text>           Browser title and lock-screen context
   --iterations <number>    PBKDF2 iterations, default ${DEFAULT_ITERATIONS}
   --chunk-size <number>    Base64 payload chunk size, default ${DEFAULT_CHUNK_SIZE}
-  --private-filename       Encrypt original name/type; use a neutral --out path
+  --private-filename       Hide original name/type; use a neutral --out path
   --stdin-password         Read password from stdin instead of prompting
   --no-password            Seal for crawler resistance only; no confidentiality
   --version                Show version
@@ -185,10 +189,20 @@ async function readPassword({ stdinPassword }) {
   return password;
 }
 
-function encryptBytes(bytes, password, { iterations, chunkSize, sourceName, contentType, access, privateFilename = false }) {
+async function encryptBytes(bytes, password, { iterations, chunkSize, sourceName, contentType, access, privateFilename = false }) {
+  if (access === 'sealed') {
+    const metadata = { v: 4, encoding: 'metadata', access,
+      ...(!privateFilename ? { filename: sourceName, contentType } : {}) };
+    const content = await prepareContent(bytes, { filename: sourceName, contentType }, metadata, chunkSize);
+    const length = Buffer.alloc(4);
+    length.writeUInt32BE(content.header.byteLength);
+    const packed = Buffer.concat([length, content.header, content.bytes]);
+    const payload = { ...metadata, v: content.v, content: toBase64Chunks(packed, chunkSize) };
+    await verifyPayload(payload, '', bytes, undefined, { name: sourceName, type: contentType });
+    return payload;
+  }
   const salt = randomBytes(16);
   const iv = randomBytes(12);
-  const unlockKey = access === 'sealed' ? password : undefined;
   const metadata = {
     v: 2,
     alg: 'AES-GCM',
@@ -197,19 +211,20 @@ function encryptBytes(bytes, password, { iterations, chunkSize, sourceName, cont
     encoding: 'metadata',
     ...(!privateFilename ? { filename: sourceName, contentType } : {}),
     access,
-    ...(unlockKey ? { unlockKey } : {}),
     salt: salt.toString('base64'),
     iv: iv.toString('base64')
   };
+  const content = await prepareContent(bytes, { filename: sourceName, contentType }, metadata, chunkSize);
+  metadata.v = content.v;
   const key = pbkdf2Sync(password, salt, iterations, 32, 'sha256');
   const cipher = createCipheriv('aes-256-gcm', key, iv);
   cipher.setAAD(authenticatedDataFor(metadata));
-  const header = Buffer.from(JSON.stringify({ filename: sourceName, contentType }));
+  const header = content.header;
   if (header.length > 65536) throw new Error('Filename metadata is too large.');
   const length = Buffer.alloc(4);
   length.writeUInt32BE(header.length);
   // Feed the header separately rather than allocating a second full plaintext buffer.
-  const ciphertext = Buffer.concat([cipher.update(length), cipher.update(header), cipher.update(bytes), cipher.final()]);
+  const ciphertext = Buffer.concat([cipher.update(length), cipher.update(header), cipher.update(content.bytes), cipher.final()]);
   const tag = cipher.getAuthTag();
 
   const payload = {
@@ -217,7 +232,7 @@ function encryptBytes(bytes, password, { iterations, chunkSize, sourceName, cont
     tag: tag.toString('base64'),
     ciphertext: toBase64Chunks(ciphertext, chunkSize)
   };
-  verifyPayload(payload, password, bytes, key, { name: sourceName, type: contentType });
+  await verifyPayload(payload, password, bytes, key, { name: sourceName, type: contentType });
   return payload;
 }
 
@@ -233,12 +248,14 @@ function decryptPayload(payload, password, existingKey) {
   return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
 }
 
-function verifyPayload(payload, password, expectedBytes, existingKey, expectedFile) {
-  const content = unpackContent(decryptPayload(payload, password, existingKey), payload);
+async function verifyPayload(payload, password, expectedBytes, existingKey, expectedFile) {
+  const decoded = payload.v >= 4 ? fromBase64Chunks(payload.content) : decryptPayload(payload, password, existingKey);
+  let content = unpackContent(decoded, payload);
+  if (payload.v === 3 || payload.v === 5) content = await inflateContent(content);
   if (expectedFile && (content.filename !== expectedFile.name || content.contentType !== expectedFile.type)) {
     throw new Error('Metadata roundtrip failed.');
   }
-  if (!content.bytes.equals(expectedBytes)) {
+  if (!expectedBytes.equals(content.bytes)) {
     throw new Error('Decrypt roundtrip failed.');
   }
 }
@@ -270,13 +287,13 @@ async function main() {
   }
 
   const access = args.noPassword ? 'sealed' : 'passphrase';
-  const password = args.noPassword ? randomBytes(32).toString('base64') : await readPassword(args);
+  const password = args.noPassword ? '' : await readPassword(args);
   if (!password && !args.noPassword) {
     throw new Error('Password must not be empty.');
   }
 
   const bytes = await readFile(inputPath);
-  const payload = encryptBytes(bytes, password, {
+  const payload = await encryptBytes(bytes, password, {
     iterations: args.iterations,
     chunkSize: args.chunkSize,
     sourceName,
@@ -296,7 +313,8 @@ async function main() {
   output.write(`${access === 'sealed' ? 'Sealed' : 'Encrypted'} ${inputPath} -> ${outputPath}\n`);
   output.write(`Access: ${access === 'sealed' ? 'no passphrase, crawler barrier only' : 'passphrase'}\n`);
   output.write(`Content type: ${args.privateFilename ? 'private' : payload.contentType}\n`);
-  output.write(`Payload chunks: ${payload.ciphertext.length}\n`);
+  output.write(`Payload chunks: ${(payload.content || payload.ciphertext).length}\n`);
+  output.write(`Original: ${bytes.byteLength} bytes → HTML package: ${Buffer.byteLength(wrapper)} bytes\n`);
 }
 
 main().catch((error) => {

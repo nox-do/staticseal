@@ -14,7 +14,7 @@ a successful CLI roundtrip does not guarantee that a recipient's browser can ope
 the output. Prefer files within the same provisional range when distributing CLI
 wrappers.
 
-All three Web Crypto decode paths allocate one destination buffer and decode
+Password-protected Web Crypto decode paths allocate one destination buffer and decode
 chunks sequentially, appending the GCM tag without copying the whole ciphertext
 again. Their argument count no longer grows with the file size. New app and CLI
 outputs default to 65,536 Base64 characters per chunk (49,152 source bytes), versus
@@ -24,8 +24,9 @@ outputs default to 65,536 Base64 characters per chunk (49,152 source bytes), ver
 bounds individual conversion work while substantially reducing object overhead;
 it does not implement streaming or guarantee a responsive UI.
 
-New outputs use one format: v2 with `encoding: "metadata"`. Compatibility with
-previous project payload formats is intentionally dropped. PBKDF2-SHA256 and
+Password outputs use v2 (original bytes) or v3 (gzip); no-password outputs use
+v4 (original bytes) or v5 (gzip). All use `encoding: "metadata"`.
+The older `v1/bytes` and `v2/private-metadata` layouts remain unsupported. PBKDF2-SHA256 and
 AES-256-GCM with authenticated metadata remain in use. Already distributed HTML
 files keep their own embedded decoder and are not modified by this change.
 Regenerate a file from its original content to obtain the current format.
@@ -90,14 +91,14 @@ The web app keeps file selection and the optional passphrase visible. A collapse
 **Advanced** section contains the passphrase generator, private-filename option,
 public title/output name and PBKDF2 settings. The submit button stays outside it.
 
-**Encrypt filename and file type too** is off by default. It puts
-both values inside the encrypted content and fixes the public title and downloaded
+**Hide original filename and file type** is off by default. It puts
+both values inside the packaged content and fixes the public title and downloaded
 wrapper name to `Protected file` and `protected_file.html`. These fields are disabled
 while the option is selected. The original name is restored after unlocking.
 Without the option, filename and MIME type remain readable in the payload, and the
 source name also appears in the title. Authentication does not hide them.
 File size remains observable in either mode. In sealed mode, anyone can recover
-private metadata because the unlock key is included.
+private metadata by decoding the packaged content. Only a passphrase makes it private.
 
 CLI equivalent:
 
@@ -124,16 +125,16 @@ both unlock cost and the cost of offline guesses. The 600k option is based on th
 
 ### Unified content format
 
-All outputs use v2 with `encoding: "metadata"`. Encrypted plaintext always consists
+Uncompressed password outputs use v2 with `encoding: "metadata"`. Encrypted plaintext consists
 of a four-byte unsigned big-endian JSON-header length, UTF-8 JSON containing
 `filename` and `contentType`, and the unchanged file bytes. The header is limited
 to 65,536 bytes. When private filenames are off, name and type are additionally
 published in the authenticated outer metadata. When on, those outer fields are
 omitted and the public title uses neutral text.
 
-AES-GCM authenticates the whole inner content and the existing ordered outer
+For password envelopes, AES-GCM authenticates the whole inner content and the existing ordered outer
 metadata fields, including version and encoding. The app, CLI and both generated
-wrappers use only this layout. Previous `v1/bytes` and `v2/private-metadata` layouts
+wrappers use this header layout. Previous `v1/bytes` and `v2/private-metadata` layouts
 are not accepted by the new decoder. Version and structure checks remain in place;
 removing compatibility does not mean guessing the format of unknown data.
 
@@ -142,6 +143,55 @@ metadata header is now present for public-name files too. In the app this requir
 a contiguous header-plus-file plaintext buffer; the CLI feeds the header and file
 separately into the cipher to avoid that additional full copy. Generator code stays
 in the creation UI; preview follows the image/text/Markdown/PDF policy described above.
+
+### Selective gzip packaging
+
+App and CLI try native gzip for inputs from 4,096 bytes through 25 MiB, regardless
+of MIME type or extension. Smaller inputs, larger CLI files, and creators without
+both native CompressionStream and DecompressionStream support stay uncompressed
+(v2 with a password, v4 without one).
+No compression library is shipped. Original browser file-size limits still apply.
+
+`prepareContent` compares complete raw and gzip envelope lengths before packaging
+(v2/v3 with a password, v4/v5 without one).
+It renders each fixed wrapper and accounts for the content header length,
+Base64 expansion, JSON chunk quotes/commas, and the optional unpacker. Title and
+GCM tag have identical lengths in both candidates, so their placeholder values
+cancel in the comparison; plaintext envelopes have no GCM tag. Ties keep the raw
+variant; even a smaller gzip stream is rejected if it does not pay for its unpacker.
+PBKDF2 and AES-GCM run only for password-protected winners.
+
+For v3/v5, the JSON header additionally contains `originalSize`; subsequent
+bytes are a single gzip stream. These versions unambiguously specify gzip. There is
+no runtime format sniffing: the generator inserts `inflateContent` into v3/v5 readers
+and omits it and its call entirely from v2/v4 readers. Original v2 envelopes remain
+supported by the common creator verification code. Previously distributed HTML
+keeps its own decoder.
+
+For encrypted files, AES-GCM authentication completes before decompression. The unpacker validates the
+declared original size (at most 25 MiB), bounds accumulated output to that size,
+and rejects truncated/invalid gzip and size mismatches before preview or download.
+Creation verifies exact original bytes and filename/type using the selected path.
+Both creator interfaces report input size and the actual UTF-8 HTML package size.
+Recipients need DecompressionStream for compressed envelopes; unsupported browsers
+show a specific error. Full cross-browser/mobile and peak-memory validation remains
+separate from the Node regression suite.
+
+### Optional encryption
+
+New password envelopes keep AES-GCM/PBKDF2 and the `ciphertext`/`tag` fields (v2/v3).
+New no-password envelopes instead store Base64 chunks in `content` (v4/v5), with no
+`alg`, `kdf`, `iterations`, `salt`, `iv`, `tag`, `unlockKey` or `ciphertext` fields.
+The inner metadata header is the same layout; original bytes, name and MIME type
+are verified before download in both modes. v4/v5 have no GCM integrity check.
+
+`createFormat` contains only the shared content parser and Base64 helpers.
+`createCrypto` holds authenticated metadata, PBKDF2 and AES-GCM decoding. The
+generator serializes the latter exclusively into password envelopes. Each emitted
+reader receives one decoder, with no runtime test for encrypted vs. plain content.
+No-password creation and reading work without Web Crypto; they do not generate a
+random key or call encryption/decryption APIs. The CLI follows the same policy.
+Already distributed HTML remains independent and retains its original decoder.
 
 The movement area shows a bounded SVG trail (up to 48 points), solely as input
 feedback. It is not an entropy meter and adds no code to generated wrappers.
@@ -205,3 +255,36 @@ these totals include the reduced JSON formatting and vary with filename/metadata
 The measurement uses synthetic ciphertext of the same length to isolate packaging
 overhead; byte-exact encryption/decryption is checked separately by the regression
 suite and browser smoke harness.
+
+### Selective gzip validation (2026-10-20)
+
+- Full regression: 26 passing tests; gzip/error/UI cases rerun after final changes.
+- Coverage includes the 4 KiB boundary, incompressible inputs, gzip savings smaller
+  than unpacker cost, different CLI chunk widths, missing native APIs, invalid
+  streams/sizes, raw CLI fallback above 25 MiB, and compressed 25 MiB roundtrips
+  for both access modes and both filename modes.
+- Chromium 155: all 12 existing browser smoke cases passed, including compressed
+  10/25 MiB envelopes, actual DOM previews, filename restoration and wrong passwords.
+- Actual browser file selection and download: 18,000 original bytes became a
+  17,992-byte gzip envelope; independently decrypted and restored byte-for-byte.
+- Built creator: 41,772 bytes, up 2,122 bytes from v1.0.3. The existing long-notes
+  fixture produces a 36,142-byte envelope rather than 503,520 bytes with the same
+  file/title/access settings. Uncompressed envelopes contain no gzip unpacker.
+- This does not establish Firefox, Safari, mobile, or peak-memory compatibility.
+
+### Optional encryption validation (2026-10-20)
+
+- `npm run check`: all 27 tests passed. No-password tests forbid Web Crypto in the
+  creator and reader, and forbid random-key, PBKDF2 and cipher calls in the CLI.
+- v4/v5 roundtrips cover empty, small, incompressible and compressible binary data,
+  public/private names, HTML parser control sequences, and gzip savings that do
+  not pay for the unpacker. Existing encrypted authentication and KDF tests remain.
+- Chromium 155: all 12 smoke cases passed. Both 10/25 MiB sealed cases confirm no
+  crypto code and exact decoding; password cases still reject wrong passwords.
+- Compared with the preceding gzip implementation, representative sealed envelopes
+  save 722 bytes, with or without gzip. The shared crypto helpers add 221 bytes to
+  the corresponding password envelopes. The creator grows 271 bytes to 42,043 bytes.
+  Measurements use identical titles, names, contents and iteration-count lengths;
+  the preceding sealed mode used its normal 44-character embedded random key.
+- No-password packages have no GCM integrity check. Creation still verifies exact
+  bytes; compressed readers also enforce gzip validity and the declared output size.

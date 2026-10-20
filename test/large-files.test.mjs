@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import vm from 'node:vm';
-import { webcrypto } from 'node:crypto';
+import { webcrypto, randomFillSync } from 'node:crypto';
+import { gzipSync } from 'node:zlib';
+import { prepareContent, COMPRESSION_THRESHOLD } from '../src/compression.mjs';
+import { inflateContent } from '../src/gzip.mjs';
 import { readFile, writeFile, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -16,7 +19,7 @@ function previewText(node) {
 // Execute the actual app/generated script with Node Web Crypto and a minimal DOM stub.
 // This tests cryptographic interoperability, not browser rendering or memory limits.
 const source = await readFile(new URL('../index.html', import.meta.url), 'utf8');
-function evaluate(script, exports, payload, crypto = webcrypto) {
+function evaluate(script, exports, payload, crypto = webcrypto, globals = {}) {
   const nodes = new Map();
   const downloads = [];
   const blobs = [];
@@ -31,9 +34,9 @@ function evaluate(script, exports, payload, crypto = webcrypto) {
     return nodes.get(id);
   } };
   const context = vm.createContext({ document, crypto, TextEncoder, TextDecoder,
-    Uint8Array, atob, btoa, console, Blob,
+    Uint8Array, atob, btoa, console, Blob, Response, CompressionStream, DecompressionStream, DOMException,
     URL: { createObjectURL(blob) { blobs.push(blob); return 'blob:test'; }, revokeObjectURL() {} },
-    window: { confirm() { return true; } } });
+    window: { confirm() { return true; } }, ...globals });
   const end = script.lastIndexOf('})();');
   assert.ok(end >= 0);
   script = script.slice(0, end) + `;globalThis.api = { ${exports} };\n` + script.slice(end);
@@ -47,17 +50,170 @@ function wrapper(html, replacement) {
   const script = html.slice(html.lastIndexOf('<script>') + 8, html.lastIndexOf('</script>'));
   return { payload, ...evaluate(script, 'unlock, renderBlobViewer, fromBase64Chunks, unpackContent, content: () => unlockedContent, confirmWith: (fn) => { window.confirm = fn; }', payload) };
 }
+
+test('sealed envelopes omit crypto and work without Web Crypto, with and without gzip', async () => {
+  const bare = evaluate(source.slice(source.indexOf('<script>') + 8, source.lastIndexOf('</script>')),
+    'encryptBytes, verifyPayload, renderWrapper', undefined, undefined, { crypto: undefined });
+  for (const bytes of [Buffer.alloc(0), Buffer.from('Unchanged original bytes.'), Buffer.alloc(8192),
+    randomFillSync(Buffer.alloc(8192)), Buffer.concat([randomFillSync(Buffer.alloc(7900)), Buffer.alloc(292)])])
+    for (const privateName of [false, true]) {
+    const file = { name: '</script><script>alert(1)</script>.txt', type: 'text/plain' };
+    const payload = await bare.encryptBytes(bytes, '', 210000, file, 'sealed', privateName);
+    assert.equal(payload.v, bytes.length === 8192 && bytes.every(value => value === 0) ? 5 : 4);
+    for (const field of ['alg', 'kdf', 'iterations', 'salt', 'iv', 'tag', 'unlockKey', 'ciphertext']) {
+      assert.equal(Object.hasOwn(payload, field), false, field);
+    }
+    const html = bare.renderWrapper({ title: file.name, payload });
+    for (const token of ['crypto.subtle', 'AES-GCM', 'PBKDF2', 'authenticatedDataFor']) assert.ok(!html.includes(token), token);
+    assert.equal(html.includes('DecompressionStream'), payload.v === 5);
+    const reader = evaluate(html.slice(html.lastIndexOf('<script>') + 8, html.lastIndexOf('</script>')),
+      'unlock, content: () => unlockedContent', payload, undefined, { crypto: undefined });
+    assert.deepEqual(Buffer.from(await reader.unlock()), bytes);
+    assert.equal(reader.content().filename, file.name);
+    assert.equal(reader.content().contentType, file.type);
+    await bare.verifyPayload(payload, '', bytes);
+  }
+  const dir = await mkdtemp(join(tmpdir(), 'staticseal-no-crypto-'));
+  try {
+    await writeFile(join(dir, 'input.txt'), Buffer.alloc(8192));
+    await writeFile(join(dir, 'forbid.cjs'), `const crypto = require('node:crypto');
+      for (const name of ['pbkdf2Sync', 'randomBytes', 'createCipheriv', 'createDecipheriv']) {
+        crypto[name] = () => { throw new Error('Unexpected crypto call: ' + name); };
+      }
+      require('node:module').syncBuiltinESMExports();`);
+    const cli = spawnSync(process.execPath, ['--require', join(dir, 'forbid.cjs'), 'bin/self-encrypt.mjs',
+      '--in', join(dir, 'input.txt'), '--out', join(dir, 'sealed.html'), '--no-password'],
+      { cwd: new URL('..', import.meta.url), encoding: 'utf8' });
+    assert.equal(cli.status, 0, cli.stderr);
+    const reader = wrapper(await readFile(join(dir, 'sealed.html'), 'utf8'));
+    assert.equal(reader.payload.v, 5);
+    assert.deepEqual(Buffer.from(await reader.unlock()), Buffer.alloc(8192));
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('gzip threshold, total-package savings and native API fallback', async () => {
+  const metadata = { v: 2, access: 'passphrase', filename: '内部.bin', contentType: 'application/octet-stream' };
+  const file = { filename: metadata.filename, contentType: metadata.contentType };
+  const { renderWrapper } = await import('../src/wrapper.mjs');
+  const asHtml = (content, chunkSize = 65536) => {
+    const ciphertext = Buffer.alloc(4 + content.header.length + content.bytes.length);
+    return renderWrapper({ title: 'Size test', payload: { ...metadata, v: content.v, tag: '',
+      ciphertext: app.toBase64Chunks(ciphertext, chunkSize) } });
+  };
+  const incompressible = randomFillSync(Buffer.alloc(8192));
+  const partlyCompressible = Buffer.concat([randomFillSync(Buffer.alloc(7000)), Buffer.alloc(1192)]);
+  const smallGain = Buffer.concat([randomFillSync(Buffer.alloc(7900)), Buffer.alloc(292)]);
+  assert.ok(gzipSync(smallGain).length < smallGain.length);
+  assert.equal((await prepareContent(smallGain, file, metadata, 65536)).v, 2,
+    'reject gzip savings that do not pay for the embedded decoder');
+  for (const chunkSize of [40, 65, 65536]) {
+    for (const bytes of [Buffer.alloc(COMPRESSION_THRESHOLD - 1), Buffer.alloc(COMPRESSION_THRESHOLD),
+      incompressible, partlyCompressible, smallGain, Buffer.alloc(65536)]) {
+      const result = await prepareContent(bytes, file, metadata, chunkSize);
+      const raw = { bytes, header: Buffer.from(JSON.stringify(file)), v: 2 };
+      const compressed = { bytes: gzipSync(bytes),
+        header: Buffer.from(JSON.stringify({ ...file, originalSize: bytes.length })), v: 3 };
+      const worthwhile = bytes.length >= COMPRESSION_THRESHOLD
+        && Buffer.byteLength(asHtml(compressed, chunkSize)) < Buffer.byteLength(asHtml(raw, chunkSize));
+      assert.equal(result.v, worthwhile ? 3 : 2, `size ${bytes.length}, chunk width ${chunkSize}`);
+      assert.ok(Buffer.byteLength(asHtml(result, chunkSize)) <= Buffer.byteLength(asHtml(raw, chunkSize)));
+      if (result.v === 2) assert.ok(!asHtml(result).includes('DecompressionStream'));
+    }
+  }
+  const fileInfo = { name: 'fallback.txt', type: 'text/plain' };
+  for (const missing of ['CompressionStream', 'DecompressionStream']) {
+    const fallback = evaluate(source.slice(source.indexOf('<script>') + 8, source.lastIndexOf('</script>')),
+      'encryptBytes, renderWrapper', undefined, webcrypto, { [missing]: undefined });
+    const payload = await fallback.encryptBytes(Buffer.alloc(8192), 'test', 160000, fileInfo, 'passphrase');
+    assert.equal(payload.v, 2);
+    assert.ok(!fallback.renderWrapper({ title: 'Fallback', payload }).includes('DecompressionStream'));
+  }
+  const overLimit = Buffer.alloc(25 * 1024 * 1024 + 1);
+  assert.equal((await prepareContent(overLimit, file, metadata, 65536)).v, 2);
+});
+
+test('compressed app and CLI envelopes restore 25 MiB exactly with both access and filename modes', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'staticseal-gzip-'));
+  try {
+    const bytes = Buffer.alloc(25 * 1024 * 1024);
+    for (let i = 0; i < bytes.length; i++) bytes[i] = i & 255;
+    const file = { name: 'compressed.bin', type: 'application/octet-stream' };
+    await writeFile(join(dir, file.name), bytes);
+    for (const access of ['passphrase', 'sealed']) for (const privateName of [false, true]) {
+      const payload = await app.encryptBytes(bytes, 'test', 160000, file, access, privateName);
+      assert.equal(payload.v, access === 'sealed' ? 5 : 3);
+      const appHtml = app.renderWrapper({ title: 'Compressed', payload });
+      assert.ok(appHtml.includes('DecompressionStream'));
+      assert.ok(!appHtml.includes('CompressionStream'));
+      assert.ok(Buffer.byteLength(appHtml) < 200000);
+      const cli = spawnSync(process.execPath, ['bin/self-encrypt.mjs', '--in', join(dir, file.name),
+        '--out', join(dir, 'sealed.html'), '--iterations', '160000',
+        '--chunk-size', privateName ? '65' : '65536',
+        access === 'sealed' ? '--no-password' : '--stdin-password', ...(privateName ? ['--private-filename'] : [])],
+        { cwd: new URL('..', import.meta.url), input: 'test\n', encoding: 'utf8' });
+      assert.equal(cli.status, 0, cli.stderr);
+      const cliHtml = await readFile(join(dir, 'sealed.html'), 'utf8');
+      for (const html of [appHtml, cliHtml]) {
+        const reader = wrapper(html);
+        const secret = reader.payload.unlockKey ?? 'test';
+        assert.equal(reader.payload.v, access === 'sealed' ? 5 : 3);
+        assert.deepEqual(Buffer.from(await reader.unlock(secret)), bytes);
+        assert.equal(reader.content().filename, file.name);
+        assert.equal(reader.content().contentType, file.type);
+        await app.verifyPayload(reader.payload, secret, bytes);
+        if (access === 'passphrase') {
+          await assert.rejects(reader.unlock('wrong-password'));
+          const changed = { ...reader.payload, v: 2 };
+          await assert.rejects(wrapper(html, changed).unlock(secret));
+        } else {
+          assert.ok(!html.includes('crypto.subtle'));
+          assert.ok(!html.includes('PBKDF2'));
+          assert.deepEqual(Buffer.from(await reader.unlock('any-value')), bytes);
+        }
+        if (privateName) assert.ok(!html.includes(file.name));
+      }
+    }
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('gzip restoration rejects damaged streams, invalid sizes and unsupported browsers', async () => {
+  const bytes = Buffer.alloc(8192, 255);
+  const content = { bytes: gzipSync(bytes), originalSize: bytes.length, filename: 'test.bin', contentType: 'application/octet-stream' };
+  assert.deepEqual(Buffer.from((await inflateContent(content)).bytes), bytes);
+  // Exercise the serialized minified helper too; it must have no module closure.
+  const built = evaluate(source.slice(source.indexOf('<script>') + 8, source.lastIndexOf('</script>')), 'inflateContent');
+  for (const inflate of [inflateContent, built.inflateContent]) {
+    for (const originalSize of [undefined, -1, 1.5, 25 * 1024 * 1024 + 1, bytes.length - 1, bytes.length + 1]) {
+      await assert.rejects(inflate({ ...content, originalSize }));
+    }
+    for (const data of [new Uint8Array([1, 2, 3]), content.bytes.subarray(0, -1)]) {
+      await assert.rejects(inflate({ ...content, bytes: data }));
+    }
+  }
+  const missing = evaluate(source.slice(source.indexOf('<script>') + 8, source.lastIndexOf('</script>')),
+    'inflateContent', undefined, webcrypto, { DecompressionStream: undefined });
+  await assert.rejects(missing.inflateContent(content), /gzip decompression support/);
+  const payload = await app.encryptBytes(bytes, 'test', 160000,
+    { name: content.filename, type: content.contentType }, 'passphrase');
+  const html = app.renderWrapper({ title: 'Unsupported browser', payload });
+  const reader = evaluate(html.slice(html.lastIndexOf('<script>') + 8, html.lastIndexOf('</script>')),
+    'unlock', payload, webcrypto, { DecompressionStream: undefined, console: { warn() {} } });
+  reader.nodes.get('password').value = 'test';
+  await reader.nodes.get('unlock-form').handlers.submit({ preventDefault() {} });
+  assert.match(reader.nodes.get('status').textContent, /gzip decompression support/);
+});
+
 for (const size of [10, 25]) {
   for (const access of ['passphrase', 'sealed']) {
    for (const privateName of [false, true]) {
-    test(`${size} MiB / ${access} / private name ${privateName}: app, CLI and both generated decryptors (Node Web Crypto)`, async () => {
-      const bytes = Buffer.alloc(size * 1024 * 1024);
-      for (let i = 0; i < bytes.length; i++) bytes[i] = (i * 31 + (i >>> 8)) & 255;
+    test(`${size} MiB / ${access} / private name ${privateName}: app, CLI and both generated readers`, async () => {
+      // Incompressible files retain the original chunk-layout regression coverage.
+      const bytes = randomFillSync(Buffer.alloc(size * 1024 * 1024));
       const password = 'regression-test-password';
       const payload = await app.encryptBytes(bytes, password, 210000,
         { name: 'large.bin', type: 'application/octet-stream' }, access, privateName);
       const packedSize = bytes.length + 4 + Buffer.byteLength(JSON.stringify({ filename: 'large.bin', contentType: 'application/octet-stream' }));
-      assert.equal(payload.ciphertext.length, Math.ceil(packedSize / 49152));
+      assert.equal((payload.content || payload.ciphertext).length, Math.ceil(packedSize / 49152));
       await app.verifyPayload(payload, password, bytes);
       const html = app.renderWrapper({ title: 'Test', payload, sourceName: 'large.bin' });
       assert.deepEqual(Buffer.from(await wrapper(html).unlock(password)), bytes);
@@ -71,9 +227,9 @@ for (const size of [10, 25]) {
         assert.equal(result.status, 0, result.stderr);
         const cliHtml = await readFile(join(dir, 'locked.html'), 'utf8');
         const cli = wrapper(cliHtml);
-        assert.equal(payload.v, 2);
+        assert.equal(payload.v, access === 'sealed' ? 4 : 2);
         assert.equal(payload.encoding, 'metadata');
-        assert.equal(cli.payload.v, 2);
+        assert.equal(cli.payload.v, access === 'sealed' ? 4 : 2);
         assert.equal(cli.payload.encoding, 'metadata');
         if (privateName) {
           assert.ok(!html.includes('large.bin'));
@@ -83,12 +239,12 @@ for (const size of [10, 25]) {
           assert.ok(cliHtml.includes('large.bin - protected file'));
         }
         const secret = cli.payload.unlockKey ?? password;
-        assert.equal(cli.payload.ciphertext.length, Math.ceil(packedSize / 49152));
+        assert.equal((cli.payload.content || cli.payload.ciphertext).length, Math.ceil(packedSize / 49152));
         assert.deepEqual(Buffer.from(await cli.unlock(secret)), bytes);
         assert.equal(cli.content().filename, 'large.bin');
         assert.equal(cli.content().contentType, 'application/octet-stream');
         await app.verifyPayload(cli.payload, secret, bytes);
-        for (const [generated, data, key] of [[html, payload, password], [cliHtml, cli.payload, secret]]) {
+        for (const [generated, data, key] of access === 'passphrase' ? [[html, payload, password], [cliHtml, cli.payload, secret]] : []) {
           await assert.rejects(wrapper(generated).unlock('wrong-password'));
           await assert.rejects(app.verifyPayload(data, 'wrong-password', bytes));
           for (const field of ['filename', 'contentType', 'access', 'unlockKey']) {
@@ -99,7 +255,7 @@ for (const size of [10, 25]) {
           const changed = { ...data, tag: Buffer.alloc(16).toString('base64') };
           await assert.rejects(wrapper(generated, changed).unlock(key));
         }
-        console.log(`${size} MiB ${access}: ${payload.ciphertext.length} chunks, app HTML ${Buffer.byteLength(html)} bytes`);
+        console.log(`${size} MiB ${access}: ${(payload.content || payload.ciphertext).length} chunks, app HTML ${Buffer.byteLength(html)} bytes`);
       } finally { await rm(dir, { recursive: true, force: true }); }
     });
    }
@@ -155,7 +311,7 @@ test('every authenticated metadata field rejects tampering, including KDF parame
   const bytes = new Uint8Array([0, 1, 2, 255]);
   const key = 'test-secret';
   const payload = await app.encryptBytes(bytes, key, 210000,
-    { name: 'small.bin', type: 'application/octet-stream' }, 'sealed');
+    { name: 'small.bin', type: 'application/octet-stream' }, 'passphrase');
   const html = app.renderWrapper({ title: 'Test', payload, sourceName: 'small.bin' });
   for (const field of ['v', 'alg', 'kdf', 'iterations', 'encoding', 'filename', 'contentType',
     'access', 'unlockKey', 'salt', 'iv']) {
@@ -216,7 +372,7 @@ test('private metadata parser rejects malformed headers and unsupported versions
     new Uint8Array([0,0,0,2,123,125]), new Uint8Array([0,0,0,1,255])]) {
     assert.throws(() => app.unpackContent(bytes, meta));
   }
-  for (const unsupported of [{ v: 1, encoding: 'bytes' }, { v: 2, encoding: 'private-metadata' }, { v: 3, encoding: 'metadata' }]) {
+  for (const unsupported of [{ v: 1, encoding: 'bytes' }, { v: 2, encoding: 'private-metadata' }, { v: 6, encoding: 'metadata' }]) {
     assert.throws(() => app.unpackContent(new Uint8Array(0), unsupported), /Unsupported payload format/);
   }
 });
@@ -298,6 +454,7 @@ test('private filename UI neutralizes fields and captures privacy before asynchr
   node('kdf-strength').value = '600000';
   await node('encrypt-form').handlers.submit({ preventDefault() {} });
   assert.deepEqual(ui.downloads, ['protected_file.html']);
+  assert.match(node('status').textContent, /Original: .* → HTML package: /);
   const html = await ui.blobs[0].text();
   assert.ok(!html.includes(file.name));
   const reader = wrapper(html);

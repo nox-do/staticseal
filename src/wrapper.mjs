@@ -1,4 +1,4 @@
-import { createFormat, createPreview } from './reader-factories.mjs';
+import { createFormat, createPreview, inflateContent, createCrypto } from './reader-factories.mjs';
 import { sealLogo } from './logo.mjs';
 import { wrapperTemplate, readerTemplate } from './wrapper-template.mjs';
 
@@ -18,6 +18,11 @@ export function renderWrapper({ title, payload }) {
     // Keep HTML script-parser control sequences out of the JSON data block.
     PAYLOAD: JSON.stringify(payload).replaceAll('<', '\\u003c'),
     READER: readerTemplate
+      .replace('STATICSEAL_DECODER', () => payload.v >= 4
+        ? '((p,k,b,c)=>c(p.content))'
+        : '(' + createCrypto.toString() + ')().decryptPayload')
+      .replace('STATICSEAL_RESTORE;', () => payload.v === 3 || payload.v === 5
+        ? 'unlockedContent=await (' + inflateContent.toString() + ')(unlockedContent);' : '')
       .replace('STATICSEAL_FORMAT', () => '(' + createFormat.toString() + ')')
       .replace('STATICSEAL_PREVIEW', () => '(' + createPreview.toString() + ')')
   };
