@@ -1,122 +1,110 @@
-# Staticseal Website Modus für Entwickler
+# Staticseal Website-Modus: Produktplan
 
-Stand: 19. Oktober 2026. Konzept für den Branch `codex/website-mode`; die beschriebenen Website-Befehle sind noch nicht implementiert.
+Stand: 19. Oktober 2026 · Branch: `codex/website-mode` · Status: Architekturplanung.
 
-## Produktziel
+## Ziel
 
-> Staticseal macht Webseiten für Menschen zugänglich und erschwert automatisiertes Auslesen — ohne Benutzerkonto oder Passwortpflicht.
+- Fertigen statischen Website-Build per CLI verschlüsselt verpacken.
+- Dateibaum, mehrere HTML-Seiten, Links und lokale Assets unterstützen.
+- Ausgabe auf statischem Hosting bereitstellen; im Browser entschlüsseln.
+- Standard: ohne Konto/Passphrase öffnen; einfache HTML-Abrufe erhalten keinen Klartext.
+- Optional: lokale Passphrase oder serverseitig autorisierte Schlüsselfreigabe.
+- Entwicklerbibliothek unabhängig von Website-Framework und Auth-Anbieter halten.
+- Build-Optimierungen erhalten; verschlüsselte Ressourcen bedarfsgerecht nachladen.
+- Statisches Hosting erlaubt dynamische Browser-Interaktionen; Backend-Funktionen werden nicht ersetzt.
 
-Dieses Ziel bestimmt Bedienung, Standardmodus und Abnahme. Entwickler sollen öffentliche Inhalte auf gewöhnlichem statischem Hosting anbieten können, ohne deren Klartext bereits mit einer einfachen HTML-Abfrage auszuliefern. Verschlüsselung ist dafür das Werkzeug. Passwortschutz bleibt eine zusätzliche Option für vertrauliche Inhalte.
+## Aktueller Arbeitsauftrag
 
-Der Einstieg soll ein zusätzlicher CLI-Schritt sein: fertige Build-Ausgabe hinein, veröffentlichbare verpackte Ausgabe heraus. Die Verschlüsselung erfolgt nach dem Website-Build, die Entschlüsselung im Browser. Zunächst unterstützen wir eigenständige HTML-Onepager. Ganze Websites mit Assets und mehreren Seiten sind das spätere Ziel.
+1. Architektur festlegen; offene Entscheidungen in [Architekturplan](staticseal-website-architektur.md) auflösen.
+2. Bewährte Muster aus BB Pilot referenzieren; keinen fremden App-Code ungeprüft übernehmen.
+3. Noch keinen Website-Modus implementieren.
 
-## Use Cases
+Die vorhandene Datei-App bleibt eigenständig. HTML-Dateien dort weiterhin nur zum Download anbieten. Website-Ausführung erhält eine eigene Laufzeit und ein eigenes Paketformat.
 
-### Öffentliche Inhalte mit einer Hürde für Crawler
+## Geplanter Entwicklerablauf
 
-Eine Entwicklerin veröffentlicht ein Portfolio, eine Präsentation oder einen Projektbericht. Menschen sollen die Inhalte über einen Link ohne Anmeldung oder Passwort sehen können. Einfache Crawler sollen beim Abruf jedoch nur die öffentliche Hülle und verschlüsselte Daten erhalten.
-
-Sie baut die Seite wie gewohnt, verarbeitet die Ausgabe mit Staticseal und veröffentlicht ausschließlich die verpackte Ausgabe. Besucher öffnen den Link und betätigen einmal „Seite öffnen“. Erst danach entschlüsselt und zeigt der Browser die Inhalte. Der Standardbetrieb benötigt keinen eigenen Server-Endpunkt.
-
-Der Button muss mit Maus, Touch, Tastatur und assistiven Technologien bedienbar sein. Bewegungsspiele, Pflichtregistrierung und wiederkehrende Prüfungen gehören nicht zum Standardablauf. Suchmaschinenauffindbarkeit und Linkvorschauen können durch die Hürde eingeschränkt sein; eine öffentliche Kurzbeschreibung kann bewusst außerhalb des verschlüsselten Inhalts bleiben.
-
-### Optional vertrauliche Inhalte
-
-Für Kundenpräsentationen oder Projektvorschauen kann die Entwicklerin zusätzlich eine Passphrase verlangen und diese separat teilen. Besucher geben sie vor dem Öffnen ein. Individuelle Konten, Rollen und sofortiger Zugangsentzug sind keine Eigenschaften des rein statischen Modells.
-
-## Schutzwirkung und Grenzen
-
-| Modus | Aussage |
-| --- | --- |
-| Öffnen per Klick ohne Passphrase als Standard | Liefert einfachen HTML-Abfragen keinen Klartext und verlangt im normalen Browserablauf eine Interaktion. Der Schlüssel ist verfügbar; angepasste Programme können direkt entschlüsseln, automatisierte Browser können klicken. |
-| Automatisches Öffnen als mögliche spätere Option | Hürde für reine HTML-Abfragen, aber keine zusätzliche Interaktionshürde für Browser mit JavaScript. |
-| Mit separat geteilter Passphrase | Inhalte bleiben ohne das Geheimnis verschlüsselt. Eine starke Passphrase ist wichtig, weil heruntergeladene Daten offline angegriffen werden können. |
-| `noindex` als Ergänzung | Hinweis für kooperative Suchmaschinen, keine Zugriffssperre. |
-
-„Menschen können es sehen, Maschinen nicht“ ist keine garantierbare technische Grenze. Ein Klick ist ein Auslöser, kein Nachweis menschlicher Nutzung. Wir messen, welche Abrufarten tatsächlich keinen Inhalt erhalten und welcher Aufwand für angepasste Bots sowie echte Besucher entsteht. Eine allgemeine Erfolgsquote gegen Crawler wird ohne entsprechende Messung nicht behauptet.
-
-Die zu verpackenden Inhalte dürfen nicht parallel als Klartext öffentlich erreichbar sein, etwa im Quellrepository, in alten Deployments oder als ungeschützte Assets. Bewusst öffentliche Metadaten bleiben davon ausgenommen. Nach dem Öffnen lassen sich Inhalte kopieren und weitergeben. Bei Passphrasenschutz schützt ein Passwortwechsel frühere heruntergeladene Ausgaben nicht nachträglich. Wer den ausgelieferten Entschlüsselungscode verändern kann, könnte eingegebene Passphrasen abgreifen; der Host bleibt eine Vertrauensinstanz.
-
-## Gewünschter Entwicklerablauf
-
-Die folgenden Namen und Befehle beschreiben die geplante Bedienung. Paketname und Veröffentlichung sind noch offen.
+Befehls-/Paketnamen sind Entwürfe, noch nicht verfügbar:
 
 ```sh
-npm install --save-dev @staticseal/cli
-
 npm run build
-npx staticseal site ./dist --out ./dist-sealed
+npx staticseal inspect ./dist
+npx staticseal build ./dist --out ./dist-sealed
 npx staticseal preview ./dist-sealed
 ```
 
-Der Standardbefehl erstellt die passwortlose Ausgabe mit einem Öffnen-Button. Nur bei ausdrücklich gewähltem Passphrasenschutz fragt die CLI das Geheimnis verdeckt ab; die genaue Option ist noch festzulegen. Der Vorschau-Befehl zeigt die tatsächlich erzeugte Ausgabe über einen lokalen Server. Entwickler können damit Öffnen, Darstellung und unterstützte Interaktionen vor dem Deployment prüfen.
+- `inspect`: unverändernde Prüfung und Bericht; blockierende Fehler liefern CI-Fehlercode.
+- `build`: prüft ebenfalls und paketiert die fertige Ausgabe; führt keinen Framework-Build aus. Ersetzt den bisherigen Befehlsentwurf `site`.
+- `preview`: tatsächlich erzeugte Ausgabe lokal ausliefern; Browserprüfung ist ein separater Nachweis.
+- Zusätzlicher Schritt nach dem bestehenden Build; keine Framework-Migration.
+- Eingabe unverändert lassen; ausschließlich `dist-sealed` deployen.
+- Einfacher Standardfall ohne Konfigurationsdatei.
+- Passphrase lokal verdeckt abfragen; in CI über stdin oder explizite Secret-Variable.
+- Keine Geheimnisse in Argumenten, Konfigurationsdateien oder Logs.
+- Fehlendes Geheimnis/fehlende Freigabe: Abbruch, kein Wechsel zum öffentlichen Modus.
+- Fehler nennen Pfad und Korrekturmöglichkeit; externe Abhängigkeiten ausweisen.
+- Erfolg erst nach vollständiger Paketprüfung; vorhandene Ausgabe bei Fehler nicht teilweise überschreiben.
 
-Für wiederholte Builds genügt ein zusätzlicher Eintrag in `package.json`:
+## Build-Kompatibilität und Leistung
 
-```json
-{
-  "scripts": {
-    "build:sealed": "npm run build && staticseal site ./dist --out ./dist-sealed"
-  }
-}
-```
+- Fertige Dateinamen/Hashes, Modulverweise und Chunk-Grenzen erhalten.
+- Minifizierung/Tree Shaking nicht erneut ausführen; vorhandenes Lazy Loading respektieren.
+- Ressourcen einzeln komprimieren, verschlüsseln und binär speichern; nach Freigabe bei Bedarf laden.
+- Optional: Build-Manifeste/Plugins liefern Einstiege und Abhängigkeiten; Kern bleibt ohne Framework-Pflicht.
+- `inspect` unterscheidet Fehler, externe Abhängigkeit und Prüfbedarf; Browsernachweise separat mit Umfang dokumentieren.
+- Separate APIs bleiben möglich, aber online erforderlich; keine automatische Backend-/Offline-Konvertierung.
+- Performance gegen unverpackten Build messen: Erstbesuch, Wiederbesuch, Unterseite und Releasewechsel.
+- Offen: Wiederverwendung unveränderter verschlüsselter Dateien über Releases bei neuer Build-Schlüsselvergabe.
 
-Veröffentlicht wird ausschließlich `dist-sealed`. Der ursprüngliche Build-Ordner bleibt unverändert. Eine Konfigurationsdatei ist für den einfachen Fall nicht erforderlich.
+## Zugangsarten und Schutzwirkung
 
-Bei gewähltem Passphrasenschutz wird in CI die Passphrase über Standard-Eingabe oder eine ausdrücklich benannte Umgebungsvariable aus dem Secret Store übergeben. Sie gehört weder in Kommandozeilenargumente noch in Konfigurationsdateien oder Logs. Fehlt sie in diesem Modus, bricht der Build ab; es gibt keinen automatischen Wechsel in den passwortlosen Modus.
+| Modus | Schlüsselquelle | Schutz vor Freigabe |
+| --- | --- | --- |
+| Öffentlich, Standard | Schlüssel im Paket; Button „Seite öffnen“ | Hürde für einfache HTML-Crawler; angepasste Programme können entschlüsseln |
+| Lokale Passphrase | Schlüsselableitung im Browser | Ohne Geheimnis verschlüsselt; Offline-Passwortraten möglich |
+| Externe Freigabe, später | API hält notwendigen Schlüssel zurück | Server prüft Zugang vor Schlüsselausgabe |
 
-## Verhalten des Werkzeugs
+- Klick ist kein Menschennachweis; keine allgemeine Anti-Scraping-Garantie.
+- Nach Freigabe kann ein berechtigter Besucher Inhalte und Schlüssel speichern.
+- Widerruf verhindert zukünftige Freigaben, löscht keine früheren Kopien.
+- Service Worker ist kein Schlüsseltresor und keine Isolation vor Website-Code.
+- Entschlüsselungs-Host und gegebenenfalls Freigabedienst bleiben Vertrauensinstanzen.
+- Originale nicht parallel öffentlich bereitstellen; Pfade/Größen können sichtbar bleiben.
+- `noindex` ist nur ein ergänzender Hinweis; Suchbarkeit/Linkvorschauen können eingeschränkt sein.
 
-- Eingabe und Ausgabe klar trennen und gefährliche Überschneidungen ablehnen.
-- Dateien und unterstützte Abhängigkeiten vor dem Verpacken prüfen. Fehler nennen den betroffenen Pfad und eine konkrete Korrekturmöglichkeit.
-- Nicht unterstützte Konstruktionen ablehnen, statt eine scheinbar erfolgreiche, später defekte Website zu erzeugen.
-- Nur vollständig erzeugte und geprüfte Ausgaben als erfolgreich melden. Ein Fehler darf nicht zu einem Deployment einer unvollständigen Ausgabe führen.
-- Externe Ressourcen sichtbar ausweisen. Sie sind weder automatisch mitverschlüsselt noch automatisch offline verfügbar.
-- Am Ende den Ausgabeordner, verarbeitete Inhalte und verbleibende externe Abhängigkeiten nennen, ohne Geheimnisse auszugeben.
+## Externe Freigabe: vorgesehener Anschluss
 
-## Erster Meilenstein
+- Primär: OAuth 2.0/OIDC; Browser-Anmeldung mit Authorization Code + PKCE.
+- Weitere Anschlüsse: HTTP Basic Auth über HTTPS, vorhandene Cookie-Session.
+- Freigabe: gewöhnlicher HTTPS-Request mit direkter Antwort, etwa `POST /unlock`.
+- Kein Webhook/Long Polling im Standardablauf.
+- Auth-Protokoll regelt Berechtigung; Staticseal-Vertrag regelt Build und Schlüsselantwort.
+- Login-Anbieter allein ist noch kein Schlüsseldienst.
+- Auth-Token/Passwort-Hash nicht als Inhaltsschlüssel verwenden.
+- Schnittstelle jetzt planen; konkrete Provider später implementieren.
 
-Der erste durchgängige Ablauf umfasst einen eigenständigen HTML-Onepager mit eingebetteten Ressourcen, passwortloses Öffnen per barrierefreiem Button, optionalen Passphrasenschutz, die lokale Vorschau und ein dokumentiertes Deployment auf GitHub Pages. Die Seite wird nach dem Entsperren angezeigt und kann innerhalb des ausdrücklich unterstützten Funktionsumfangs benutzt werden.
+## Geplante Meilensteine
 
-Die bestehende Browser-App bleibt das Werkzeug für einzelne Dateien. Ihre Entscheidung, HTML nur zum Download anzubieten, wird durch den Website-Modus nicht stillschweigend geändert. Die Ausführung von HTML und JavaScript benötigt einen eigenen, bewusst gestalteten Website-Wrapper.
+| Phase | Ergebnis |
+| --- | --- |
+| Jetzt: Planung | Ausführung, Sitzung, URLs, Paketformat und Updates explizit entscheiden |
+| Danach: Architekturprototyp | Zwei HTML-Seiten, separate Assets, dynamischer Import nach Interaktion; bedarfsgerechtes Laden und Worker-Lebenszyklus prüfen |
+| Erster Produktumfang | Nachgewiesene Funktionen, öffentliches Öffnen, lokale Passphrase, Preview, GitHub-Pages-Beispiel unter Unterpfad |
+| Erweiterung | Externe Schlüsselfreigabe, komplexere Builds/Router/Medien, Framework-Adapter |
 
-Zur Abnahme gehören:
+## Abnahme des ersten Produktumfangs
 
-1. Ein kopierbares Beispiel vom Build bis zur veröffentlichten Seite.
-2. Einfache HTML-Abfragen liefern keinen geschützten Klartext. Im normalen Browserablauf erfolgt die Entschlüsselung erst nach dem Öffnen; ein automatisierter Browser testet ausdrücklich auch die Umgehbarkeit per Klick.
-3. Bedienbarkeit mit Maus, Touch und Tastatur sowie Prüfung mit assistiven Technologien. Ladezeit und zusätzlicher Aufwand für Besucher werden erfasst.
-4. Beim optionalen Passphrasenschutz: erfolgreiches Entsperren mit korrekter Passphrase und Ablehnung falscher Passphrasen. Manipulierte geschützte Daten werden erkannt; ohne Geheimnis ist dies kein Schutz vor absichtlichem Neuverschlüsseln durch Dritte.
-5. Prüfung der erzeugten Ausgabe auf versehentlich enthaltene Originaldateien und Klartextinhalte.
-6. Tests des tatsächlich generierten Website-Codes in Browsern, einschließlich der zugesagten Interaktionen und eines Deployments unter einem Unterpfad wie `/staticseal/`.
-7. Verständlicher Abbruch bei einem nicht unterstützten Eingabeprojekt.
-
-Eine Node-Rückprüfung allein belegt weder Website-Funktion noch Browserkompatibilität. Die Größenregeln der bisherigen Datei-App werden nicht ungeprüft auf Websites übertragen.
-
-## Erweiterungen nach dem ersten Meilenstein
-
-Anschließend können lokale Bilder, CSS, Skripte und mehrere HTML-Seiten hinzukommen. Für mehrere Seiten ist das gewünschte Besuchererlebnis: einmal entsperren und innerhalb der Website navigieren. Die sichere Verwaltung des entsperrten Zustands und das Verhalten bei Neuladen sind noch festzulegen.
-
-Eine optionale servergestützte Schlüsselfreigabe kann später bestehende Anmeldungen oder serverseitig geprüfte Bot-Challenges anbinden. Dafür muss der Server einen notwendigen Schlüssel zurückhalten. Ein Ja/Nein-Endpunkt bei bereits verfügbarem Schlüssel ist keine belastbare Zugriffskontrolle; ein frei abrufbarer Schlüssel bietet kaum eine zusätzliche Hürde. Eine solche Erweiterung bringt Betriebskosten und Verfügbarkeitsabhängigkeiten mit sich und gehört nicht zum ersten Meilenstein. Bereits freigegebene Schlüssel oder Inhalte können nicht zurückgerufen werden.
-
-Framework-Plugins für beispielsweise Vite oder Astro können später Build-Pfade und Einstellungen automatisch übernehmen. Sie sollen dieselbe CLI beziehungsweise denselben Kern verwenden. Zunächst genügt ein dokumentierter CI-Workflow; eine eigene GitHub Action ist keine Startvoraussetzung.
-
-## Technische Entscheidungen vor der Umsetzung
-
-Die bestehende Verschlüsselung und Formatvalidierung bilden die Grundlage. Ein Website-Paket benötigt jedoch eine eigene Entscheidung zu Dateistruktur, Ressourcenauflösung und Ausführung. Das heutige Ein-Datei-Format wird nicht automatisch als ausreichendes Website-Format vorausgesetzt.
-
-Vor dem Implementieren des Website-Wrappers klären wir:
-
-- Wo entschlüsseltes HTML ausgeführt wird und welche Isolation, Skript- und Netzwerkregeln gelten.
-- Welche eingebetteten Ressourcen und Interaktionen der erste Meilenstein tatsächlich unterstützt.
-- Wie relative URLs, Unterpfade und später mehrere Seiten aufgelöst werden.
-- Wie nicht unterstützte Module, dynamische Ladevorgänge, Service Worker und Backend-Abhängigkeiten erkannt oder eingegrenzt werden.
-- Wie lange ein entsperrter Zustand bestehen bleibt und wie erneutes Sperren im optionalen Passphrasenmodus funktioniert.
-- Welche Metadaten öffentlich sichtbar bleiben, etwa Titel, Pfade und Dateigrößen.
-
-Ein kleiner Prototyp mit repräsentativen Seiten soll diese Fragen beantworten, bevor wir allgemeine Kompatibilität mit Framework-Builds zusagen.
+- Kopierbarer Ablauf: Build → Paket → Preview → Deployment.
+- Echte Browserprüfung des erzeugten Codes; Node-Rückprüfung allein reicht nicht.
+- Direktbesuch auf Unterseite, Navigation und zugesagte Interaktionen funktionieren.
+- HTML-Abruf/Output-Scan: kein geschützter Klartext und keine versehentlichen Originale.
+- Öffnen mit Maus, Touch, Tastatur und assistiven Technologien prüfen.
+- Richtige Passphrase funktioniert; falsche Passphrase und manipulierte Daten werden abgelehnt.
+- Automatisierter Browser demonstriert Umgehbarkeit der passwortlosen Klickhürde.
+- Ladezeit/Speicher messen; keine Übernahme der Datei-App-Größenlimits ohne Nachweis.
+- Nicht unterstützte Eingaben verständlich ablehnen; Grenzen statischer Analyse dokumentieren.
 
 ## Verteilung
 
-Die Browser-App wird weiterhin über GitHub Pages bereitgestellt. Für die CLI ist später eine npm-Veröffentlichung vorgesehen. Das Projekt steht unter der MIT-Lizenz; Paketname und veröffentlichte Dateien müssen dafür noch festgelegt werden. Ein GitHub-Release ist unabhängig davon und für dieses Konzept nicht erforderlich.
-
-Die gemeinsame technische Basis bleibt im Projekt. CLI und spätere Plugins ergänzen die Browser-App, ohne deren einfache Bedienung um Website-Konfiguration zu erweitern.
+- Browser-App: weiterhin GitHub Pages.
+- CLI/Lib: spätere npm-Veröffentlichung; Paketname/Dateiumfang offen.
+- Lizenz: MIT. GitHub-Release/eigene GitHub Action keine Voraussetzung.
