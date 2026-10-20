@@ -11,11 +11,11 @@ export function renderWrapper({ title, payload, sourceName }) {
   const scriptClose = '</' + 'script>';
   const hasPassphrase = payload.access !== 'sealed';
   const lockCopy = hasPassphrase
-    ? 'This file contains encrypted content. The passphrase unlocks it locally in your browser.'
-    : 'This file is sealed for static publishing. Open it locally in your browser.';
+    ? 'Enter the passphrase to open this file in your browser.'
+    : 'Open this file in your browser. No passphrase needed.';
   const hintCopy = hasPassphrase
-    ? 'Static encryption is not a replacement for server-side access control.'
-    : 'No passphrase is required. This hides cleartext from crawlers, but it is not confidentiality or access control.';
+    ? 'Passphrase protection depends on a strong passphrase. Anyone with the file can attempt offline password guesses.'
+    : 'Anyone with this file can open it.';
 
   return `<!doctype html>
 <html lang="en">
@@ -164,27 +164,42 @@ input:focus-visible, button:focus-visible, a:focus-visible {
 .viewer-page {
   display: block;
   place-items: normal;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
   padding: 0;
+  overflow: hidden;
 }
 .viewer-shell {
   width: 100%;
-  min-height: 100vh;
+  height: 100%;
   display: flex;
   flex-direction: column;
 }
 .viewer-bar {
   display: flex;
+  flex: none;
   align-items: center;
-  gap: 24px;
-  padding: 16px 24px;
+  gap: 12px;
+  padding: 6px 12px;
   background: var(--panel);
   border-bottom: 1px solid var(--line);
+}
+.viewer-bar .brand {
+  gap: 6px;
+  font-size: 18px;
+}
+.viewer-bar .brand svg {
+  width: 32px;
+  height: 32px;
 }
 .viewer-title {
   flex: 1;
   min-width: 0;
-  overflow-wrap: anywhere;
-  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
   font-weight: 650;
 }
 .viewer-title small {
@@ -196,12 +211,25 @@ input:focus-visible, button:focus-visible, a:focus-visible {
 .viewer-actions {
   flex: none;
 }
+.viewer-actions a {
+  min-height: 36px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+}
 #viewer-content {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
   place-items: center;
-  padding: 32px 24px;
+}
+.download-only {
+  width: min(calc(100% - 32px), 520px);
+  max-height: calc(100% - 32px);
+  margin: 16px;
+  overflow: auto;
 }
 .download-only p + p {
   margin-top: 16px;
@@ -212,16 +240,15 @@ input:focus-visible, button:focus-visible, a:focus-visible {
 .image-frame {
   display: block;
   max-width: 100%;
-  max-height: calc(100vh - 150px);
+  max-height: 100%;
   object-fit: contain;
-  border-radius: 8px;
 }
 .viewer-frame {
+  display: block;
   width: 100%;
-  height: calc(100vh - 150px);
-  min-height: 420px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  height: 100%;
+  min-height: 0;
+  border: 0;
   background: var(--panel);
 }
 @media (max-width: 560px) {
@@ -229,26 +256,18 @@ input:focus-visible, button:focus-visible, a:focus-visible {
     padding: 16px;
   }
   .viewer-bar {
-    flex-wrap: wrap;
-    gap: 12px;
-    padding: 16px;
+    gap: 8px;
+    padding: 6px 8px;
   }
-  .viewer-bar .brand {
-    width: 100%;
-    font-size: 19px;
+  .viewer-bar .brand span {
+    display: none;
   }
   .viewer-bar .brand svg {
-    width: 36px;
-    height: 36px;
+    width: 28px;
+    height: 28px;
   }
-  #viewer-content {
-    padding: 24px 16px;
-  }
-  .image-frame {
-    max-height: calc(100vh - 200px);
-  }
-  .viewer-frame {
-    height: calc(100vh - 200px);
+  .viewer-actions a {
+    min-height: 40px;
   }
 }
 </style>

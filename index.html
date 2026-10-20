@@ -564,9 +564,9 @@ button:disabled {
 <main class="page">
   <section class="intro" aria-labelledby="page-title">
     <div class="intro-copy">
-    <p class="eyebrow">A little privacy goes a long way</p>
-    <h1 id="page-title">Your files. <em>Safely sealed.</em></h1>
-    <p>Turn a file into a self-contained, encrypted HTML file.<br>Add a passphrase, download it, and share it your way.</p>
+    <p class="eyebrow">Simple file sharing.</p>
+    <h1 id="page-title">Your files. <em>Ready to share.</em></h1>
+    <p>Package a file as a self-contained HTML file.<br>Share it as an attachment or link. Add a passphrase if needed.</p>
     </div>
     <div class="mascot"><div aria-hidden="true"><svg id="seal-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="50" height="50" aria-hidden="true">
 <circle cx="50" cy="50" r="46" fill="#eef2f7"/>
@@ -585,7 +585,7 @@ button:disabled {
 </g></svg></div><span class="brand">staticseal</span></div>
   </section>
   <div class="workspace">
-  <section class="tool" aria-label="File encryption tool">
+  <section class="tool" aria-label="File packaging tool">
     <form class="panel" id="encrypt-form">
       <div class="panel-heading"><h2>Seal a file</h2></div>
       <div class="row">
@@ -604,7 +604,7 @@ button:disabled {
         </div>
         <div class="passphrase-note">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></svg>
-          <p class="meta" id="passphrase-note">Leave both fields blank for a crawler barrier only.</p>
+          <p class="meta" id="passphrase-note">Without a passphrase, anyone with the file can open it.</p>
         </div>
       </div>
 
@@ -671,8 +671,8 @@ button:disabled {
   <aside class="guide" aria-label="How Staticseal works">
     <h2>One file in.<br>One sealed file out.</h2>
     <ol>
-      <li><strong>Pick something to protect</strong><p>A document, an image, a little HTML page.</p></li>
-      <li><strong>Seal it on your device</strong><p>Staticseal packages your file with everything needed to unlock it.</p></li>
+      <li><strong>Pick a file to share</strong><p>A document, an image, a little HTML page.</p></li>
+      <li><strong>Seal it on your device</strong><p>Staticseal packages your file with everything needed to open it.</p></li>
     </ol>
     <div class="local-sticker" aria-label="Local processing notice">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4m-4-11 3 3 5-5"/></svg>
@@ -938,11 +938,11 @@ function renderWrapper({ title, payload, sourceName }) {
   const scriptClose = '</' + 'script>';
   const hasPassphrase = payload.access !== 'sealed';
   const lockCopy = hasPassphrase
-    ? 'This file contains encrypted content. The passphrase unlocks it locally in your browser.'
-    : 'This file is sealed for static publishing. Open it locally in your browser.';
+    ? 'Enter the passphrase to open this file in your browser.'
+    : 'Open this file in your browser. No passphrase needed.';
   const hintCopy = hasPassphrase
-    ? 'Static encryption is not a replacement for server-side access control.'
-    : 'No passphrase is required. This hides cleartext from crawlers, but it is not confidentiality or access control.';
+    ? 'Passphrase protection depends on a strong passphrase. Anyone with the file can attempt offline password guesses.'
+    : 'Anyone with this file can open it.';
 
   return `<!doctype html>
 <html lang="en">
@@ -1091,27 +1091,42 @@ input:focus-visible, button:focus-visible, a:focus-visible {
 .viewer-page {
   display: block;
   place-items: normal;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
   padding: 0;
+  overflow: hidden;
 }
 .viewer-shell {
   width: 100%;
-  min-height: 100vh;
+  height: 100%;
   display: flex;
   flex-direction: column;
 }
 .viewer-bar {
   display: flex;
+  flex: none;
   align-items: center;
-  gap: 24px;
-  padding: 16px 24px;
+  gap: 12px;
+  padding: 6px 12px;
   background: var(--panel);
   border-bottom: 1px solid var(--line);
+}
+.viewer-bar .brand {
+  gap: 6px;
+  font-size: 18px;
+}
+.viewer-bar .brand svg {
+  width: 32px;
+  height: 32px;
 }
 .viewer-title {
   flex: 1;
   min-width: 0;
-  overflow-wrap: anywhere;
-  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
   font-weight: 650;
 }
 .viewer-title small {
@@ -1123,12 +1138,25 @@ input:focus-visible, button:focus-visible, a:focus-visible {
 .viewer-actions {
   flex: none;
 }
+.viewer-actions a {
+  min-height: 36px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+}
 #viewer-content {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
   place-items: center;
-  padding: 32px 24px;
+}
+.download-only {
+  width: min(calc(100% - 32px), 520px);
+  max-height: calc(100% - 32px);
+  margin: 16px;
+  overflow: auto;
 }
 .download-only p + p {
   margin-top: 16px;
@@ -1139,16 +1167,15 @@ input:focus-visible, button:focus-visible, a:focus-visible {
 .image-frame {
   display: block;
   max-width: 100%;
-  max-height: calc(100vh - 150px);
+  max-height: 100%;
   object-fit: contain;
-  border-radius: 8px;
 }
 .viewer-frame {
+  display: block;
   width: 100%;
-  height: calc(100vh - 150px);
-  min-height: 420px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  height: 100%;
+  min-height: 0;
+  border: 0;
   background: var(--panel);
 }
 @media (max-width: 560px) {
@@ -1156,26 +1183,18 @@ input:focus-visible, button:focus-visible, a:focus-visible {
     padding: 16px;
   }
   .viewer-bar {
-    flex-wrap: wrap;
-    gap: 12px;
-    padding: 16px;
+    gap: 8px;
+    padding: 6px 8px;
   }
-  .viewer-bar .brand {
-    width: 100%;
-    font-size: 19px;
+  .viewer-bar .brand span {
+    display: none;
   }
   .viewer-bar .brand svg {
-    width: 36px;
-    height: 36px;
+    width: 28px;
+    height: 28px;
   }
-  #viewer-content {
-    padding: 24px 16px;
-  }
-  .image-frame {
-    max-height: calc(100vh - 200px);
-  }
-  .viewer-frame {
-    height: calc(100vh - 200px);
+  .viewer-actions a {
+    min-height: 40px;
   }
 }
 </style>

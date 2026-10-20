@@ -10,7 +10,7 @@ import { renderWrapper } from '../src/wrapper.mjs';
 
 const { fromBase64Chunks, unpackContent, authenticatedDataFor } = createFormat(value => Buffer.from(value, 'base64'));
 
-const VERSION = '1.0.0';
+const VERSION = '1.0.1';
 const DEFAULT_ITERATIONS = 210_000;
 const DEFAULT_CHUNK_SIZE = 64 * 1024;
 function parseArgs(argv) {

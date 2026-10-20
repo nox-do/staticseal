@@ -1,14 +1,14 @@
 # Staticseal
 
-Turn a file into a self-contained, encrypted HTML file. Share it as an attachment
-or host it on a static website. Recipients unlock it locally in their browser.
+Package a file as a self-contained HTML file. Share it as an attachment or link.
+Add a passphrase if needed.
 
 **[Open Staticseal](https://nox-do.github.io/staticseal/)** · [MIT license](LICENSE)
 
 ## Use in your browser
 
 1. Choose a file.
-2. Enter and repeat a passphrase.
+2. Optionally add and repeat a passphrase.
 3. Select **Seal & download file**.
 
 Your file and passphrase stay in your browser. No upload, account, or backend is
@@ -49,9 +49,9 @@ Run `node bin/self-encrypt.mjs --help` for all options.
 
 ## Know the limits
 
-- **Use a strong passphrase.** Files use AES-256-GCM and PBKDF2-SHA256 with
-  authenticated metadata. Anyone with the output can attempt offline password
-  guesses. There is no password reset or server-side access control.
+- **Passphrase protection depends on a strong passphrase.** Anyone with the file
+  can attempt offline password guesses. There is no password reset or server-side
+  access control.
 - **Without a passphrase, contents are not private.** Leaving both browser fields
   blank, or using `--no-password`, embeds the unlock key. This only obstructs simple
   crawlers; anyone with the file can recover its contents.
