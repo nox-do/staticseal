@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 import { createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { basename, dirname, extname, resolve } from 'node:path';
+import { basename, dirname, resolve } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 
+import { createPreview } from '../src/preview.mjs';
 import { createFormat } from '../src/format.mjs';
 import { renderWrapper } from '../src/wrapper.mjs';
 
@@ -112,22 +113,7 @@ function toBase64Chunks(bytes, size) {
   return chunks;
 }
 
-function inferContentType(filePath) {
-  const types = {
-    '.html': 'text/html',
-    '.htm': 'text/html',
-    '.xhtml': 'application/xhtml+xml',
-    '.pdf': 'application/pdf',
-    '.png': 'image/png',
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.gif': 'image/gif',
-    '.webp': 'image/webp',
-    '.svg': 'image/svg+xml',
-    '.txt': 'text/plain'
-  };
-  return types[extname(filePath).toLowerCase()] || 'application/octet-stream';
-}
+const { inferContentType } = createPreview();
 
 function stripFinalLineEnding(value) {
   if (value.endsWith('\r\n')) {
@@ -294,7 +280,7 @@ async function main() {
     iterations: args.iterations,
     chunkSize: args.chunkSize,
     sourceName,
-    contentType: inferContentType(inputPath),
+    contentType: inferContentType(basename(inputPath)),
     access,
     privateFilename: args.privateFilename
   });

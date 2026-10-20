@@ -1,5 +1,6 @@
 import { createFormat } from './format.mjs';
 import { sealLogo } from './logo.mjs';
+import { createPreview } from './preview.mjs';
 
 export function renderWrapper({ title, payload, sourceName }) {
   const { escapeHtml } = createFormat();
@@ -251,6 +252,38 @@ input:focus-visible, button:focus-visible, a:focus-visible {
   border: 0;
   background: var(--panel);
 }
+.text-frame {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  padding: clamp(16px, 4vw, 40px);
+  background: var(--panel);
+}
+.text-frame pre, .text-frame code {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 13px;
+}
+.text-frame > pre {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  tab-size: 4;
+}
+.markdown-frame > article { max-width: 80ch; margin: auto; overflow-wrap: anywhere; }
+.markdown-frame p { color: inherit; font-size: inherit; }
+.markdown-frame p, .markdown-frame pre, .markdown-frame blockquote { margin: 0 0 1em; }
+.markdown-frame h1, .markdown-frame h2, .markdown-frame h3 { margin: 1em 0 .5em; }
+.markdown-frame pre { overflow: auto; padding: 16px; background: var(--bg); }
+.markdown-frame :not(pre) > code { padding: 2px 4px; background: var(--bg); }
+.markdown-frame blockquote { margin-left: 0; padding-left: 16px; border-left: 3px solid var(--line); }
+.markdown-frame a { color: var(--accent); }
+.preview-note { margin-bottom: 16px; color: var(--muted); font-size: 13px; }
+.preview-end { margin: 24px 0 0; padding: 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+.syntax-comment { color: #64736a; font-style: italic; }
+.syntax-string { color: #21633c; }
+.syntax-number { color: #995014; }
+.syntax-keyword, .syntax-tag { color: #7043a0; }
+.syntax-key { color: #1d638e; }
 @media (max-width: 560px) {
   body {
     padding: 16px;
@@ -307,6 +340,7 @@ ${scriptClose}
   const status = document.getElementById('status');
   const payload = JSON.parse(document.getElementById('encrypted-payload').textContent);
   const { escapeHtml, fromBase64, fromBase64Chunks, unpackContent, authenticatedDataFor } = (${createFormat.toString()})();
+  const { inferContentType, previewKind, renderMarkdown, codeLanguage, highlightCode } = (${createPreview.toString()})();
   const brand = document.getElementById('wrapper-brand').outerHTML;
 
   async function deriveKey(password) {
@@ -345,10 +379,10 @@ ${scriptClose}
   }
 
   function renderBlobViewer(bytes) {
-    const contentType = unlockedContent.contentType || 'application/octet-stream';
     const filename = unlockedContent.filename || 'sealed-file';
-    const isImage = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(contentType);
-    const isPdf = contentType === 'application/pdf';
+    const contentType = inferContentType(filename, unlockedContent.contentType);
+    const kind = previewKind(filename, contentType);
+    const isPdf = kind === 'pdf';
     const blob = new Blob([bytes], { type: contentType });
     const url = URL.createObjectURL(blob);
     const safeName = escapeHtml(filename);
@@ -364,8 +398,32 @@ ${scriptClose}
       '</div></header><section id="viewer-content"></section></main>';
 
     const viewer = document.getElementById('viewer-content');
-    if (isImage) {
+    if (kind === 'image') {
       viewer.innerHTML = '<img class="image-frame" alt="' + safeName + '" src="' + url + '">';
+      return;
+    }
+    if (kind === 'text' || kind === 'markdown') {
+      const limit = 128 * 1024;
+      const truncated = bytes.length > limit;
+      const encoding = bytes[0] === 255 && bytes[1] === 254 ? 'utf-16le'
+        : bytes[0] === 254 && bytes[1] === 255 ? 'utf-16be' : 'utf-8';
+      let text;
+      try {
+        text = new TextDecoder(encoding, { fatal: true }).decode(bytes.subarray(0, limit), { stream: truncated });
+      } catch {
+        viewer.innerHTML = '<div class="download-only"><h1>Text preview unavailable</h1><p>Unsupported text encoding. Download the original file to open it.</p></div>';
+        return;
+      }
+      viewer.innerHTML = '<section class="text-frame' + (kind === 'markdown' ? ' markdown-frame' : '') + '">' +
+        (truncated ? '<p class="preview-note">Preview limited to the first 128 KiB. Download contains the complete file.</p>' : '') +
+        (kind === 'markdown' ? '<article>' + renderMarkdown(text) + '</article>' : '<pre id="text-preview"></pre>') +
+        (truncated ? '<aside class="preview-note preview-end" role="note"><strong>Preview ends here — the file continues.</strong><br>Only the first 128 KiB are shown. Use Download above to read the complete original file.</aside>' : '') + '</section>';
+      if (kind === 'text') {
+        const pre = document.getElementById('text-preview');
+        const language = codeLanguage(filename, contentType);
+        if (language) pre.innerHTML = highlightCode(text, language);
+        else pre.textContent = text;
+      }
       return;
     }
     viewer.innerHTML = '<div class="download-only">' +

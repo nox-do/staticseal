@@ -55,7 +55,8 @@ Before treating the proposed range as supported, test Chrome, Firefox and Safari
 on desktop, plus Safari/iOS and Chrome/Android on memory-constrained devices:
 
 - Create and reopen 5, 10 and 25 MiB files in both access modes with both generators.
-- Check byte-exact downloads, allowlisted image previews, PDF consent/cancellation and download-only HTML.
+- Check byte-exact downloads, allowlisted image previews (including SVG as an image),
+  escaped text/source previews, Markdown formatting and PDF consent/cancellation.
 - Confirm wrong passwords and metadata tampering never display plaintext.
 - Check warning/confirmation boundaries and rejection above 25 MiB before file reads.
 - Record browser/device versions, peak process memory, creation/unlock time,
@@ -74,11 +75,13 @@ node test/build-browser-smoke.mjs /tmp/staticseal-browser-smoke
 python3 -m http.server 8766 --bind 127.0.0.1 --directory /tmp/staticseal-browser-smoke
 ```
 
-Open `http://127.0.0.1:8766/smoke.html` and check for six PASS lines and DONE.
+Open `http://127.0.0.1:8766/smoke.html` and check for twelve PASS lines and DONE.
 The harness uses the actual app and generated wrapper scripts in browser iframes;
 its test hooks are absent from production output.
 Two cases parse complete app/CLI wrappers with a public filename containing
 HTML script-parser control sequences and verify decryption and the restored name.
+Six preview cases verify escaped HTML/JSON, Markdown and code colors, text
+truncation and its end notice, dense-code fallback, and SVG rendering in a real DOM.
 
 
 ## Private filenames and passphrase generation
@@ -138,8 +141,34 @@ This removes the legacy decoding branch and the split creation path. The small
 metadata header is now present for public-name files too. In the app this requires
 a contiguous header-plus-file plaintext buffer; the CLI feeds the header and file
 separately into the cipher to avoid that additional full copy. Generator code stays
-in the creation UI; preview follows the restricted image/PDF policy described above.
+in the creation UI; preview follows the image/text/Markdown/PDF policy described above.
 
 The movement area shows a bounded SVG trail (up to 48 points), solely as input
 feedback. It is not an entropy meter and adds no code to generated wrappers.
 
+
+## Compact offline previews
+
+`src/preview.mjs` shares file-type detection between the app, CLI and generated
+wrappers. Plain text previews use `textContent`. JavaScript, JSON and HTML get
+basic syntax colors through escaped text wrapped in fixed CSS spans, including
+Markdown fences labeled js/javascript, json or html. This is a small lexical
+highlighter, not a full language parser; regex literals and template substitutions
+in JavaScript and embedded languages in HTML are not parsed separately. HTML,
+XML and source code never execute. Markdown uses a dependency-free basic-subset renderer, not a complete
+CommonMark implementation. It supports ATX headings, paragraphs, simple lists,
+blockquotes, fenced code, inline code, emphasis, strikethrough, rules and links.
+Nested lists, tables, reference links and embedded HTML are not interpreted.
+Source HTML is escaped, images remain literal Markdown, and only explicit HTTP,
+HTTPS, mailto and fragment links become clickable. No remote assets are loaded.
+SVG is embedded through an image element, never as an inline SVG or document.
+
+Text decoding accepts UTF-8 and UTF-16 with a byte-order mark. Unsupported encodings
+fall back to a download message. Previews decode at most the first 128 KiB, with
+visible truncation notices above and below the preview, while the original download stays byte-exact. This
+bounds rendering work but does not change the complete-file decryption cost.
+Dense code falls back to escaped text above 4,096 colored spans. Markdown with
+more than 4,096 lines or more than roughly 4,096 generated elements is shown as
+escaped source with an explanatory note. These limits bound DOM expansion as
+well as input size; they do not change the downloaded original.
+New previews apply only to newly generated wrappers.

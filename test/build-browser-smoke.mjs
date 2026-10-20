@@ -8,6 +8,14 @@ const out = resolve(process.argv[2] || '/tmp/staticseal-browser-smoke');
 await mkdir(out, { recursive: true });
 const embeddingName = '<!--<script>.txt';
 const embeddingBytes = new Uint8Array([0, 1, 128, 255]);
+const previewCases = [
+  ['source.html', 'text/html', '<script>alert("source only")</script><div title="x">Hello</div>', 'html'],
+  ['data.json', 'application/json', '{"key":"<img src=x>","count":42,"ready":true}', 'json'],
+  ['note.md', 'text/markdown', '# C#\n\n**Bold**\n\n```js\nconst count = 42;\n```', 'markdown'],
+  ['long.txt', 'text/plain', 'ä'.repeat(100000), 'truncated'],
+  ['dense.json', 'application/json', '0 '.repeat(65536), 'dense'],
+  ['drawing.svg', 'image/svg+xml', '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><circle cx="20" cy="20" r="15" fill="green"/></svg>', 'svg']
+];
 await writeFile(join(out, embeddingName), embeddingBytes);
 const cli = spawnSync(process.execPath, [fileURLToPath(new URL('../bin/self-encrypt.mjs', import.meta.url)),
   '--in', join(out, embeddingName), '--out', join(out, 'embedding-cli.html'), '--stdin-password'],
@@ -50,6 +58,41 @@ const runner = `
         frame.contentWindow.reader.renderBlobViewer(decoded);
         check(frame.contentDocument.body.textContent.includes(embeddingName), generator + ': name not restored');
         log('PASS: ' + generator + ' / public filename with HTML script-parser control sequences');
+      } finally { frame.remove(); }
+    }
+    for (const [name, type, text, kind] of ${JSON.stringify(previewCases).replaceAll('<', '\\u003c')}) {
+      const bytes = new TextEncoder().encode(text);
+      const payload = await smoke.encryptBytes(bytes, 'preview-test', 210000, { name, type }, 'sealed', true);
+      let wrapped = smoke.renderWrapper({ title: name, sourceName: name, payload });
+      const end = wrapped.lastIndexOf('})();');
+      wrapped = wrapped.slice(0, end) + 'window.reader = { unlock, renderBlobViewer };' + wrapped.slice(end);
+      const frame = document.createElement('iframe');
+      const loaded = new Promise(resolve => frame.onload = resolve);
+      frame.srcdoc = wrapped;
+      document.body.append(frame);
+      await loaded;
+      try {
+        const reader = frame.contentWindow.reader;
+        reader.renderBlobViewer(await reader.unlock('preview-test'));
+        const doc = frame.contentDocument;
+        const pre = doc.getElementById('text-preview');
+        if (kind === 'html' || kind === 'json' || kind === 'dense') {
+          check(pre.textContent === text, name + ': source text changed');
+          check(!pre.querySelector('script, img, div'), name + ': active source became DOM');
+          check(kind === 'dense' ? !pre.querySelector('span') : !!pre.querySelector('.syntax-' + (kind === 'html' ? 'tag' : 'key')), name + ': highlighting/fallback');
+        } else if (kind === 'markdown') {
+          check(doc.querySelector('article h1').textContent === 'C#', name + ': heading changed');
+          check(doc.querySelector('article strong').textContent === 'Bold', name + ': emphasis');
+          check(!!doc.querySelector('article code .syntax-keyword'), name + ': fenced code colors');
+        } else if (kind === 'truncated') {
+          check(pre.textContent === text.slice(0, 65536), name + ': truncation boundary');
+          check(pre.nextElementSibling.classList.contains('preview-end'), name + ': missing end notice');
+        } else {
+          const image = doc.querySelector('.image-frame');
+          await image.decode();
+          check(image.naturalWidth === 40, name + ': SVG image did not render');
+        }
+        log('PASS: preview / ' + kind + ' / real DOM');
       } finally { frame.remove(); }
     }
     for (const size of [10, 25]) for (const access of ['passphrase', 'sealed']) {

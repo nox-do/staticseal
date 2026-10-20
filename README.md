@@ -19,8 +19,14 @@ Under **Advanced options**, you can generate a passphrase, encrypt the original
 filename and file type, or adjust the PBKDF2 settings. Share the passphrase
 separately from the generated file.
 
-After unlocking, PNG, JPEG, GIF and WebP display inline. PDFs offer an optional
-preview after confirmation. HTML, SVG and other formats are download-only.
+After unlocking, PNG, JPEG, GIF, WebP and SVG display inline. SVG uses an image
+element. Text and source code (including HTML) display as escaped text, and
+JavaScript, JSON and HTML get basic syntax colors, including labeled Markdown
+code blocks. Markdown offers basic formatting: headings, paragraphs, emphasis, lists, quotes,
+fenced code blocks and links. Markdown HTML remains text; images are not loaded.
+Text previews show at most 128 KiB and support UTF-8 and BOM-marked UTF-16.
+Downloads always contain the complete original file. PDFs offer an optional
+preview after confirmation. Other formats are download-only.
 Staticseal packages individual files; it does not currently run or package whole websites.
 
 ## Use the CLI

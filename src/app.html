@@ -744,25 +744,8 @@ button:disabled {
     return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   };
 
-  const inferContentType = (file) => {
-    if (file.type) {
-      return file.type;
-    }
-    const extension = file.name.toLowerCase().split('.').pop();
-    const types = {
-      html: 'text/html',
-      htm: 'text/html',
-      pdf: 'application/pdf',
-      png: 'image/png',
-      jpg: 'image/jpeg',
-      jpeg: 'image/jpeg',
-      gif: 'image/gif',
-      webp: 'image/webp',
-      svg: 'image/svg+xml',
-      txt: 'text/plain'
-    };
-    return types[extension] || 'application/octet-stream';
-  };
+  const fileType = createPreview().inferContentType;
+  const inferContentType = (file) => fileType(file.name, file.type);
 
   async function deriveKey(passphrase, salt, iterationCount, usages) {
     const baseKey = await crypto.subtle.importKey(
