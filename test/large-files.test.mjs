@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createPreview } from '../src/preview.mjs';
+import { themeStyle } from '../src/cli-theme.mjs';
 
 function previewText(node) {
   return node.textContent || (node.innerHTML || '').replace(/<span class="s-[a-z]+">|<\/span>/g, '')
@@ -41,7 +42,7 @@ function evaluate(script, exports, payload, crypto = webcrypto, globals = {}) {
   assert.ok(end >= 0);
   script = script.slice(0, end) + `;globalThis.api = { ${exports} };\n` + script.slice(end);
   vm.runInContext(script, context);
-  return Object.assign(context.api, { nodes, downloads, blobs });
+  return Object.assign(context.api, { nodes, downloads, blobs, document });
 }
 const app = evaluate(source.slice(source.indexOf('<script>') + 8, source.lastIndexOf('</script>')),
   'encryptBytes, verifyPayload, renderWrapper, fromBase64Chunks, toBase64Chunks, generateSecret, packContent, unpackContent');
@@ -50,6 +51,210 @@ function wrapper(html, replacement) {
   const script = html.slice(html.lastIndexOf('<script>') + 8, html.lastIndexOf('</script>'));
   return { payload, ...evaluate(script, 'unlock, renderBlobViewer, fromBase64Chunks, unpackContent, content: () => unlockedContent, confirmWith: (fn) => { window.confirm = fn; }', payload) };
 }
+
+test('minimal opening screens and custom button labels preserve access modes and errors', async () => {
+  const { renderWrapper } = await import('../src/wrapper.mjs');
+  const dir = await mkdtemp(join(tmpdir(), 'staticseal-minimal-'));
+  const bytes = Buffer.from('<!doctype html><title>Impressum</title><h1>Impressum</h1>');
+  const label = 'Impressum öffnen $& </button><script>bad()</script>';
+  const safeLabel = label.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+  try {
+    await writeFile(join(dir, 'page.html'), bytes);
+    for (const access of ['sealed', 'passphrase']) for (const minimal of [false, true]) {
+      const payload = await app.encryptBytes(bytes, 'minimal-test', 100000,
+        { name: 'page.html', type: 'text/html' }, access, false, true);
+      const result = spawnSync(process.execPath, ['bin/self-encrypt.mjs', '--in', join(dir, 'page.html'),
+        '--out', join(dir, 'output.html'), '--html-page', '--title', 'Impressum', '--button-label', label,
+        '--iterations', '100000', access === 'sealed' ? '--no-password' : '--stdin-password', ...(minimal ? ['--minimal'] : [])],
+      { cwd: new URL('..', import.meta.url), input: 'minimal-test\n', encoding: 'utf8' });
+      assert.equal(result.status, 0, result.stderr);
+      for (const html of [renderWrapper({ title: 'Impressum', payload, minimal, buttonLabel: label }),
+        app.renderWrapper({ title: 'Impressum', payload, minimal, buttonLabel: label }),
+        await readFile(join(dir, 'output.html'), 'utf8')]) {
+        assert.ok(html.includes('<h1>Impressum</h1>'));
+        assert.ok(html.includes('id="wrapper-brand"'));
+        assert.ok(html.includes('type="submit">' + safeLabel + '</button>'));
+        assert.ok(!html.includes('<script>bad()'));
+        assert.ok(!html.includes('Anyone with this file can open it.'));
+        assert.ok(!html.includes('Passphrase protection depends on'));
+        assert.equal(html.includes('in your browser.'), !minimal);
+        const reader = wrapper(html);
+        assert.equal(reader.nodes.get('status').textContent, access === 'sealed' && !minimal ? 'No passphrase required.' : '');
+        if (access === 'passphrase') {
+          reader.nodes.get('password').value = '';
+          await reader.nodes.get('unlock-form').handlers.submit({ preventDefault() {} });
+          assert.equal(reader.nodes.get('status').textContent, 'Enter the passphrase.');
+        }
+        assert.deepEqual(Buffer.from(await reader.unlock('minimal-test')), bytes);
+      }
+    }
+    const defaults = renderWrapper({ title: 'Default', payload: { access: 'sealed', v: 4, content: [] } });
+    assert.ok(defaults.includes('type="submit">Open sealed file</button>'));
+    const invalid = spawnSync(process.execPath, ['bin/self-encrypt.mjs', '--button-label'], { encoding: 'utf8' });
+    assert.equal(invalid.status, 1);
+    assert.match(invalid.stderr, /Missing value for --button-label/);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('optional CLI themes affect only opening-screen CSS and preserve payload roundtrips', async () => {
+  const { renderWrapper } = await import('../src/wrapper.mjs');
+  const dir = await mkdtemp(join(tmpdir(), 'staticseal-theme-'));
+  const bytes = Buffer.from('<!doctype html><title>Theme</title><p>Original page</p>');
+  const themedArgs = ['--theme-bg', '#181818', '--theme-text', '#eee', '--theme-accent', '#e98663',
+    '--theme-panel', '#252525', '--theme-font', '"Georgia", serif', '--theme-radius', '0'];
+  try {
+    await writeFile(join(dir, 'page.html'), bytes);
+    const run = args => spawnSync(process.execPath, ['bin/self-encrypt.mjs', '--in', join(dir, 'page.html'),
+      '--out', join(dir, 'output.html'), '--iterations', '100000', ...args],
+    { cwd: new URL('..', import.meta.url), input: 'theme-test\n', encoding: 'utf8' });
+    for (const page of [false, true]) for (const encrypted of [false, true]) {
+      const mode = [...(page ? ['--html-page'] : []), encrypted ? '--stdin-password' : '--no-password'];
+      for (const themed of [false, true]) {
+        const result = run([...mode, ...(themed ? themedArgs : [])]);
+        assert.equal(result.status, 0, result.stderr);
+        const html = await readFile(join(dir, 'output.html'), 'utf8');
+        const reader = wrapper(html);
+        assert.deepEqual(Buffer.from(await reader.unlock('theme-test')), bytes);
+        const plain = renderWrapper({ title: 'page.html - protected file', payload: reader.payload });
+        if (!themed) assert.equal(html, plain);
+        else {
+          const css = themeStyle({ bg: '#181818', text: '#eee', accent: '#e98663', panel: '#252525', font: '"Georgia", serif', radius: '0' });
+          assert.equal(html, plain.replace('</head>', `<style>${css}</style></head>`));
+          assert.match(css, /body:not\(\.vp\)/);
+          assert.match(css, /--muted:#eee/);
+          assert.match(css, /outline-color:var\(--accent\)/);
+        }
+      }
+    }
+    for (const args of [['--theme-bg'], ['--theme-bg', '--html-page'], ['--theme-bg', 'red'],
+      ['--theme-accent', '#fff;display:none'], ['--theme-font', '</style><script>alert(1)</script>'],
+      ['--theme-font', 'serif; color:red'], ['--theme-radius', '-1px'], ['--theme-radius', 'url(x)']]) {
+      const result = run(['--no-password', ...args]);
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /theme-/);
+    }
+    assert.equal(themeStyle(), '');
+    for (const radius of ['0', '4px', '.5rem', '1.2em']) assert.match(themeStyle({ radius }), /border-radius:/);
+    for (const bg of ['#abc', '#abcd', '#aabbcc', '#aabbccdd']) assert.match(themeStyle({ bg }), /--bg:/);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('page mode emits only its renderer and restores full HTML across app and CLI variants', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'staticseal-page-'));
+  const small = '<!doctype html><html><head><title>Page test</title><style>body{color:teal}</style></head><body><h1>Grüße</h1><button id="count">0</button><script>document.getElementById("count").onclick=e=>e.target.textContent="1";</script></body></html>';
+  try {
+    for (const large of [false, true]) for (const access of ['sealed', 'passphrase']) for (const privateName of [false, true]) {
+      const text = small.replace('</body>', (large ? '<!--' + 'Full page, no preview truncation.\n'.repeat(6000) + '-->' : '') + '</body>');
+      const bytes = Buffer.from(text);
+      const file = { name: 'page.html', type: 'text/html' };
+      const payload = await app.encryptBytes(bytes, 'page-test', 160000, file, access, privateName, true);
+      assert.equal(payload.display, 'page');
+      assert.equal(payload.v, access === 'sealed' ? (large ? 5 : 4) : (large ? 3 : 2));
+      const html = app.renderWrapper({ title: 'Page', payload });
+      await writeFile(join(dir, file.name), bytes);
+      const cli = spawnSync(process.execPath, ['bin/self-encrypt.mjs', '--in', join(dir, file.name),
+        '--out', join(dir, 'sealed.html'), '--html-page', '--iterations', '160000',
+        access === 'sealed' ? '--no-password' : '--stdin-password', ...(privateName ? ['--private-filename'] : [])],
+        { cwd: new URL('..', import.meta.url), input: 'page-test\n', encoding: 'utf8' });
+      assert.equal(cli.status, 0, cli.stderr);
+      for (const emitted of [html, await readFile(join(dir, 'sealed.html'), 'utf8')]) {
+        assert.ok(!emitted.includes('highlightCode'));
+        assert.ok(!emitted.includes('renderMarkdown'));
+        assert.ok(!emitted.includes('Preview limited to'));
+        assert.equal(emitted.includes('DecompressionStream'), large);
+        assert.equal(emitted.includes('crypto.subtle'), access === 'passphrase');
+        const reader = wrapper(emitted);
+        const restored = await reader.unlock('page-test');
+        assert.deepEqual(Buffer.from(restored), bytes);
+        assert.equal(reader.content().filename, file.name);
+        assert.equal(reader.content().contentType, file.type);
+        let written, opened = 0, closed = 0, meta;
+        reader.document.open = () => opened++;
+        reader.document.write = text => { written = text; };
+        reader.document.close = () => closed++;
+        reader.document.head = { append(node) { meta = node; } };
+        reader.renderBlobViewer(restored);
+        assert.equal(written, text);
+        assert.equal(opened, 1);
+        assert.equal(closed, 1);
+        assert.equal(meta.name, 'robots');
+        assert.equal(meta.content, 'noindex,nofollow,noarchive');
+        await app.verifyPayload(reader.payload, 'page-test', bytes);
+        if (access === 'passphrase') {
+          await assert.rejects(reader.unlock('wrong'));
+          await assert.rejects(wrapper(emitted, { ...reader.payload, display: undefined }).unlock('page-test'));
+        }
+        if (privateName) assert.ok(!emitted.includes(file.name));
+      }
+      if (!large) {
+        const preview = await app.encryptBytes(bytes, 'page-test', 160000, file, access, privateName);
+        const previewHtml = app.renderWrapper({ title: 'File preview', payload: preview });
+        assert.equal(preview.display, undefined);
+        assert.ok(previewHtml.includes('highlightCode'));
+        assert.ok(!previewHtml.includes('document.write'));
+        assert.ok(Buffer.byteLength(html) < Buffer.byteLength(previewHtml));
+      }
+    }
+    await writeFile(join(dir, 'not-html.txt'), 'Text');
+    const invalid = spawnSync(process.execPath, ['bin/self-encrypt.mjs', '--in', join(dir, 'not-html.txt'),
+      '--out', join(dir, 'invalid.html'), '--html-page', '--no-password'], { cwd: new URL('..', import.meta.url), encoding: 'utf8' });
+    assert.equal(invalid.status, 1);
+    assert.match(invalid.stderr, /requires an HTML file/);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('page choice is per-file, HTML-only and captured before asynchronous reads', async () => {
+  const ui = evaluate(source.slice(source.indexOf('<script>') + 8, source.lastIndexOf('</script>')), 'encryptBytes');
+  const node = id => ui.nodes.get(id);
+  const bytes = Buffer.from('<!doctype html><title>Selected page</title><h1>Hello</h1>');
+  const file = { name: 'selected.html', type: 'text/html', size: bytes.length, async arrayBuffer() {
+    node('html-page').checked = false;
+    return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  } };
+  node('source-file').files = [file];
+  node('source-file').handlers.change();
+  assert.equal(node('html-page-option').hidden, false);
+  assert.equal(node('html-page').disabled, false);
+  assert.equal(node('html-page').checked, false);
+  node('html-page').checked = true;
+  node('kdf-strength').value = '210000';
+  await node('encrypt-form').handlers.submit({ preventDefault() {} });
+  assert.deepEqual(ui.downloads, ['selected_sealed.html']);
+  const emitted = wrapper(await ui.blobs[0].text());
+  assert.equal(emitted.payload.display, 'page');
+  assert.deepEqual(Buffer.from(await emitted.unlock()), bytes);
+  node('source-file').files = [{ name: 'other.txt', type: 'text/plain', size: 1 }];
+  node('source-file').handlers.change();
+  assert.equal(node('html-page-option').hidden, true);
+  assert.equal(node('html-page').disabled, true);
+  assert.equal(node('html-page').checked, false);
+  node('source-file').files = [file];
+  node('source-file').handlers.change();
+  assert.equal(node('html-page').checked, false);
+  node('source-file').files = [];
+  node('source-file').handlers.change();
+  assert.equal(node('html-page-option').hidden, true);
+});
+
+test('page mode accepts UTF-8 and BOM-marked UTF-16 and rejects unsupported input', async () => {
+  const text = '<!doctype html><title>Grüße</title><p>日本語</p>';
+  for (const bytes of [Buffer.from(text), Buffer.concat([Buffer.from([255, 254]), Buffer.from(text, 'utf16le')])]) {
+    const payload = await app.encryptBytes(bytes, '', 160000, { name: 'utf.html', type: 'text/html' }, 'sealed', false, true);
+    const reader = wrapper(app.renderWrapper({ title: 'Encoding', payload }));
+    const restored = await reader.unlock();
+    let written;
+    reader.document.open = () => {};
+    reader.document.close = () => {};
+    reader.document.write = html => { written = html; };
+    reader.document.head = { append() {} };
+    reader.renderBlobViewer(restored);
+    assert.equal(written, text);
+  }
+  await assert.rejects(app.encryptBytes(Buffer.from([0xc3, 0x28]), '', 160000,
+    { name: 'bad.html', type: 'text/html' }, 'sealed', false, true), /UTF-8 or BOM-marked UTF-16/);
+  await assert.rejects(app.encryptBytes(Buffer.from(text), '', 160000,
+    { name: 'wrong.txt', type: 'text/plain' }, 'sealed', false, true), /HTML files only/);
+});
 
 test('sealed envelopes omit crypto and work without Web Crypto, with and without gzip', async () => {
   const bare = evaluate(source.slice(source.indexOf('<script>') + 8, source.lastIndexOf('</script>')),
@@ -314,7 +519,7 @@ test('every authenticated metadata field rejects tampering, including KDF parame
     { name: 'small.bin', type: 'application/octet-stream' }, 'passphrase');
   const html = app.renderWrapper({ title: 'Test', payload, sourceName: 'small.bin' });
   for (const field of ['v', 'alg', 'kdf', 'iterations', 'encoding', 'filename', 'contentType',
-    'access', 'unlockKey', 'salt', 'iv']) {
+    'access', 'unlockKey', 'salt', 'iv', 'display']) {
     let value = typeof payload[field] === 'number' ? payload[field] + 1 : 'tampered';
     if (field === 'salt' || field === 'iv') {
       const raw = Buffer.from(payload[field], 'base64');

@@ -22,6 +22,7 @@
 * {
   box-sizing: border-box;
 }
+[hidden] { display: none !important; }
 body {
   margin: 0;
   background: var(--bg);
@@ -570,6 +571,10 @@ button:disabled {
         </div>
         <p class="meta" id="file-meta" aria-live="polite">No file selected</p>
       </div>
+      <div class="row" id="html-page-option" hidden>
+        <label><input id="html-page" type="checkbox" disabled aria-describedby="html-page-note"> Display as a webpage after opening</label>
+        <p class="meta" id="html-page-note">For self-contained HTML files. Shows the original layout and runs included JavaScript.</p>
+      </div>
       <div class="row">
         <div class="row-header"><span class="step" aria-hidden="true">2</span><span class="field-heading">Add a passphrase<span class="optional">optional</span></span></div>
         <div class="fields">
@@ -617,7 +622,7 @@ button:disabled {
           </div>
           <div>
             <label for="output-name">Output filename</label>
-            <input id="output-name" name="output-name" type="text" placeholder="page_encrypted.html">
+            <input id="output-name" name="output-name" type="text" placeholder="page_sealed.html">
           </div>
         </div>
 
@@ -670,6 +675,8 @@ button:disabled {
   const form = $('encrypt-form');
   const sourceFile = $('source-file');
   const fileMeta = $('file-meta');
+  const htmlPageOption = $('html-page-option');
+  const htmlPage = $('html-page');
   const password = $('password');
   const passwordRepeat = $('password-repeat');
   const privateFilename = $('private-filename');
@@ -721,7 +728,7 @@ button:disabled {
     const base = (name.replace(/\.[^.]+$/, '') || 'file')
       .trim()
       .replace(/\s+/g, '_');
-    return `${base}_encrypted.html`;
+    return `${base}_sealed.html`;
   };
 
   const formatBytes = (bytes) => {
@@ -743,10 +750,15 @@ button:disabled {
     return packed;
   };
 
-  async function encryptBytes(bytes, passphrase, iterationCount, file, access, privateName = false) {
+  async function encryptBytes(bytes, passphrase, iterationCount, file, access, privateName = false, pageMode = false) {
+    if (pageMode) {
+      if (!isHtmlFile(file.name, inferContentType(file))) throw new Error('Page mode is available for HTML files only.');
+      createPageViewer().decodeHtml(bytes);
+    }
+    const display = pageMode ? { display: 'page' } : {};
     if (access === 'sealed') {
       const metadata = {
-        v: 4, encoding: 'metadata', access,
+        v: 4, encoding: 'metadata', access, ...display,
         ...(!privateName ? { filename: file.name, contentType: inferContentType(file) } : {})
       };
       const content = await prepareContent(bytes,
@@ -764,6 +776,7 @@ button:disabled {
       kdf: 'PBKDF2-SHA256',
       iterations: iterationCount,
       encoding: 'metadata',
+      ...display,
       ...(!privateName ? { filename: file.name, contentType: inferContentType(file) } : {}),
       access,
       salt: toBase64(salt),
@@ -956,6 +969,10 @@ button:disabled {
 
   sourceFile.addEventListener('change', () => {
     const file = sourceFile.files[0];
+    const supportsPage = !!file && isHtmlFile(file.name, inferContentType(file));
+    htmlPageOption.hidden = !supportsPage;
+    htmlPage.disabled = !supportsPage;
+    htmlPage.checked = false;
     if (!file) {
       fileMeta.textContent = 'No file selected';
       return;
@@ -992,6 +1009,7 @@ button:disabled {
     const repeatedPassphrase = passwordRepeat.value;
     const iterationCount = Number(kdfStrength.value);
     const privateName = privateFilename.checked;
+    const pageMode = htmlPage.checked;
     const title = privateName ? 'Protected file' : (outputTitle.value || 'Protected file');
     const output = privateName ? 'protected_file.html' : (outputName.value || (file ? outputFilenameFor(file.name) : ''));
     const access = enteredPassphrase ? 'passphrase' : 'sealed';
@@ -1030,7 +1048,7 @@ button:disabled {
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
       setStatus(access === 'sealed' ? 'Sealing locally ...' : 'Encrypting locally ...');
-      const payload = await encryptBytes(bytes, passphrase, iterationCount, file, access, privateName);
+      const payload = await encryptBytes(bytes, passphrase, iterationCount, file, access, privateName, pageMode);
 
       const wrapper = renderWrapper({ title, payload });
       downloadHtml(output, wrapper);

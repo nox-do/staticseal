@@ -288,3 +288,77 @@ suite and browser smoke harness.
   the preceding sealed mode used its normal 44-character embedded random key.
 - No-password packages have no GCM integrity check. Creation still verifies exact
   bytes; compressed readers also enforce gzip validity and the declared output size.
+
+### Single-file HTML page output (local development, 2026-10-20)
+
+The creator offers an opt-in **Display as a webpage after opening** switch only
+for `.html`/`.htm` or `text/html` inputs. It starts off and resets on every file
+change, including cancellation/non-HTML selection. Its value is captured before
+asynchronous reads. The CLI exposes the same choice as `--html-page`.
+
+The optional outer `display: "page"` field selects the renderer during generation.
+It is included in AES-GCM authenticated metadata, after `iv`; when absent it is
+omitted from the AAD JSON, preserving existing file-mode payload verification.
+No decoder guesses the rendering mode at runtime. `src/viewer.mjs` provides two
+standalone factories: page envelopes receive only `createPageViewer`, whereas file
+envelopes receive `createFileViewer` with the existing preview helpers. Page
+outputs omit syntax highlighting, Markdown, image/PDF preview and download UI.
+Password and gzip selection remain independent, and gzip comparisons use the
+selected renderer's actual fixed size.
+
+Page mode validates UTF-8 or BOM-marked UTF-16 before packaging. After decoding,
+it replaces the wrapper document in place using `document.open/write/close`, as
+the original single-page tool did. Full HTML is rendered without the file preview's
+128 KiB limit. The wrapper's robots/noindex hint is appended to the new head.
+Original CSS, inline scripts, title and document interactions are retained. Scripts
+run with the wrapper's origin/permissions; the page is not sanitized or sandboxed.
+This mode targets explicitly chosen, self-contained HTML. It does not collect
+external dependencies, implement resource routing, or package multi-page sites.
+
+`document.write` has browser-specific limitations and is discouraged for general
+web development ([MDN](https://developer.mozilla.org/en-US/docs/Web/API/Document/write)).
+Strict host CSP/Trusted Types rules or embedded-frame contexts can affect it.
+The intended flow is opening the standalone output and using its own unlock form.
+The smoke harness waits for the replaced iframe DOM instead of treating
+`document.open` as a new parent-frame navigation/load event.
+
+Validation: all 30 Node regression tests passed, plus 21 Chromium 155 smoke cases.
+The new cases cover app/CLI, password/no-password, gzip/raw, private/public names,
+mode-metadata tampering, encoding validation, complete HTML beyond 128 KiB,
+original CSS, inline-script execution, button interaction and fragment links.
+A separate real-page button test also confirmed the original window load handler.
+Firefox, Safari and mobile behavior still need separate validation.
+
+The minified creator is 43,564 bytes (1,527 bytes above the preceding filename-fix
+build). The synthetic 180,723-byte self-contained demo produces an 11,888-byte
+no-password page envelope versus 18,564 bytes in file-preview mode with identical
+content/title; both use gzip. Password page output with a private name is 12,804
+bytes. No runtime dependency was added.
+
+### Release 1.2.0 opening-screen options (2026-10-20)
+
+The CLI adds `--minimal` and `--button-label`, independently of page/file mode,
+passphrase protection and gzip. Minimal output omits introductory copy and the
+initial no-passphrase status while preserving progress, errors, the logo, heading
+and any required passphrase field. The button label is escaped as text; the reader
+does not overwrite it. The bottom explanatory note and its CSS are removed from
+all newly generated wrappers.
+
+Six optional `--theme-*` parameters customize the opening screen. Validation and
+CSS generation live in the CLI-only `src/cli-theme.mjs`; no theme parser is embedded
+in the browser app or generated readers. Colors accept hex, fonts accept simple
+font-family stacks, and card rounding accepts nonnegative px/rem/em lengths or 0.
+Styles apply to `body:not(.vp)` and the lock card, so file previews keep their
+default theme. Page rendering replaces the entire document and its styles.
+Without theme parameters there is no additional CSS. These options affect neither
+payload metadata nor the original content bytes.
+
+The final browser app is 43,367 bytes. All 32 Node regression tests passed before
+release, including optional themes, minimal output, escaped labels, invalid CLI
+values and payload roundtrips. The customized theme and minimal opening screen
+were also visually checked in Chromium. The README now documents a static
+Impressum page with an opening button, including crawler limitations.
+
+Review follow-ups remain separate: page envelopes still carry about 2 KiB of
+unused file-preview CSS, and password readers without `crypto.subtle` still report
+a generic password/damaged-file error rather than a secure-context explanation.

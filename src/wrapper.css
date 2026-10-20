@@ -128,12 +128,6 @@ input:focus-visible, button:focus-visible, a:focus-visible {
 .status:empty {
   display: none;
 }
-.hint {
-  margin-top: 24px;
-  padding-top: 20px;
-  border-top: 1px solid var(--line);
-  font-size: 12px;
-}
 .vp {
   display: block;
   place-items: normal;

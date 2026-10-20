@@ -11,11 +11,13 @@ import { createCrypto } from '../src/crypto.mjs';
 import { renderWrapper } from '../src/wrapper.mjs';
 import { prepareContent } from '../src/compression.mjs';
 import { inflateContent } from '../src/gzip.mjs';
+import { isHtmlFile, createPageViewer } from '../src/viewer.mjs';
+import { themeStyle } from '../src/cli-theme.mjs';
 
 const { fromBase64Chunks, unpackContent } = createFormat(value => Buffer.from(value, 'base64'));
 const { authenticatedDataFor } = createCrypto();
 
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 const DEFAULT_ITERATIONS = 210_000;
 const DEFAULT_CHUNK_SIZE = 64 * 1024;
 function parseArgs(argv) {
@@ -29,6 +31,13 @@ function parseArgs(argv) {
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     const next = argv[index + 1];
+
+    if (['bg', 'text', 'accent', 'panel', 'font', 'radius'].some(name => arg === '--theme-' + name)) {
+      if (!next || next.startsWith('--')) throw new Error(`Missing value for ${arg}.`);
+      (args.theme ??= {})[arg.slice(8)] = next;
+      index += 1;
+      continue;
+    }
 
     switch (arg) {
       case '--in':
@@ -57,6 +66,17 @@ function parseArgs(argv) {
       case '--private-filename':
         args.privateFilename = true;
         break;
+      case '--html-page':
+        args.htmlPage = true;
+        break;
+      case '--minimal':
+        args.minimal = true;
+        break;
+      case '--button-label':
+        if (!next || next.startsWith('--') || !next.trim()) throw new Error('Missing value for --button-label.');
+        args.buttonLabel = next;
+        index += 1;
+        break;
       case '--no-password':
         args.noPassword = true;
         break;
@@ -79,7 +99,7 @@ function printHelp() {
   output.write(`self-encrypt ${VERSION}
 
 Usage:
-  node ./bin/self-encrypt.mjs --in input.pdf --out input_encrypted.html [--title "Protected file"]
+  node ./bin/self-encrypt.mjs --in input.pdf --out input_sealed.html [--title "Protected file"]
 
 Options:
   --in <file>              Static source file
@@ -90,6 +110,15 @@ Options:
   --private-filename       Hide original name/type; use a neutral --out path
   --stdin-password         Read password from stdin instead of prompting
   --no-password            Seal for crawler resistance only; no confidentiality
+  --html-page              Display self-contained HTML as a webpage, including scripts
+  --minimal                Opening screen with logo/title/form only; errors still shown
+  --button-label <text>    Optional opening button text
+  --theme-bg <hex>         Optional lock-screen background color
+  --theme-text <hex>       Optional lock-screen text color
+  --theme-accent <hex>     Optional lock-screen button/focus color
+  --theme-panel <hex>      Optional lock-screen card color
+  --theme-font <stack>     Optional font-family stack; no font files embedded
+  --theme-radius <length>  Optional card rounding: px, rem, em, or 0
   --version                Show version
   --help                   Show this help
 `);
@@ -189,9 +218,14 @@ async function readPassword({ stdinPassword }) {
   return password;
 }
 
-async function encryptBytes(bytes, password, { iterations, chunkSize, sourceName, contentType, access, privateFilename = false }) {
+async function encryptBytes(bytes, password, { iterations, chunkSize, sourceName, contentType, access, privateFilename = false, htmlPage = false }) {
+  if (htmlPage) {
+    if (!isHtmlFile(sourceName, contentType)) throw new Error('--html-page requires an HTML file.');
+    createPageViewer().decodeHtml(bytes);
+  }
+  const display = htmlPage ? { display: 'page' } : {};
   if (access === 'sealed') {
-    const metadata = { v: 4, encoding: 'metadata', access,
+    const metadata = { v: 4, encoding: 'metadata', access, ...display,
       ...(!privateFilename ? { filename: sourceName, contentType } : {}) };
     const content = await prepareContent(bytes, { filename: sourceName, contentType }, metadata, chunkSize);
     const length = Buffer.alloc(4);
@@ -209,6 +243,7 @@ async function encryptBytes(bytes, password, { iterations, chunkSize, sourceName
     kdf: 'PBKDF2-SHA256',
     iterations,
     encoding: 'metadata',
+    ...display,
     ...(!privateFilename ? { filename: sourceName, contentType } : {}),
     access,
     salt: salt.toString('base64'),
@@ -271,6 +306,8 @@ async function main() {
     return;
   }
 
+  const css = themeStyle(args.theme);
+
   const inputPath = resolve(requiredString(args.in, '--in'));
   const outputPath = resolve(requiredString(args.out, '--out'));
   const sourceName = basename(inputPath);
@@ -299,13 +336,17 @@ async function main() {
     sourceName,
     contentType: inferContentType(basename(inputPath)),
     access,
-    privateFilename: args.privateFilename
+    privateFilename: args.privateFilename,
+    htmlPage: args.htmlPage
   });
 
-  const wrapper = renderWrapper({
+  const plainWrapper = renderWrapper({
     title,
-    payload
+    payload,
+    minimal: args.minimal,
+    buttonLabel: args.buttonLabel
   });
+  const wrapper = css ? plainWrapper.replace('</head>', () => `<style>${css}</style></head>`) : plainWrapper;
 
   await mkdir(dirname(outputPath), { recursive: true });
   await writeFile(outputPath, wrapper, 'utf8');

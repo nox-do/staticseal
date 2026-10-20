@@ -19,7 +19,12 @@ Stand: 19. Oktober 2026 · Branch: `codex/website-mode` · Status: Architekturpl
 2. Bewährte Muster aus BB Pilot referenzieren; keinen fremden App-Code ungeprüft übernehmen.
 3. Noch keinen Website-Modus implementieren.
 
-Die vorhandene Datei-App bleibt eigenständig. HTML-Dateien dort weiterhin nur zum Download anbieten. Website-Ausführung erhält eine eigene Laufzeit und ein eigenes Paketformat.
+Die vorhandene Datei-App bleibt eigenständig. Seit dem lokalen Entwicklungsstand
+vom 20. Oktober 2026 kann sie einzelne, vollständig eingebettete HTML-Dateien auf
+ausdrückliche Auswahl wieder als Webseite öffnen. Diese Einzelseiten-Funktion
+ersetzt nicht den hier geplanten Modus für Dateibäume, mehrere Seiten und Assets.
+Ohne Auswahl bleibt die HTML-Quelltextvorschau aktiv. Der umfangreiche Website-Modus
+erhält weiterhin eine eigene Laufzeit und ein eigenes Paketformat.
 
 ## Geplanter Entwicklerablauf
 

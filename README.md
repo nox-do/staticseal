@@ -1,9 +1,43 @@
 # Staticseal
 
-Package any file into a self-contained HTML file. Send it as an attachment or host it
-on your website. Add a passphrase if needed.
+Package a file or a complete static HTML page into one standalone HTML file.
+Recipients open it in their browser through a button or a passphrase screen.
+Send it as an attachment or host it on your website; no backend is required.
 
 **[Open Staticseal](https://nox-do.github.io/staticseal/)** · [MIT license](LICENSE)
+
+- **Share a file:** open a preview or download the original after unlocking.
+- **Publish a static page:** replace the opening screen with the original HTML,
+  including its layout and JavaScript. Optionally protect access with a passphrase,
+  or use a simple opening button to obstruct basic text crawlers.
+
+## Publish a static HTML page
+
+For example, you can package a self-contained `impressum.html` so visitors first
+see your heading and an **Impressum öffnen** button. Clicking it displays the full
+original page. With `--no-password`, visitors do not need a passphrase:
+
+```sh
+node bin/self-encrypt.mjs --in impressum.html --out impressum_sealed.html \
+  --html-page --no-password --minimal --title "Impressum" \
+  --button-label "Impressum öffnen"
+```
+
+Host the generated file and link to it, for example
+`<a href="impressum_sealed.html">Impressum</a>`. Keep CSS, scripts and images
+embedded in the source HTML for a fully standalone result. Staticseal does not
+collect dependencies from a website or bundle multiple pages.
+
+`--minimal` keeps the Staticseal logo, heading and opening button, plus the
+passphrase field if used. `--button-label` changes the button text independently.
+Optional theme parameters can match the opening screen to your site's colors
+and typography; examples are below. To require a passphrase, omit `--no-password`.
+
+The button is a barrier for simple crawlers, not confidential access control.
+The original text is encoded rather than directly present in the HTML source;
+crawlers that execute JavaScript or decode the package can still read it.
+Generated pages request `noindex,nofollow,noarchive`. These mechanisms do not
+guarantee exclusion from search engines or establish GDPR or other legal compliance.
 
 ## Use in your browser
 
@@ -18,6 +52,12 @@ and open `staticseal.html` in your browser to use it offline.
 Under **Advanced options**, you can generate a passphrase, hide the original
 filename and file type, or adjust the PBKDF2 settings. Share the passphrase
 separately from the generated file.
+
+For HTML files, **Display as a webpage after opening** appears below the file
+picker. It is off by default and resets when you select another file. Turn it on
+to replace the lock screen with the original self-contained page, including its
+CSS and JavaScript. Passphrase protection and automatic gzip still work in this
+mode. With the switch off, HTML remains an escaped source preview.
 
 Files from 4 KiB up to 25 MiB are automatically tried with gzip before packaging.
 Compression is used only when the complete HTML package, including its unpacker,
@@ -35,14 +75,15 @@ fenced code blocks and links. Markdown HTML remains text; images are not loaded.
 Text previews show at most 128 KiB and support UTF-8 and BOM-marked UTF-16.
 Downloads always contain the complete original file. PDFs offer an optional
 preview after confirmation. Other formats are download-only.
-Staticseal packages individual files; it does not currently run or package whole websites.
+Staticseal packages individual files, including self-contained HTML pages. It does
+not collect dependencies or bundle multi-file websites.
 
 ## Use the CLI
 
 Requires Node.js 20 or later. From a checkout of this repository:
 
 ```sh
-node bin/self-encrypt.mjs --in report.pdf --out report_encrypted.html
+node bin/self-encrypt.mjs --in report.pdf --out report_sealed.html
 ```
 
 The CLI prompts for a passphrase without displaying it. To hide the original
@@ -60,6 +101,41 @@ printf '%s\n' "$STATICSEAL_PASSPHRASE" | node bin/self-encrypt.mjs \
 ```
 
 Run `node bin/self-encrypt.mjs --help` for all options.
+
+To open a self-contained HTML page as a webpage instead of showing source code:
+
+```sh
+node bin/self-encrypt.mjs --in page.html --out page_sealed.html --html-page
+```
+
+For a compact opening screen, add `--minimal`: the logo, heading and opening
+button remain, along with the passphrase field when protected. Introductory copy
+and the initial no-passphrase message are omitted. Progress and errors still
+appear when opening. The bottom explanatory note is omitted in all new packages.
+Use `--button-label` independently to set the button text.
+
+Optional CLI theme parameters customize only the opening screen. They work with
+or without a passphrase and in both file and webpage modes:
+
+```sh
+node bin/self-encrypt.mjs --in page.html --out page_sealed.html --html-page \
+  --theme-bg "#181818" --theme-text "#eeeeee" --theme-accent "#e98663" \
+  --theme-panel "#252525" --theme-font "Georgia, serif" --theme-radius "8px"
+```
+
+All parameters are independent and optional; omitted settings keep their defaults.
+Colors accept hex notation (`#RGB`, `#RGBA`, `#RRGGBB`, `#RRGGBBAA`).
+`--theme-font` accepts a simple font-family stack with Latin names (quotes allowed),
+using fonts available on the recipient's device; it does not embed or load fonts.
+`--theme-radius` sets the card rounding in `px`, `rem`, `em`, or `0`.
+The original webpage, file preview, payload bytes and encryption are unaffected.
+Theme settings are visible before unlocking. Without theme parameters the output
+has no additional theme CSS. The browser creator's interface is unchanged.
+
+Add `--no-password` to omit passphrase protection. Page mode supports UTF-8 and
+BOM-marked UTF-16 HTML. It runs the page's scripts with the wrapper's origin and
+browser permissions. External resources are not bundled; embed everything needed
+for offline use. The `noindex,nofollow,noarchive` hint is retained after opening.
 
 ## Know the limits
 
@@ -92,7 +168,9 @@ Edit `src/app.html` for the browser UI, `src/wrapper.mjs` for wrapper generation
 `src/wrapper.html` and `src/wrapper.css` for its layout, `src/reader.js` for the
 unlock/viewer script, `src/format.mjs`, `src/crypto.mjs` and `src/preview.mjs` for shared helpers,
 `src/compression.mjs` for compression selection, `src/gzip.mjs` for the optional
-unpacker, and `src/seal.svg` for the logo.
+unpacker, `src/viewer.mjs` for the separate file/page renderers,
+`src/cli-theme.mjs` for CLI-only theme validation, and `src/seal.svg`
+for the logo.
 The build generates `index.html`, `src/logo.mjs`, `src/wrapper-template.mjs`
 and `src/reader-factories.mjs`; do not edit them directly.
 CSS, HTML and JavaScript are minified only during the build. Terser preserves

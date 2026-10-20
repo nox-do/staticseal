@@ -12,7 +12,8 @@ const AUTHENTICATED_METADATA = [
   'access',
   'unlockKey',
   'salt',
-  'iv'
+  'iv',
+  'display'
 ];
   const authenticatedDataFor = (payload) => encoder.encode(JSON.stringify(
     Object.fromEntries(AUTHENTICATED_METADATA.map((key) => [key, payload[key]]))
