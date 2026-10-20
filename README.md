@@ -12,7 +12,8 @@ or host it on a static website. Recipients unlock it locally in their browser.
 3. Select **Seal & download file**.
 
 Your file and passphrase stay in your browser. No upload, account, or backend is
-required. You can also save `index.html` and use it offline.
+required. [Download the latest release](https://github.com/nox-do/staticseal/releases/latest/download/staticseal.html)
+and open `staticseal.html` in your browser to use it offline.
 
 Under **Advanced options**, you can generate a passphrase, encrypt the original
 filename and file type, or adjust the PBKDF2 settings. Share the passphrase
@@ -78,6 +79,15 @@ The browser app and generated wrappers remain standalone HTML files.
 Tests exercise the app, CLI and generated wrapper code using Node Web Crypto
 and DOM stubs, including 10/25 MiB files. They do not establish full browser or
 mobile compatibility.
+
+### Release download
+
+Publish a GitHub Release for a tag containing `.github/workflows/release.yml`.
+The workflow checks out that tag, builds the browser app, runs `npm run check`,
+and attaches the result as `staticseal.html`. The website's fixed download URL
+automatically follows GitHub's latest stable release; prereleases do not replace it.
+Every stable release must include this asset. Check that the workflow completes
+successfully before announcing the download. Re-running it replaces the asset.
 
 - [Technical notes and browser smoke tests](docs/technical-notes.md)
 - [Working plan and validation history (German)](docs/staticseal-arbeitsplan.md)

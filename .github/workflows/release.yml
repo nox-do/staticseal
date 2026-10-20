@@ -1,0 +1,42 @@
+name: Build release download
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  browser-download:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: Build standalone browser app
+        run: npm run build
+
+      - name: Check build and regression suite
+        run: npm run check
+
+      - name: Attach browser app to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          cp index.html "$RUNNER_TEMP/staticseal.html"
+          gh release upload "$RELEASE_TAG" "$RUNNER_TEMP/staticseal.html" \
+            --repo "$GITHUB_REPOSITORY" --clobber
