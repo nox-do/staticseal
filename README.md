@@ -63,7 +63,7 @@ Files from 4 KiB up to 25 MiB are automatically tried with gzip before packaging
 Compression is used only when the complete HTML package, including its unpacker,
 is smaller. This works for any file type and restores the original bytes exactly.
 Uncompressed packages contain no gzip unpacker. The result shows original and
-HTML package sizes. The CLI uses the same policy; larger CLI files stay uncompressed.
+HTML package sizes. The CLI tries compression up to its experimental 128 MiB original-file limit.
 Compression needs native Compression Streams support during creation and
 Decompression Streams support when opening a compressed package; no library is bundled.
 
@@ -153,7 +153,10 @@ for offline use. The `noindex,nofollow,noarchive` hint is retained after opening
   output if the original should stay private.
 - **Browser sizes are provisional.** Warning from 5 MiB, confirmation above 10 MiB,
   maximum 25 MiB. These are product limits, not validated browser capacities.
-  The CLI has no equivalent cap; recipient browsers still have memory limits.
+- **CLI sizes are experimental.** Maximum 128 MiB original, 25 MiB binary package
+  (including metadata, length prefix and authentication tag), and 35 MiB final HTML.
+  Oversized results are rejected before writing. Creation still uses full buffers;
+  recipient browser memory and large HTML page execution are not validated.
 - **Only open trusted content.** Encryption and previews do not scan for malware.
 
 ## Development

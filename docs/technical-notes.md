@@ -9,7 +9,8 @@ rejects files **above 25 MiB** before reading them. Exactly 10 MiB needs no
 confirmation; exactly 25 MiB is allowed with confirmation. These are conservative
 product limits, **not measured browser capacity or a validated support guarantee**.
 The intended regular range is up to 10 MiB; 10–25 MiB is an optional range pending
-desktop and mobile validation. The CLI remains unrestricted for local workflows;
+desktop and mobile validation. The CLI accepts at most 128 MiB original, 25 MiB
+binary package (prefix, metadata and GCM tag included), and 35 MiB final UTF-8 HTML;
 a successful CLI roundtrip does not guarantee that a recipient's browser can open
 the output. Prefer files within the same provisional range when distributing CLI
 wrappers.
@@ -145,8 +146,8 @@ in the creation UI; preview follows the image/text/Markdown/PDF policy described
 
 ### Selective gzip packaging
 
-App and CLI try native gzip for inputs from 4,096 bytes through 25 MiB, regardless
-of MIME type or extension. Smaller inputs, larger CLI files, and creators without
+App and CLI try native gzip from 4,096 bytes through 25 MiB and 128 MiB respectively,
+regardless of MIME type or extension. Smaller inputs and creators without
 both native CompressionStream and DecompressionStream support stay uncompressed
 (v2 with a password, v4 without one).
 No compression library is shipped. Original browser file-size limits still apply.
@@ -168,7 +169,7 @@ supported by the common creator verification code. Previously distributed HTML
 keeps its own decoder.
 
 For encrypted files, AES-GCM authentication completes before decompression. The unpacker validates the
-declared original size (at most 25 MiB), bounds accumulated output to that size,
+declared original size (at most 128 MiB), writes directly into a buffer of that size,
 and rejects truncated/invalid gzip and size mismatches before preview or download.
 Creation verifies exact original bytes and filename/type using the selected path.
 Both creator interfaces report input size and the actual UTF-8 HTML package size.
@@ -263,7 +264,7 @@ suite and browser smoke harness.
 - Full regression: 26 passing tests; gzip/error/UI cases rerun after final changes.
 - Coverage includes the 4 KiB boundary, incompressible inputs, gzip savings smaller
   than unpacker cost, different CLI chunk widths, missing native APIs, invalid
-  streams/sizes, raw CLI fallback above 25 MiB, and compressed 25 MiB roundtrips
+  streams/sizes, raw fallback above the default compression limit, and compressed 25 MiB roundtrips
   for both access modes and both filename modes.
 - Chromium 155: all 12 existing browser smoke cases passed, including compressed
   10/25 MiB envelopes, actual DOM previews, filename restoration and wrong passwords.

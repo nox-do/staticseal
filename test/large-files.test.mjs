@@ -5,7 +5,7 @@ import { webcrypto, randomFillSync } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
 import { prepareContent, COMPRESSION_THRESHOLD } from '../src/compression.mjs';
 import { inflateContent } from '../src/gzip.mjs';
-import { readFile, writeFile, mkdtemp, rm } from 'node:fs/promises';
+import { readFile, writeFile, mkdtemp, rm, truncate } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -421,7 +421,7 @@ test('gzip restoration rejects damaged streams, invalid sizes and unsupported br
   // Exercise the serialized minified helper too; it must have no module closure.
   const built = evaluate(source.slice(source.indexOf('<script>') + 8, source.lastIndexOf('</script>')), 'inflateContent');
   for (const inflate of [inflateContent, built.inflateContent]) {
-    for (const originalSize of [undefined, -1, 1.5, 25 * 1024 * 1024 + 1, bytes.length - 1, bytes.length + 1]) {
+    for (const originalSize of [undefined, -1, 1.5, 128 * 1024 * 1024 + 1, bytes.length - 1, bytes.length + 1]) {
       await assert.rejects(inflate({ ...content, originalSize }));
     }
     for (const data of [new Uint8Array([1, 2, 3]), content.bytes.subarray(0, -1)]) {
@@ -445,8 +445,8 @@ for (const size of [10, 25]) {
   for (const access of ['passphrase', 'sealed']) {
    for (const privateName of [false, true]) {
     test(`${size} MiB / ${access} / private name ${privateName}: app, CLI and both generated readers`, async () => {
-      // Incompressible files retain the original chunk-layout regression coverage.
-      const bytes = randomFillSync(Buffer.alloc(size * 1024 * 1024));
+      // Reserve 1 KiB for metadata/tag under the CLI binary package limit.
+      const bytes = randomFillSync(Buffer.alloc(size * 1024 * 1024 - 1024));
       const password = 'regression-test-password';
       const payload = await app.encryptBytes(bytes, password, 210000,
         { name: 'large.bin', type: 'application/octet-stream' }, access, privateName);
@@ -869,4 +869,45 @@ test('built app and CLI renderer emit matching markup and payload with one logo'
   assert.equal(normalize(appHtml), normalize(renderWrapper(options)));
   assert.equal((appHtml.match(/<svg id="seal-logo"/g) || []).length, 1);
   assert.equal((source.match(/<svg id="seal-logo"/g) || []).length, 1);
+});
+
+test('CLI accepts 128 MiB HTML and rejects original, binary and HTML budget overflow without overwriting output', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'staticseal-cli-limits-'));
+  const inputPath = join(dir, 'page.html');
+  const outputPath = join(dir, 'sealed.html');
+  const run = (...args) => spawnSync(process.execPath, ['bin/self-encrypt.mjs', '--in', inputPath,
+    '--out', outputPath, ...args], { cwd: new URL('..', import.meta.url), input: 'test\n', encoding: 'utf8' });
+  try {
+    const bytes = Buffer.alloc(128 * 1024 * 1024, 32);
+    bytes.write('<!doctype html><title>Large page</title><script>globalThis.ready=true</script>');
+    await writeFile(inputPath, bytes);
+    for (const access of ['--no-password', '--stdin-password']) {
+      const result = run(access, '--html-page', '--private-filename');
+      assert.equal(result.status, 0, result.stderr);
+      const reader = wrapper(await readFile(outputPath, 'utf8'));
+      assert.equal(reader.payload.display, 'page');
+      assert.equal(reader.payload.v, access === '--no-password' ? 5 : 3);
+      assert.deepEqual(Buffer.from(await reader.unlock('test')), bytes);
+    }
+    await writeFile(outputPath, 'keep existing output');
+    await truncate(inputPath, 128 * 1024 * 1024 + 1);
+    let result = run('--no-password');
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /128 MiB CLI limit/);
+    assert.equal(await readFile(outputPath, 'utf8'), 'keep existing output');
+    // A raw 25 MiB file cannot fit once metadata and the length prefix are included.
+    await writeFile(inputPath, randomFillSync(Buffer.alloc(25 * 1024 * 1024)));
+    for (const access of ['--no-password', '--stdin-password']) {
+      result = run(access);
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /Binary package exceeds the 25 MiB/);
+      assert.equal(await readFile(outputPath, 'utf8'), 'keep existing output');
+    }
+    // Small Base64 chunks increase JSON overhead beyond the transport budget.
+    await truncate(inputPath, 25 * 1024 * 1024 - 1024);
+    result = run('--no-password', '--chunk-size', '40');
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /HTML package exceeds the 35 MiB/);
+    assert.equal(await readFile(outputPath, 'utf8'), 'keep existing output');
+  } finally { await rm(dir, { recursive: true, force: true }); }
 });

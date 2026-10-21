@@ -3,14 +3,14 @@ import { renderWrapper } from './wrapper.mjs';
 export const COMPRESSION_THRESHOLD = 4 * 1024;
 
 // Creator only. Compare exact output lengths without encrypting/encoding twice.
-export async function prepareContent(bytes, file, metadata, chunkSize) {
+export async function prepareContent(bytes, file, metadata, chunkSize, maxOriginalSize = 25 * 1024 * 1024) {
   const encoder = new TextEncoder();
   const header = encoder.encode(JSON.stringify(file));
   if (header.byteLength > 65536) throw new Error('Filename metadata is too large.');
   const rawVersion = metadata.access === 'sealed' ? 4 : 2;
   const original = { bytes, header, v: rawVersion };
-  // Larger CLI files keep the uncompressed layout and its existing size policy.
-  if (bytes.byteLength < COMPRESSION_THRESHOLD || bytes.byteLength > 25 * 1024 * 1024
+  // The browser keeps its original limit; the CLI opts into a larger range.
+  if (bytes.byteLength < COMPRESSION_THRESHOLD || bytes.byteLength > maxOriginalSize
       || typeof CompressionStream !== 'function' || typeof DecompressionStream !== 'function') return original;
   const compressed = new Uint8Array(await new Response(
     new Blob([bytes]).stream().pipeThrough(new CompressionStream('gzip'))

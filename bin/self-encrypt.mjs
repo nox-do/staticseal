@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, resolve } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
@@ -20,6 +20,9 @@ const { authenticatedDataFor } = createCrypto();
 const VERSION = '1.2.0';
 const DEFAULT_ITERATIONS = 210_000;
 const DEFAULT_CHUNK_SIZE = 64 * 1024;
+const ORIGINAL_MAX_BYTES = 128 * 1024 * 1024;
+const PAYLOAD_MAX_BYTES = 25 * 1024 * 1024;
+const HTML_MAX_BYTES = 35 * 1024 * 1024;
 function parseArgs(argv) {
   const args = {
     iterations: DEFAULT_ITERATIONS,
@@ -100,6 +103,8 @@ function printHelp() {
 
 Usage:
   node ./bin/self-encrypt.mjs --in input.pdf --out input_sealed.html [--title "Protected file"]
+
+Limits (experimental): 128 MiB original, 25 MiB binary package, 35 MiB final HTML.
 
 Options:
   --in <file>              Static source file
@@ -218,6 +223,14 @@ async function readPassword({ stdinPassword }) {
   return password;
 }
 
+async function prepareCliContent(bytes, file, metadata, chunkSize) {
+  const content = await prepareContent(bytes, file, metadata, chunkSize, ORIGINAL_MAX_BYTES);
+  // Include the length prefix, metadata and (when encrypted) the GCM tag.
+  const size = 4 + content.header.byteLength + content.bytes.byteLength + (metadata.access === 'sealed' ? 0 : 16);
+  if (size > PAYLOAD_MAX_BYTES) throw new Error('Binary package exceeds the 25 MiB CLI limit after compression.');
+  return content;
+}
+
 async function encryptBytes(bytes, password, { iterations, chunkSize, sourceName, contentType, access, privateFilename = false, htmlPage = false }) {
   if (htmlPage) {
     if (!isHtmlFile(sourceName, contentType)) throw new Error('--html-page requires an HTML file.');
@@ -227,7 +240,7 @@ async function encryptBytes(bytes, password, { iterations, chunkSize, sourceName
   if (access === 'sealed') {
     const metadata = { v: 4, encoding: 'metadata', access, ...display,
       ...(!privateFilename ? { filename: sourceName, contentType } : {}) };
-    const content = await prepareContent(bytes, { filename: sourceName, contentType }, metadata, chunkSize);
+    const content = await prepareCliContent(bytes, { filename: sourceName, contentType }, metadata, chunkSize);
     const length = Buffer.alloc(4);
     length.writeUInt32BE(content.header.byteLength);
     const packed = Buffer.concat([length, content.header, content.bytes]);
@@ -249,7 +262,7 @@ async function encryptBytes(bytes, password, { iterations, chunkSize, sourceName
     salt: salt.toString('base64'),
     iv: iv.toString('base64')
   };
-  const content = await prepareContent(bytes, { filename: sourceName, contentType }, metadata, chunkSize);
+  const content = await prepareCliContent(bytes, { filename: sourceName, contentType }, metadata, chunkSize);
   metadata.v = content.v;
   const key = pbkdf2Sync(password, salt, iterations, 32, 'sha256');
   const cipher = createCipheriv('aes-256-gcm', key, iv);
@@ -323,6 +336,10 @@ async function main() {
     throw new Error('--no-password cannot be combined with --stdin-password.');
   }
 
+  if ((await stat(inputPath)).size > ORIGINAL_MAX_BYTES) {
+    throw new Error('Original file exceeds the 128 MiB CLI limit.');
+  }
+
   const access = args.noPassword ? 'sealed' : 'passphrase';
   const password = args.noPassword ? '' : await readPassword(args);
   if (!password && !args.noPassword) {
@@ -330,6 +347,7 @@ async function main() {
   }
 
   const bytes = await readFile(inputPath);
+  if (bytes.byteLength > ORIGINAL_MAX_BYTES) throw new Error('Original file exceeds the 128 MiB CLI limit.');
   const payload = await encryptBytes(bytes, password, {
     iterations: args.iterations,
     chunkSize: args.chunkSize,
@@ -347,6 +365,10 @@ async function main() {
     buttonLabel: args.buttonLabel
   });
   const wrapper = css ? plainWrapper.replace('</head>', () => `<style>${css}</style></head>`) : plainWrapper;
+
+  if (Buffer.byteLength(wrapper, 'utf8') > HTML_MAX_BYTES) {
+    throw new Error('HTML package exceeds the 35 MiB CLI limit.');
+  }
 
   await mkdir(dirname(outputPath), { recursive: true });
   await writeFile(outputPath, wrapper, 'utf8');
