@@ -34,7 +34,7 @@
     input.files = transfer.files;
     input.dispatchEvent(new frame.contentWindow.Event('change', { bubbles: true }));
   };
-  const create = (bytes, name, type, password = '', privateFilename = false, page = false, iterations = 210000) =>
+  const create = (bytes, name, type, password = '', privateFilename = false, page = false) =>
     withFrame({ url: 'creator.html' }, async frame => {
       const doc = frame.contentDocument, node = id => doc.getElementById(id);
       const blobs = captureBlobs(frame);
@@ -43,7 +43,6 @@
       frame.contentWindow.confirm = () => true;
       selectFile(frame, bytes, name, type);
       node('password').value = node('password-repeat').value = password;
-      node('kdf-strength').value = String(iterations);
       node('private-filename').checked = privateFilename;
       node('private-filename').dispatchEvent(new frame.contentWindow.Event('change'));
       node('html-page').checked = page;
@@ -113,7 +112,7 @@
       const bytes = new Uint8Array(size * 1024 * 1024);
       for (let i = 0; i < bytes.length; i++) bytes[i] = i & 255;
       const password = access === 'sealed' ? '' : 'browser-test-only';
-      const html = await create(bytes, 'Private-test.bin', 'application/octet-stream', password, true, false, 600000);
+      const html = await create(bytes, 'Private-test.bin', 'application/octet-stream', password, true, false);
       check(!html.includes('Private-test.bin'), 'private filename leaked');
       await withFrame({ html }, async frame => {
         await equalBytes(await open(frame, password), bytes);

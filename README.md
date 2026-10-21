@@ -42,16 +42,17 @@ guarantee exclusion from search engines or establish GDPR or other legal complia
 ## Use in your browser
 
 1. Choose a file.
-2. Optionally add and repeat a passphrase.
+2. Optionally select **Generate passphrase** to fill both fields, or enter and repeat your own. Use **Copy** to save it separately.
 3. Select **Seal & download file**.
 
 Your file and passphrase stay in your browser. No upload, account, or backend is
 required. [Download the latest release](https://github.com/nox-do/staticseal/releases/latest/download/staticseal.html)
 and open `staticseal.html` in your browser to use it offline.
 
-Under **Advanced options**, you can generate a passphrase, hide the original
-filename and file type, or adjust the PBKDF2 settings. Share the passphrase
-separately from the generated file.
+**Hide original filename and file type** is available beside file selection.
+The browser uses 210,000 PBKDF2 rounds and automatically names the output file.
+Custom titles, output paths and iteration counts remain CLI options.
+Share the passphrase separately from the generated file.
 
 For HTML files, **Display as a webpage after opening** appears below the file
 picker. It is off by default and resets when you select another file. Turn it on

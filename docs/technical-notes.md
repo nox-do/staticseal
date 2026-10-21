@@ -208,14 +208,14 @@ including CSS, scripts, interaction, full content and CLI fragment navigation.
 
 ## Private filenames and passphrase generation
 
-The web app keeps file selection and the optional passphrase visible. A collapsed
-**Advanced** section contains the passphrase generator, private-filename option,
-public title/output name and PBKDF2 settings. The submit button stays outside it.
+The web app shows file selection, the private-filename option and an optional
+passphrase. Generate fills both password fields immediately; Copy uses the current
+first field. There is no Advanced section or separate adoption/cancellation step.
+Titles and output names are derived from the selected file.
 
 **Hide original filename and file type** is off by default. It puts
 both values inside the packaged content and fixes the public title and downloaded
-wrapper name to `Protected file` and `protected_file.html`. These fields are disabled
-while the option is selected. The original name is restored after unlocking.
+wrapper name to `Protected file` and `protected_file.html`. There are no editable title/output fields in the browser. The original name is restored after unlocking.
 Without the option, filename and MIME type remain readable in the payload, and the
 source name also appears in the title. Authentication does not hide them.
 File size remains observable in either mode. In sealed mode, anyone can recover
@@ -232,16 +232,16 @@ neutral wrapper title. Source/output paths printed by the local CLI are not hidd
 
 The optional web-only generator directly formats 16 fresh bytes from
 `crypto.getRandomValues()` as a 22-character Base64url secret (128 bits).
-One click generates and displays the result; copy or explicitly adopt it into
-both fields. Cancel preserves existing passphrases. Secure browser randomness is
+One click fills both editable password fields. Copy confirmation is reset on
+generation or edits; pending clipboard operations cannot confirm a newer value.
+Randomness failures preserve existing values. If clipboard access fails, the first
+field is temporarily revealed and selected for manual copying; blur or edits mask it again. Secure browser randomness is
 mandatory; no user-event collection or hashing is needed. Generator code is never
 included in generated wrappers. There is no enforced passphrase-strength policy.
 
-PBKDF2 options are 160k, 210k (unchanged default), 420k, 600k and 1.2M. The CLI still
-defaults to 210k and accepts higher values via `--iterations`. Higher values increase
-both unlock cost and the cost of offline guesses. The 600k option is based on the
-[OWASP PBKDF2-HMAC-SHA256 guidance](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#pbkdf2);
-1.2M is an additional product option. Mobile latency remains to be measured.
+The browser fixes PBKDF2 at its unchanged default of 210,000 rounds. The CLI
+also defaults to 210,000 and keeps its `--iterations` option. Mobile latency
+remains to be measured.
 
 ### Unified content format
 

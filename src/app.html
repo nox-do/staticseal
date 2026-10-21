@@ -30,10 +30,10 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   line-height: 1.5;
 }
-button, input, select {
+button, input {
   font: inherit;
 }
-button, input, select, summary {
+button, input {
   -webkit-tap-highlight-color: transparent;
 }
 .site-header {
@@ -242,7 +242,7 @@ input[type="file"] {
   align-content: start;
   gap: 7px;
 }
-input[type="text"], input[type="password"], select {
+input[type="text"], input[type="password"] {
   width: 100%;
   min-width: 0;
   min-height: 44px;
@@ -267,7 +267,7 @@ input[type="checkbox"] {
   vertical-align: -3px;
   margin-right: 7px;
 }
-input:focus-visible, select:focus-visible, button:focus-visible, summary:focus-visible, a:focus-visible {
+input:focus-visible, button:focus-visible, a:focus-visible {
   outline: 3px solid #27665d40;
   outline-offset: 3px;
 }
@@ -282,26 +282,6 @@ input:focus-visible, select:focus-visible, button:focus-visible, summary:focus-v
   flex: none;
   margin-top: 2px;
   color: var(--muted);
-}
-.advanced {
-  border-bottom: 1px solid var(--line);
-  background: #fbfcfb;
-}
-.advanced > summary {
-  padding: 17px 28px;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink);
-}
-.advanced > summary span {
-  font-weight: 400;
-  color: var(--muted);
-  font-size: 11px;
-  margin-left: 8px;
-}
-.advanced[open] > summary {
-  border-bottom: 1px solid var(--line);
 }
 button {
   min-height: 44px;
@@ -322,12 +302,12 @@ button:disabled {
   opacity: .55;
   cursor: not-allowed;
 }
-#generate-password, #cancel-generator, #copy-generated {
+#generate-password, #copy-generated {
   background: #fff;
   color: var(--accent);
   border-color: #ccd9d5;
 }
-#generate-password:hover, #cancel-generator:hover, #copy-generated:hover {
+#generate-password:hover, #copy-generated:hover {
   background: #edf3f1;
 }
 .actions {
@@ -344,17 +324,11 @@ button:disabled {
 .status[data-kind="error"] {
   color: #a13c2e;
 }
-#generator-panel, #generator-result {
-  margin-top: 12px;
-}
-#generator-panel > .meta {
-  margin-bottom: 12px;
-}
 .generator-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 12px;
+  margin-bottom: 12px;
 }
 .guide {
   padding-top: 12px;
@@ -496,14 +470,7 @@ button:disabled {
   .row {
     padding: 20px;
   }
-  .advanced > summary {
-    padding: 17px 20px;
-  }
-  .advanced > summary span {
-    display: block;
-    margin: 4px 0 0 14px;
-  }
-  .fields {
+      .fields {
     grid-template-columns: 1fr;
   }
   .guide {
@@ -549,6 +516,8 @@ button:disabled {
           <input id="source-file" name="source-file" type="file" aria-describedby="file-meta">
         </div>
         <p class="meta" id="file-meta" aria-live="polite">No file selected</p>
+        <label><input id="private-filename" type="checkbox"> Hide original filename and file type</label>
+        <p class="meta">Uses a neutral public title and download name. Without a passphrase, anyone can still recover the original name and contents.</p>
       </div>
       <div class="row" id="html-page-option" hidden>
         <label><input id="html-page" type="checkbox" disabled aria-describedby="html-page-note"> Display as a webpage after opening</label>
@@ -556,67 +525,20 @@ button:disabled {
       </div>
       <div class="row">
         <div class="row-header"><span class="step" aria-hidden="true">2</span><span class="field-heading">Add a passphrase<span class="optional">optional</span></span></div>
+        <div class="generator-actions">
+          <button id="generate-password" type="button">Generate passphrase</button>
+          <button id="copy-generated" type="button" disabled>Copy</button>
+        </div>
+        <p id="generator-status" class="meta" role="status" aria-live="polite"></p>
         <div class="fields">
           <div><label for="password">Passphrase</label><input id="password" name="password" type="password" autocomplete="new-password" placeholder="Make it a good secret" aria-describedby="passphrase-note"></div>
           <div><label for="password-repeat">Repeat passphrase</label><input id="password-repeat" name="password-repeat" type="password" autocomplete="new-password" placeholder="One more time"></div>
         </div>
         <div class="passphrase-note">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></svg>
-          <p class="meta" id="passphrase-note">Without a passphrase, anyone with the file can open it.</p>
+          <p class="meta" id="passphrase-note">Leave both fields empty to package without a passphrase. Anyone with the file can then open it.</p>
         </div>
       </div>
-
-      <details class="advanced">
-        <summary>Advanced options<span>Private filename, passphrase generator &amp; more</span></summary>
-        <div class="row">
-          <button id="generate-password" type="button">Generate a strong passphrase</button>
-          <div id="generator-panel" hidden>
-            <p class="meta">Generated locally using secure browser randomness.</p>
-            <p id="generator-status" class="meta" role="status" aria-live="polite"></p>
-            <div id="generator-result" hidden>
-              <label for="generated-password">Generated passphrase (keep a copy before sending)</label>
-              <input id="generated-password" type="text" readonly autocomplete="off" spellcheck="false">
-              <div class="generator-actions">
-                <button id="copy-generated" type="button" disabled>Copy</button>
-                <button id="use-generated" type="button" disabled>Use passphrase</button>
-              </div>
-            </div>
-            <div class="generator-actions">
-              <button id="cancel-generator" type="button">Cancel</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="row">
-          <label><input id="private-filename" type="checkbox"> Hide original filename and file type</label>
-          <p class="meta">Uses a neutral public title and download name. Without this option, the original name and type remain visible. In no-passphrase mode anyone can still recover them.</p>
-        </div>
-
-        <div class="row fields">
-          <div>
-            <label for="output-title">Protected page title optional</label>
-            <input id="output-title" name="output-title" type="text" placeholder="Optional display title">
-          </div>
-          <div>
-            <label for="output-name">Output filename</label>
-            <input id="output-name" name="output-name" type="text" placeholder="page_sealed.html">
-          </div>
-        </div>
-
-        <div class="row">
-          <div>
-            <label for="kdf-strength">Passphrase stretching</label>
-            <select id="kdf-strength" name="kdf-strength">
-              <option value="160000">Fast - 160k PBKDF2 rounds</option>
-              <option value="210000" selected>Default - 210k PBKDF2 rounds</option>
-              <option value="420000">420k PBKDF2 rounds</option>
-              <option value="600000">600k PBKDF2 rounds - OWASP reference</option>
-              <option value="1200000">1.2M PBKDF2 rounds - highest cost</option>
-            </select>
-            <p class="meta" id="kdf-help"></p>
-          </div>
-        </div>
-      </details>
 
       <div class="row actions">
         <div class="status" id="status" role="status" aria-live="polite"></div>
@@ -655,10 +577,6 @@ button:disabled {
   const password = $('password');
   const passwordRepeat = $('password-repeat');
   const privateFilename = $('private-filename');
-  const outputTitle = $('output-title');
-  const outputName = $('output-name');
-  const kdfStrength = $('kdf-strength');
-  const kdfHelp = $('kdf-help');
   const button = $('encrypt-button');
   const status = $('status');
 
@@ -666,14 +584,7 @@ button:disabled {
   const format = createFormat();
   const { fromBase64, fromBase64Chunks, unpackContent } = format;
   const { authenticatedDataFor, deriveKey, decryptPayload } = createCrypto();
-  const KDF_PRESETS = {
-    160000: 'Fast is useful for quick drafts, but relies more heavily on passphrase strength.',
-    210000: 'Default: 210k rounds. Higher values slow password guessing and unlocking; they do not replace a strong passphrase.',
-    420000: '420k rounds increase the cost of each password guess and unlock.',
-    600000: '600k is the OWASP reference for PBKDF2-HMAC-SHA256. Unlocking takes longer, especially on mobile.',
-    1200000: '1.2M rounds double the KDF work compared with 600k. Expect longer waits on mobile.'
-  };
-  kdfHelp.textContent = KDF_PRESETS[kdfStrength.value];
+  const DEFAULT_ITERATIONS = 210000;
   const setStatus = (message, kind = '') => {
     status.textContent = message;
     status.dataset.kind = kind;
@@ -805,69 +716,48 @@ button:disabled {
   }
 
   // Creation UI only: none of this generator code is emitted in the wrapper.
-  const generatorPanel = $('generator-panel');
-  const generatorResult = $('generator-result');
   const generatorStatus = $('generator-status');
-  const generatedPassword = $('generated-password');
   const copyGenerated = $('copy-generated');
-  const useGenerated = $('use-generated');
-
-  const generateSecret = () => {
-    const random = crypto.getRandomValues(new Uint8Array(16));
-    const secret = toBase64(random).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
-    random.fill(0);
-    return secret;
+  let passphraseRevision = 0;
+  const resetCopy = () => {
+    passphraseRevision++;
+    password.type = 'password';
+    copyGenerated.disabled = !password.value;
+    copyGenerated.textContent = 'Copy';
+    generatorStatus.textContent = '';
   };
-  const resetGenerator = () => {
-    generatedPassword.value = '';
-    generatorResult.hidden = true;
-    copyGenerated.disabled = true;
-    useGenerated.disabled = true;
-  };
+  resetCopy();
+  password.addEventListener('input', resetCopy);
+  password.addEventListener('blur', () => { password.type = 'password'; });
+  passwordRepeat.addEventListener('input', resetCopy);
   $('generate-password').addEventListener('click', () => {
-    resetGenerator();
-    generatorPanel.hidden = false;
+    resetCopy();
     try {
-      generatedPassword.value = generateSecret();
-      generatorResult.hidden = false;
+      const random = crypto.getRandomValues(new Uint8Array(16));
+      const secret = toBase64(random).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
+      random.fill(0);
+      password.value = passwordRepeat.value = secret;
       copyGenerated.disabled = false;
-      useGenerated.disabled = false;
-      generatorStatus.textContent = 'Ready. Save the passphrase separately; it is not included in the protected file.';
-      generatedPassword.focus();
+      generatorStatus.textContent = 'Save a copy separately before sharing the protected file.';
     } catch {
       generatorStatus.textContent = 'Secure browser randomness is unavailable. Enter your own passphrase.';
     }
   });
   copyGenerated.addEventListener('click', async () => {
-    if (!generatedPassword.value) return;
+    if (!password.value) return;
+    const revision = passphraseRevision;
     try {
-      await navigator.clipboard.writeText(generatedPassword.value);
+      await navigator.clipboard.writeText(password.value);
+      if (revision !== passphraseRevision) return;
+      copyGenerated.textContent = 'Copied';
       generatorStatus.textContent = 'Passphrase copied to clipboard.';
     } catch {
-      generatedPassword.focus();
-      generatedPassword.select();
-      generatorStatus.textContent = 'Copy the selected passphrase manually.';
+      if (revision !== passphraseRevision) return;
+      password.type = 'text';
+      password.focus();
+      password.select();
+      generatorStatus.textContent = 'Clipboard unavailable. Copy the visible passphrase manually; it hides again when you leave the field.';
     }
-  });
-  useGenerated.addEventListener('click', () => {
-    if (!generatedPassword.value) return;
-    password.value = generatedPassword.value;
-    passwordRepeat.value = generatedPassword.value;
-    resetGenerator();
-    generatorPanel.hidden = true;
-    password.focus();
-  });
-  $('cancel-generator').addEventListener('click', () => {
-    resetGenerator();
-    generatorPanel.hidden = true;
-    $('generate-password').focus();
-  });
-  privateFilename.addEventListener('change', () => {
-    outputTitle.disabled = privateFilename.checked;
-    outputName.disabled = privateFilename.checked;
-    const file = sourceFile.files[0];
-    outputTitle.value = privateFilename.checked ? 'Protected file' : (file?.name.replace(/\.[^.]+$/, '') || '');
-    outputName.value = privateFilename.checked ? 'protected_file.html' : (file ? outputFilenameFor(file.name) : '');
   });
 
   sourceFile.addEventListener('change', () => {
@@ -889,20 +779,6 @@ button:disabled {
     } else {
       setStatus('');
     }
-    if (privateFilename.checked) {
-      outputTitle.value = 'Protected file';
-      outputName.value = 'protected_file.html';
-    }
-    if (!outputTitle.value) {
-      outputTitle.value = file.name.replace(/\.[^.]+$/, '');
-    }
-    if (!outputName.value) {
-      outputName.value = outputFilenameFor(file.name);
-    }
-  });
-
-  kdfStrength.addEventListener('change', () => {
-    kdfHelp.textContent = KDF_PRESETS[kdfStrength.value] || KDF_PRESETS[210000];
   });
 
   form.addEventListener('submit', async (event) => {
@@ -910,11 +786,11 @@ button:disabled {
     const file = sourceFile.files[0];
     const enteredPassphrase = password.value;
     const repeatedPassphrase = passwordRepeat.value;
-    const iterationCount = Number(kdfStrength.value);
+    const iterationCount = DEFAULT_ITERATIONS;
     const privateName = privateFilename.checked;
     const pageMode = htmlPage.checked;
-    const title = privateName ? 'Protected file' : (outputTitle.value || 'Protected file');
-    const output = privateName ? 'protected_file.html' : (outputName.value || (file ? outputFilenameFor(file.name) : ''));
+    const title = privateName ? 'Protected file' : (file?.name.replace(/\.[^.]+$/, '') || 'Protected file');
+    const output = privateName ? 'protected_file.html' : (file ? outputFilenameFor(file.name) : '');
     const access = enteredPassphrase ? 'passphrase' : 'sealed';
     const passphrase = enteredPassphrase;
 
@@ -926,11 +802,6 @@ button:disabled {
     if (enteredPassphrase !== repeatedPassphrase) {
       setStatus('Passphrases do not match.', 'error');
       passwordRepeat.focus();
-      return;
-    }
-    if (!KDF_PRESETS[iterationCount]) {
-      setStatus('Choose a passphrase stretching level.', 'error');
-      kdfStrength.focus();
       return;
     }
     if (access === 'passphrase' && !crypto.subtle) {

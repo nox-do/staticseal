@@ -20,7 +20,7 @@ export function executeHtml(html, { payload, crypto = webcrypto, globals = {} } 
     getElementById(id) {
       if (id === 'password' && !html.includes('id="password"')) return null;
       if (!nodes.has(id)) nodes.set(id, {
-        value: id === 'kdf-strength' ? '210000' : '', dataset: {}, checked: false,
+        value: '', dataset: {}, checked: false,
         outerHTML: id === 'seal-logo' ? html.match(/<svg id="seal-logo"[\s\S]*?<\/svg>/)?.[0] : '',
         textContent: id === 'encrypted-payload' ? JSON.stringify(payload ?? readPayload(html)) : '',
         attributes: {}, setAttribute(name, value) { this.attributes[name] = value; },
@@ -67,7 +67,7 @@ export function wrapper(html, payload, options = {}) {
 }
 
 export async function createThroughUi(html, bytes, file, {
-  password = '', iterations = 210000, privateFilename = false, htmlPage = false, ...environment
+  password = '', privateFilename = false, htmlPage = false, ...environment
 } = {}) {
   const ui = executeHtml(html, environment);
   const node = id => ui.nodes.get(id);
@@ -76,9 +76,7 @@ export async function createThroughUi(html, bytes, file, {
   } }];
   node('source-file').handlers.change();
   node('password').value = node('password-repeat').value = password;
-  node('kdf-strength').value = String(iterations);
   node('private-filename').checked = privateFilename;
-  node('private-filename').handlers.change();
   node('html-page').checked = htmlPage;
   await node('encrypt-form').handlers.submit({ preventDefault() {} });
   if (node('status').dataset.kind === 'error') throw new Error(node('status').textContent);

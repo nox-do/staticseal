@@ -360,7 +360,6 @@ test('page choice is per-file, HTML-only and captured before asynchronous reads'
   assert.equal(node('html-page').disabled, false);
   assert.equal(node('html-page').checked, false);
   node('html-page').checked = true;
-  node('kdf-strength').value = '210000';
   await node('encrypt-form').handlers.submit({ preventDefault() {} });
   assert.deepEqual(ui.downloads, ['selected_sealed.html']);
   const emitted = wrapper(await ui.blobs[0].text());
@@ -470,7 +469,7 @@ test('gzip threshold, total-package savings and native API fallback', async () =
   const fileInfo = { name: 'fallback.txt', type: 'text/plain' };
   for (const missing of ['CompressionStream', 'DecompressionStream']) {
     const { html } = await createThroughUi(source, Buffer.alloc(8192), fileInfo,
-      { password: 'test', iterations: 160000, globals: { [missing]: undefined } });
+      { password: 'test', globals: { [missing]: undefined } });
     const payload = wrapper(html).payload;
     assert.equal(payload.v, 2);
     assert.ok(!html.includes('DecompressionStream'));
@@ -649,7 +648,7 @@ test('every authenticated metadata field rejects tampering, including KDF parame
   }
 });
 
-test('five KDF choices, one derivation per creation, private metadata and generator isolation', async () => {
+test('browser uses the default KDF once per creation and preserves private metadata', async () => {
   let derivations = 0;
   const trackedCrypto = {
     getRandomValues: webcrypto.getRandomValues.bind(webcrypto),
@@ -663,11 +662,12 @@ test('five KDF choices, one derivation per creation, private metadata and genera
     } })
   };
   const file = { name: 'Quartalszahlen_内部.pdf', type: 'application/pdf' };
-  for (const iterations of [160000, 210000, 420000, 600000, 1200000]) {
+  {
+    const iterations = 210000;
     const before = derivations;
     const bytes = new Uint8Array([0, 255, 128]);
     const { html } = await createThroughUi(source, bytes, file,
-      { password: 'test', iterations, privateFilename: true, crypto: trackedCrypto });
+      { password: 'test', privateFilename: true, crypto: trackedCrypto });
     const payload = wrapper(html).payload;
     assert.equal(derivations, before + 1);
     assert.equal(payload.iterations, iterations);
@@ -694,33 +694,61 @@ test('private metadata parser rejects malformed headers and unsupported versions
   }
 });
 
-test('generator uses browser randomness without hashing, supports explicit adoption and cancellation', () => {
-  let randomCalls = 0;
-  const crypto = { getRandomValues(bytes) { randomCalls++; return webcrypto.getRandomValues(bytes); } };
-  const ui = executeHtml(source, { crypto });
+test('generator prefills both fields and copy follows edits without stale confirmations', async () => {
+  let randomCalls = 0, copied, finishCopy;
+  const crypto = { getRandomValues(bytes) { randomCalls++; bytes.fill(randomCalls); return bytes; } };
+  const ui = executeHtml(source, { crypto, globals: { navigator: { clipboard: {
+    async writeText(value) { copied = value; }
+  } } } });
   const node = id => ui.nodes.get(id);
   const click = id => node(id).handlers.click();
+  assert.equal(node('copy-generated').disabled, true);
   node('password').value = 'existing';
   click('generate-password');
   assert.equal(randomCalls, 1);
-  assert.match(node('generated-password').value, /^[A-Za-z0-9_-]{22}$/);
-  assert.equal(node('password').value, 'existing');
-  const generated = node('generated-password').value;
-  click('use-generated');
-  assert.equal(node('password').value, generated);
-  assert.equal(node('password-repeat').value, generated);
-  assert.equal(node('generated-password').value, '');
+  assert.match(node('password').value, /^[A-Za-z0-9_-]{22}$/);
+  assert.equal(node('password-repeat').value, node('password').value);
+  await click('copy-generated');
+  assert.equal(copied, node('password').value);
+  assert.equal(node('copy-generated').textContent, 'Copied');
+  const generated = node('password').value;
   click('generate-password');
-  click('cancel-generator');
-  assert.equal(node('password').value, generated);
-  const broken = executeHtml(source, { crypto: { subtle: webcrypto.subtle, getRandomValues() { throw new Error('unavailable'); } } });
+  assert.notEqual(node('password').value, generated);
+  assert.equal(node('password-repeat').value, node('password').value);
+  assert.equal(node('copy-generated').textContent, 'Copy');
+  node('password').value = 'manual secret';
+  node('password').handlers.input();
+  await click('copy-generated');
+  assert.equal(copied, 'manual secret');
+  node('password-repeat').handlers.input();
+  assert.equal(node('generator-status').textContent, '');
+  node('password').value = '';
+  node('password').handlers.input();
+  assert.equal(node('copy-generated').disabled, true);
+  assert.doesNotMatch(source, /id="(?:generated-password|use-generated|cancel-generator|kdf-strength|output-title|output-name)"/);
+  const pending = executeHtml(source, { globals: { navigator: { clipboard: {
+    writeText() { return new Promise(resolve => { finishCopy = resolve; }); }
+  } } } });
+  pending.nodes.get('password').value = 'old';
+  const copy = pending.nodes.get('copy-generated').handlers.click();
+  pending.nodes.get('password').value = 'new';
+  pending.nodes.get('password').handlers.input();
+  finishCopy(); await copy;
+  assert.equal(pending.nodes.get('copy-generated').textContent, 'Copy');
+  const broken = executeHtml(source, { crypto: { getRandomValues() { throw new Error('unavailable'); } } });
+  broken.nodes.get('password').value = broken.nodes.get('password-repeat').value = 'keep';
   broken.nodes.get('generate-password').handlers.click();
-  assert.equal(broken.nodes.get('generator-result').hidden, true);
-  assert.equal(broken.nodes.get('use-generated').disabled, true);
+  assert.equal(broken.nodes.get('password').value, 'keep');
+  assert.equal(broken.nodes.get('password-repeat').value, 'keep');
   assert.match(broken.nodes.get('generator-status').textContent, /unavailable/);
+  await broken.nodes.get('copy-generated').handlers.click();
+  assert.match(broken.nodes.get('generator-status').textContent, /Clipboard unavailable/);
+  assert.equal(broken.nodes.get('password').type, 'text');
+  broken.nodes.get('password').handlers.blur();
+  assert.equal(broken.nodes.get('password').type, 'password');
 });
 
-test('CLI derives only once per creation and accepts both additional KDF settings', async () => {
+test('CLI derives only once per creation and accepts all five established KDF settings', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'staticseal-kdf-'));
   try {
     await writeFile(join(dir, 'empty.txt'), '');
@@ -730,7 +758,7 @@ test('CLI derives only once per creation and accepts both additional KDF setting
       crypto.pbkdf2Sync = (...args) => { calls++; return original(...args); };
       require('node:module').syncBuiltinESMExports();
       process.on('exit', () => { if (calls !== 1) process.exitCode = 99; });`);
-    for (const iterations of [600000, 1200000]) {
+    for (const iterations of [160000, 210000, 420000, 600000, 1200000]) {
       const result = spawnSync(process.execPath, ['--require', join(dir, 'count.cjs'), 'bin/self-encrypt.mjs',
         '--in', join(dir, 'empty.txt'), '--out', join(dir, 'private.html'), '--private-filename',
         '--iterations', String(iterations), '--stdin-password'],
@@ -744,27 +772,18 @@ test('CLI derives only once per creation and accepts both additional KDF setting
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
-test('private filename UI neutralizes fields and captures privacy before asynchronous reads', async () => {
+test('private filename UI uses neutral output and captures privacy before asynchronous reads', async () => {
   const ui = executeHtml(source);
   const node = id => ui.nodes.get(id);
   const file = { name: 'Secret-report.pdf', type: 'application/pdf', size: 3,
     async arrayBuffer() {
       // Simulate the user editing controls while File.arrayBuffer is pending.
       node('private-filename').checked = false;
-      node('output-name').value = file.name + '.html';
-      node('output-title').value = file.name;
       return new Uint8Array([1,2,3]).buffer;
     } };
   node('source-file').files = [file];
-  node('output-title').value = file.name;
-  node('output-name').value = file.name + '.html';
   node('private-filename').checked = true;
-  node('private-filename').handlers.change();
-  assert.equal(node('output-title').value, 'Protected file');
-  assert.equal(node('output-name').value, 'protected_file.html');
-  assert.equal(node('output-name').disabled, true);
   node('password').value = node('password-repeat').value = 'test';
-  node('kdf-strength').value = '600000';
   await node('encrypt-form').handlers.submit({ preventDefault() {} });
   assert.deepEqual(ui.downloads, ['protected_file.html']);
   assert.match(node('status').textContent, /Original: .* → HTML package: /);
@@ -993,7 +1012,7 @@ test('app and CLI readers remain standalone without creator APIs or unresolved b
       for (const page of [false, true]) for (const encrypted of [false, true]) {
         const password = encrypted ? 'standalone-audit-only' : '';
         const { html: browserHtml } = await createThroughUi(source, bytes, file,
-          { password, iterations: 160000, htmlPage: page, privateFilename: true });
+          { password, htmlPage: page, privateFilename: true });
         const result = spawnSync(process.execPath, ['bin/self-encrypt.mjs', '--in', join(dir, file.name),
           '--out', join(dir, 'reader.html'), '--iterations', '160000', '--private-filename',
           ...(page ? ['--html-page'] : []), encrypted ? '--stdin-password' : '--no-password'],
