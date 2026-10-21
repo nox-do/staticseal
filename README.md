@@ -207,8 +207,9 @@ Every stable release must include this asset. Check that the workflow completes
 successfully before announcing the download. Re-running it replaces the asset.
 
 - [Technical notes and browser smoke tests](docs/technical-notes.md)
-- [Working plan and validation history (German)](docs/staticseal-arbeitsplan.md)
-- [Proposed website mode for developers (German)](docs/staticseal-website-konzept.md) — not implemented yet
+- [Current architecture](docs/architecture.md) and [AP1–AP5 validation and size comparison](docs/refactoring-validation.md)
+- [Historical working plan and validation history (German)](docs/staticseal-arbeitsplan.md)
+- [Proposed multi-file website mode (German)](docs/staticseal-website-konzept.md) — not implemented; separate from the supported single-file HTML page mode
 
 ## License
 

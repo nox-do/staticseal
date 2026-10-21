@@ -1,5 +1,16 @@
 # Staticseal Befunde und Arbeitsplan
 
+> Historisches Arbeitsprotokoll, kein aktueller Architekturvertrag. Die Abschnitte
+> halten den jeweiligen damaligen Stand fest und widersprechen sich teilweise.
+> Maßgeblich sind die [aktuelle Architektur](architecture.md), die README und die
+> [Abschlussprüfung AP1–AP5](refactoring-validation.md). Überholt sind insbesondere
+> „nur Download“ für HTML/SVG/Text, ein mitgelieferter `unlockKey` und PBKDF2 im
+> Sealed-Modus, nur v2 als aktuelles Format, ein abhängigkeitsfreier Build und feste
+> interne Testnamen. Heute gelten Vorschau plus optionaler HTML-Seitenmodus,
+> v2–v5 mit unverschlüsselten v4/v5, festgeschriebene Entwicklungsabhängigkeiten für den
+> Build und Tests ohne private Namens-Hooks. Die nachfolgende Überschrift
+> „Aktueller Stand“ bezeichnet einen historischen Zwischenstand.
+
 Stand: 19. Oktober 2026. Grundlage ist der aktuelle Arbeitsstand im Repository einschließlich des bereits implementierten Großdateien-Fixes. F1, F3/F3a und F4 sind auf dem Branch `codex/privacy-and-passphrase-options` implementiert. Die folgenden Abschnitte dokumentieren Anforderungen und verbleibende Validierung.
 
 Staticseal soll einzelne Dokumente lokal in eine eigenständige, offline nutzbare HTML-Datei verpacken. Für kleine bis mittlere Dateien bleibt diese Architektur sinnvoll. Vorrang haben eine ehrliche Beschreibung der Schutzwirkung, weniger Schlüsselableitungen und Speicherduplikate sowie Browser-Validierung. Ein Streaming-Dateiformat oder interaktive HTML-Ausführung wären eigenständige Erweiterungen.

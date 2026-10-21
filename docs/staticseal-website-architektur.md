@@ -1,5 +1,12 @@
 # Staticseal Website-Modus: Architekturplan
 
+> Historischer Entwurf für einen mehrteiligen Website-Modus, keine Beschreibung
+> der ausgelieferten Architektur. Maßgeblich für den bestehenden Einzeldatei- und
+> HTML-Seitenmodus ist die [aktuelle Architektur](architecture.md). Die folgende
+> Bezeichnung „heutiges v2-Dateiformat“ bezieht sich auf den Planungsstand vom
+> 19. Oktober; aktuell unterstützt das Werkzeug v2–v5. Service Worker, externe
+> Schlüsselfreigabe und Mehrdatei-Pakete sind weiterhin nicht implementiert.
+
 Stand: 19. Oktober 2026 · Branch: `codex/website-mode` · Status: Planung, nicht implementiert.
 Produktziel und Meilensteine: [Produktplan](staticseal-website-konzept.md).
 

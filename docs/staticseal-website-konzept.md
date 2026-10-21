@@ -1,5 +1,11 @@
 # Staticseal Website-Modus: Produktplan
 
+> Historischer Produktentwurf für mehrere Dateien und Ressourcenrouting, nicht
+> der bereits implementierte Einzeldatei-HTML-Seitenmodus. Die folgenden Aufträge
+> und offenen Entscheidungen gehören zu diesem Entwurf, nicht zum aktuellen
+> Refactoring-Auftrag. Aktueller Stand: [Architektur](architecture.md) und
+> [Abschlussprüfung AP1–AP5](refactoring-validation.md).
+
 Stand: 19. Oktober 2026 · Branch: `codex/website-mode` · Status: Architekturplanung.
 
 ## Ziel

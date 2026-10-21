@@ -2,6 +2,10 @@
 
 Implementation details, format constraints, and validation scope for the current single-file tool.
 
+Current overview: [architecture](architecture.md). Final AP1–AP5 results and exact
+build/size evidence: [validation](refactoring-validation.md). Dated AP/release
+measurements below describe their recorded revision, not the current artifact size.
+
 ## Shared format rules and creator policies
 
 `createFormat()` in `src/format.mjs` is the common source for supported versions,
@@ -301,7 +305,8 @@ New no-password envelopes instead store Base64 chunks in `content` (v4/v5), with
 The inner metadata header is the same layout; original bytes, name and MIME type
 are verified before download in both modes. v4/v5 have no GCM integrity check.
 
-`createFormat` contains only the shared content parser and Base64 helpers.
+`createFormat` contains the shared content parser, Base64 helpers, version rules
+and technical format constants; it does not create packages or perform encryption.
 `createCrypto` holds authenticated metadata, PBKDF2 and AES-GCM decoding. The
 generator serializes the latter exclusively into password envelopes. Each emitted
 reader receives one decoder, with no runtime test for encrypted vs. plain content.
@@ -365,6 +370,12 @@ HTML script-parser escaping. It is not file-content compression. The technical
 generation comment, timestamp and redundant source-name parameter are removed.
 Template substitution uses callbacks and a single pass so literal replacement
 sequences or marker-like text in filenames are preserved.
+
+### Historical preview comparison (before AP1)
+
+These measurements used an earlier implementation and synthetic payloads. They
+are retained as history; use the [AP1/final comparison](refactoring-validation.md)
+for current sizes with identical real CLI fixtures.
 
 Measured against the preview baseline `106fcae`, `index.html` shrank from 58,994
 to 39,650 bytes (19,344 bytes / 32.79%). Using identical representative payload
@@ -455,6 +466,10 @@ content/title; both use gzip. Password page output with a private name is 12,804
 bytes. No runtime dependency was added.
 
 ### Release 1.2.0 opening-screen options (2026-10-20)
+
+Historical release validation: the size and test count below apply to that release
+revision. The later passphrase-generator and compression-limit changes and AP1–AP5
+are reflected in the current architecture and final measurement instead.
 
 The CLI adds `--minimal` and `--button-label`, independently of page/file mode,
 passphrase protection and gzip. Minimal output omits introductory copy and the

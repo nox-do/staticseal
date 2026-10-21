@@ -987,6 +987,50 @@ test('built creator and reader forms cover raw/gzip, access, privacy and both di
   }
 });
 
+test('app and CLI readers remain standalone without creator APIs or unresolved build markers', async () => {
+  const factories = await import('../src/reader-factories.mjs');
+  assert.deepEqual(Object.keys(factories).sort(), [
+    'createCrypto', 'createFileViewer', 'createFormat', 'createPageViewer', 'createPreview', 'inflateContent', 'isHtmlFile'
+  ]);
+  const readOnlyCrypto = {
+    getRandomValues() { assert.fail('Reader must not generate creation randomness'); },
+    subtle: new Proxy(webcrypto.subtle, { get(target, property) {
+      if (['encrypt', 'generateKey', 'wrapKey'].includes(property)) return () => assert.fail('Reader must not use ' + property);
+      const value = Reflect.get(target, property);
+      return typeof value === 'function' ? value.bind(target) : value;
+    } })
+  };
+  const dir = await mkdtemp(join(tmpdir(), 'staticseal-reader-audit-'));
+  try {
+    for (const compressed of [false, true]) {
+      const bytes = Buffer.from('<!doctype html><meta charset="utf-8"><p>Eigenständiger Reader 🔒</p>'
+        + (compressed ? 'Repeated reader audit content.\n'.repeat(2048) : ''));
+      const file = { name: 'reader-audit.html', type: 'text/html' };
+      await writeFile(join(dir, file.name), bytes);
+      for (const page of [false, true]) for (const encrypted of [false, true]) {
+        const password = encrypted ? 'standalone-audit-only' : '';
+        const { html: browserHtml } = await createThroughUi(source, bytes, file,
+          { password, iterations: 160000, htmlPage: page, privateFilename: true });
+        const result = spawnSync(process.execPath, ['bin/self-encrypt.mjs', '--in', join(dir, file.name),
+          '--out', join(dir, 'reader.html'), '--iterations', '160000', '--private-filename',
+          ...(page ? ['--html-page'] : []), encrypted ? '--stdin-password' : '--no-password'],
+          { cwd: new URL('..', import.meta.url), input: password + '\n', encoding: 'utf8' });
+        assert.equal(result.status, 0, result.stderr);
+        for (const html of [browserHtml, await readFile(join(dir, 'reader.html'), 'utf8')]) {
+          assert.doesNotMatch(html, /STATICSEAL_/);
+          assert.doesNotMatch(html, /<script\b[^>]*\bsrc=|<link\b[^>]*\bhref=/i);
+          const reader = wrapper(html, undefined, { globals: {
+            crypto: encrypted ? readOnlyCrypto : undefined,
+            CompressionStream: undefined, Response: undefined, fetch: undefined
+          } });
+          assert.equal(reader.payload.v, (encrypted ? 2 : 4) + Number(compressed));
+          assert.deepEqual(Buffer.from(await reader.open(password)), bytes);
+        }
+      }
+    }
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
 test('browser UI keeps warning, confirmation and rejection boundaries before file reading', async () => {
   for (const size of [5 * 1024 * 1024 - 1, 5 * 1024 * 1024, 10 * 1024 * 1024,
     10 * 1024 * 1024 + 1, 25 * 1024 * 1024, 25 * 1024 * 1024 + 1]) {

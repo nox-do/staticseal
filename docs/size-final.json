@@ -1,0 +1,146 @@
+{
+  "sourceCommit": "a9f9b92bd458c71af33c57812a58807ee4de70ef",
+  "trackedChanges": [],
+  "runtime": {
+    "node": "v22.22.2",
+    "zlib": "1.3.1-e00f703",
+    "platform": "darwin",
+    "arch": "arm64"
+  },
+  "options": {
+    "filename": "sample.html",
+    "title": "Größenmessung – Staticseal",
+    "buttonLabel": "Öffnen",
+    "iterations": 210000,
+    "chunkSize": 65536,
+    "password": "staticseal-size-fixture-only",
+    "privateFilename": false,
+    "minimal": false,
+    "theme": null
+  },
+  "fixtures": [
+    {
+      "id": "small-raw",
+      "compression": "raw",
+      "bytes": 172,
+      "sha256": "a0fe0729f4d4b6e68fc7abd28fe1506c0f54769d80a640fecc34a928d37cbd1a"
+    },
+    {
+      "id": "repeated-gzip",
+      "compression": "gzip",
+      "bytes": 139368,
+      "sha256": "4814d359abcf6023b32a1564fbc49200b9bd90965f5698fa87b77e86e70dec94"
+    }
+  ],
+  "app": {
+    "path": "index.html",
+    "utf8Bytes": 41488,
+    "sha256": "27f35706c62b327befe7d8844a595a74cb0ee5a928eafc012ad1dee436ff219c"
+  },
+  "readers": [
+    {
+      "fixture": "small-raw",
+      "mode": "file",
+      "access": "passphrase",
+      "compression": "raw",
+      "payloadVersion": 2,
+      "originalBytes": 172,
+      "htmlBytes": 17369,
+      "payloadJsonBytes": 575,
+      "wrapperBytes": 16794,
+      "binaryPackageBytes": 244,
+      "chunks": 1
+    },
+    {
+      "fixture": "small-raw",
+      "mode": "file",
+      "access": "sealed",
+      "compression": "raw",
+      "payloadVersion": 4,
+      "originalBytes": 172,
+      "htmlBytes": 16357,
+      "payloadJsonBytes": 419,
+      "wrapperBytes": 15938,
+      "binaryPackageBytes": 228,
+      "chunks": 1
+    },
+    {
+      "fixture": "small-raw",
+      "mode": "page",
+      "access": "passphrase",
+      "compression": "raw",
+      "payloadVersion": 2,
+      "originalBytes": 172,
+      "htmlBytes": 10679,
+      "payloadJsonBytes": 592,
+      "wrapperBytes": 10087,
+      "binaryPackageBytes": 244,
+      "chunks": 1
+    },
+    {
+      "fixture": "small-raw",
+      "mode": "page",
+      "access": "sealed",
+      "compression": "raw",
+      "payloadVersion": 4,
+      "originalBytes": 172,
+      "htmlBytes": 9667,
+      "payloadJsonBytes": 436,
+      "wrapperBytes": 9231,
+      "binaryPackageBytes": 228,
+      "chunks": 1
+    },
+    {
+      "fixture": "repeated-gzip",
+      "mode": "file",
+      "access": "passphrase",
+      "compression": "gzip",
+      "payloadVersion": 3,
+      "originalBytes": 139368,
+      "htmlBytes": 18875,
+      "payloadJsonBytes": 1271,
+      "wrapperBytes": 17604,
+      "binaryPackageBytes": 765,
+      "chunks": 1
+    },
+    {
+      "fixture": "repeated-gzip",
+      "mode": "file",
+      "access": "sealed",
+      "compression": "gzip",
+      "payloadVersion": 5,
+      "originalBytes": 139368,
+      "htmlBytes": 17863,
+      "payloadJsonBytes": 1115,
+      "wrapperBytes": 16748,
+      "binaryPackageBytes": 749,
+      "chunks": 1
+    },
+    {
+      "fixture": "repeated-gzip",
+      "mode": "page",
+      "access": "passphrase",
+      "compression": "gzip",
+      "payloadVersion": 3,
+      "originalBytes": 139368,
+      "htmlBytes": 12185,
+      "payloadJsonBytes": 1288,
+      "wrapperBytes": 10897,
+      "binaryPackageBytes": 765,
+      "chunks": 1
+    },
+    {
+      "fixture": "repeated-gzip",
+      "mode": "page",
+      "access": "sealed",
+      "compression": "gzip",
+      "payloadVersion": 5,
+      "originalBytes": 139368,
+      "htmlBytes": 11173,
+      "payloadJsonBytes": 1132,
+      "wrapperBytes": 10041,
+      "binaryPackageBytes": 749,
+      "chunks": 1
+    }
+  ]
+}

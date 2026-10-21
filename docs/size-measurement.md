@@ -1,5 +1,10 @@
 # Reproducible size measurement
 
+The original AP1 baseline below is preserved. The AP5 [final report](size-final.json)
+and [comparison/validation](refactoring-validation.md) use the same fixtures,
+options and runtime and record the final sizes; this document's baseline table
+continues to describe the original product commit.
+
 From a checkout with the locked development dependencies installed (`npm ci`):
 
 ```sh
