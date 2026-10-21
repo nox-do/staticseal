@@ -1,0 +1,164 @@
+{
+  "sourceCommit": "40658cca516e38bb69410134ae4bc48a601c19cc",
+  "password": "format-compatibility-only",
+  "inputs": [
+    {
+      "text": "<!doctype html><meta charset=\"utf-8\"><p>Grüße 🔒</p>\n",
+      "repeat": 1
+    },
+    {
+      "text": "<!doctype html><meta charset=\"utf-8\"><p>Grüße 🔒</p>\n",
+      "repeat": 2048
+    }
+  ],
+  "cases": [
+    {
+      "inputIndex": 0,
+      "mode": "file",
+      "access": "passphrase",
+      "payload": {
+        "v": 2,
+        "alg": "AES-GCM",
+        "kdf": "PBKDF2-SHA256",
+        "iterations": 100000,
+        "encoding": "metadata",
+        "filename": "compat.html",
+        "contentType": "text/html",
+        "access": "passphrase",
+        "salt": "1RBkPPWmq8NVRR2E45ik1w==",
+        "iv": "khhVEuGys40TSp6b",
+        "tag": "l1+uFBlWLz1EkQgY3HJPmg==",
+        "ciphertext": [
+          "hiE83pN6vi6Vly1p3OZEY6kH1MJVu8HItcE0+NRDI+l1WB8Sr0+Q4sC6BbUKQp1oEqOEVUO1hY/S3zhtIgpKBdVoS8hmY2hYF0rG5f9/bPbQ3SaFwQPMfSh/gHkSTBD6GLELQA8Qzy9lu7UuvGWx+U0="
+        ]
+      }
+    },
+    {
+      "inputIndex": 0,
+      "mode": "file",
+      "access": "sealed",
+      "payload": {
+        "v": 4,
+        "encoding": "metadata",
+        "access": "sealed",
+        "filename": "compat.html",
+        "contentType": "text/html",
+        "content": [
+          "AAAANHsiZmlsZW5hbWUiOiJjb21wYXQuaHRtbCIsImNvbnRlbnRUeXBlIjoidGV4dC9odG1sIn08IWRvY3R5cGUgaHRtbD48bWV0YSBjaGFyc2V0PSJ1dGYtOCI+PHA+R3LDvMOfZSDwn5SSPC9wPgo="
+        ]
+      }
+    },
+    {
+      "inputIndex": 0,
+      "mode": "page",
+      "access": "passphrase",
+      "payload": {
+        "v": 2,
+        "alg": "AES-GCM",
+        "kdf": "PBKDF2-SHA256",
+        "iterations": 100000,
+        "encoding": "metadata",
+        "display": "page",
+        "filename": "compat.html",
+        "contentType": "text/html",
+        "access": "passphrase",
+        "salt": "lLK2yFmKg4ogPFOAIcrEWg==",
+        "iv": "Ow4fXqcPP5nzB62Y",
+        "tag": "Rc8+79AIMVi2gCozRqaMcQ==",
+        "ciphertext": [
+          "46elLS2UPz6TY8KCdAqlPEzli/VmjijbIheAhcG4mwrPwX7Clpl1jh51FhmerMcRWM1rINPUIyfuymWAChyUf+Dih1S/gBINd5WdwNSJT1MycmGTjg9OuXYCjbS7gN6i7WFx7XtePLDx5ex1VZAd2xY="
+        ]
+      }
+    },
+    {
+      "inputIndex": 0,
+      "mode": "page",
+      "access": "sealed",
+      "payload": {
+        "v": 4,
+        "encoding": "metadata",
+        "access": "sealed",
+        "display": "page",
+        "filename": "compat.html",
+        "contentType": "text/html",
+        "content": [
+          "AAAANHsiZmlsZW5hbWUiOiJjb21wYXQuaHRtbCIsImNvbnRlbnRUeXBlIjoidGV4dC9odG1sIn08IWRvY3R5cGUgaHRtbD48bWV0YSBjaGFyc2V0PSJ1dGYtOCI+PHA+R3LDvMOfZSDwn5SSPC9wPgo="
+        ]
+      }
+    },
+    {
+      "inputIndex": 1,
+      "mode": "file",
+      "access": "passphrase",
+      "payload": {
+        "v": 3,
+        "alg": "AES-GCM",
+        "kdf": "PBKDF2-SHA256",
+        "iterations": 100000,
+        "encoding": "metadata",
+        "filename": "compat.html",
+        "contentType": "text/html",
+        "access": "passphrase",
+        "salt": "FsjcL0S60gdBU+a17iDuwg==",
+        "iv": "k4cH7e6aJU9FE88a",
+        "tag": "TdWAYMo90S3Kjpd0A44EMw==",
+        "ciphertext": [
+          "JJsNKGc8MkW9DfzyzpCUIAWZRfn7K6xZBJiVWbM8zFZwtLmnLRjl1zmtzSEWGnuiubjsuBx1MWOvkrL6YNMX82vjXOD4nTgnoiUs/3d3cs5RNDrbzZvOK1Ujt5z7kqNFjfJJpYERC88d3DQizf61VNNVCHQlgPyskM9dmpdTkmcWwEUCM2hE7hSD01/vL4KOHn000tZ/s0NUY37BjuHGATq6KdEdFZHmmyVKt6Acu/zfQhnmpdik7WInnbIMqezoZ6dhXKNbix4WYYdcKWOnCNzxFEDwtH7xk3JvtmTK8exuZgrDGKFtVY79pfJ5SGUUGEeY83zPbZ6kT0mMcvLA2cOWpXJKL3JVFRC3UELwbbTfg+JGonffn/yk7t7zJIoPp5+5O6fQVgLV5TRXl/vlbHIE3mheFqQv0JpgWxmsIPEro9E6UphxnGjvl5z8M0TwhnEZIWjMv6UhA5BBpPsmssysjDZBlPwY6A3xkwqp44bS6TOGhjiR8s/1X7ETBQmKSvO9hL4ryqEydYrXXsfV5WL06he7oRB4gzSHWfBfnq5w0sSeWYr4HFIgzhWzNUKRbqFkKPjCLqMu2wKzwzc+gJRn8tZaXrIzknqsHC5eb1DmAwj+Hpf7WJBrzfwJWDpwwWIc4SNiZAPDl+tkg1fJimTl70La8kJ9OoDSMOdTzO/54L5FTHt9QQ=="
+        ]
+      }
+    },
+    {
+      "inputIndex": 1,
+      "mode": "file",
+      "access": "sealed",
+      "payload": {
+        "v": 5,
+        "encoding": "metadata",
+        "access": "sealed",
+        "filename": "compat.html",
+        "contentType": "text/html",
+        "content": [
+          "AAAASnsiZmlsZW5hbWUiOiJjb21wYXQuaHRtbCIsImNvbnRlbnRUeXBlIjoidGV4dC9odG1sIiwib3JpZ2luYWxTaXplIjoxMTY3MzZ9H4sIAAAAAAAAE+3LoQ3CQBQAUM8URz3BIo6zzNGUIxU0XMpHsAbBdxFcF2IEhsC+51/enm9DPFtNY0zXkqcafRrGfr7XOHaPuOwOXcmtnOb1sy41fZf3K+9b2WRRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFMX/4g88iy/fAMgBAA=="
+        ]
+      }
+    },
+    {
+      "inputIndex": 1,
+      "mode": "page",
+      "access": "passphrase",
+      "payload": {
+        "v": 3,
+        "alg": "AES-GCM",
+        "kdf": "PBKDF2-SHA256",
+        "iterations": 100000,
+        "encoding": "metadata",
+        "display": "page",
+        "filename": "compat.html",
+        "contentType": "text/html",
+        "access": "passphrase",
+        "salt": "0+cW4tPKApHbFxKfpsgFzQ==",
+        "iv": "jAUXc21r5Ojl3hQs",
+        "tag": "7TYTXev4YhCEgMm9qyQWYw==",
+        "ciphertext": [
+          "QqguvI4ZJvd9MvFIsJ0I8iSRHQSL489wVIEzXnC/78H0dB3uSdr1t4xsb/vviiSTaUfouBMyCJiwS4o4zV0ZgyAxlxx3HQDjvZcWtlRiY6fUKvA9pnLPwOMFe+3uc0eDl05kAKiTL7v58QFJfv1sY5GFrsJYqXlmSDlCkLM3+e1QcJuJBxgudZN9rikyjCpNbv+SXzZ+JRpBvT4+LX2ucXbvSnoA22RZXFxDZUuY15XDGmUsSLf4ip9G/aqo+Vw3mqM46dTXOtCh+k7QynPLElmgIjY4EAayoFig0yJdbDrRIVSugrUWHnfHfwoyazIYSW4kHg/MUHeYrwxwVSPCu8IkBVBRyQBF2dd6NlQju9dFRrr5R380/B9qKfYdPqaD75TsQ5uFJQA+yttYvKj2dWZAzh8H5SfcNVdKWH6XHO/2GS3QgSJPoWNOJlK3S1hEeYpoZAnWEdelV+UYkBqG5NVjoj0lm4AW7QUtaVExIf9fyc4o6EkVN5lU+izSTVoK0oBPocysCnYCaJpYkuiq9LLem0FQ0aCsiN3+I7TOjwFtdvWoSo5ROaGUgxVLPMqAwd6jlMJpV/ypojSS4UVxKW8FJh6EU7QCnPGeolGLxWLEAHvbeXWIbP6E6skJWPkUwyglUL01PQXXG0eY4SSw2L/X8JJ+1BWAUWbpL04WE0/m7a8ZcNUZ7w=="
+        ]
+      }
+    },
+    {
+      "inputIndex": 1,
+      "mode": "page",
+      "access": "sealed",
+      "payload": {
+        "v": 5,
+        "encoding": "metadata",
+        "access": "sealed",
+        "display": "page",
+        "filename": "compat.html",
+        "contentType": "text/html",
+        "content": [
+          "AAAASnsiZmlsZW5hbWUiOiJjb21wYXQuaHRtbCIsImNvbnRlbnRUeXBlIjoidGV4dC9odG1sIiwib3JpZ2luYWxTaXplIjoxMTY3MzZ9H4sIAAAAAAAAE+3LoQ3CQBQAUM8URz3BIo6zzNGUIxU0XMpHsAbBdxFcF2IEhsC+51/enm9DPFtNY0zXkqcafRrGfr7XOHaPuOwOXcmtnOb1sy41fZf3K+9b2WRRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFMX/4g88iy/fAMgBAA=="
+        ]
+      }
+    }
+  ]
+}

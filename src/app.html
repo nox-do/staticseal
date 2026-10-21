@@ -644,9 +644,7 @@ button:disabled {
 <script>
 (() => {
   const DEFAULT_CHUNK_SIZE = 64 * 1024;
-  const FILE_WARN_BYTES = 5 * 1024 * 1024;
-  const FILE_CONFIRM_BYTES = 10 * 1024 * 1024;
-  const FILE_MAX_BYTES = 25 * 1024 * 1024;
+  /* STATICSEAL_BROWSER_LIMITS */
 
   const $ = id => document.getElementById(id);
   const form = $('encrypt-form');
@@ -666,7 +664,8 @@ button:disabled {
 
   const encoder = new TextEncoder();
   /* STATICSEAL_FORMAT */
-  const { fromBase64, fromBase64Chunks, unpackContent } = createFormat();
+  const format = createFormat();
+  const { fromBase64, fromBase64Chunks, unpackContent } = format;
   const { authenticatedDataFor, deriveKey, decryptPayload } = createCrypto();
   const KDF_PRESETS = {
     160000: 'Fast is useful for quick drafts, but relies more heavily on passphrase strength.',
@@ -719,11 +718,11 @@ button:disabled {
   const inferContentType = (file) => fileType(file.name, file.type);
 
   const packContent = (bytes, file, header = encoder.encode(JSON.stringify({ filename: file.name, contentType: inferContentType(file) }))) => {
-    if (header.byteLength > 65536) throw new Error('Filename metadata is too large.');
-    const packed = new Uint8Array(4 + header.byteLength + bytes.byteLength);
+    if (header.byteLength > format.MAX_METADATA_BYTES) throw new Error('Filename metadata is too large.');
+    const packed = new Uint8Array(format.HEADER_LENGTH_BYTES + header.byteLength + bytes.byteLength);
     new DataView(packed.buffer).setUint32(0, header.byteLength);
-    packed.set(header, 4);
-    packed.set(bytes, 4 + header.byteLength);
+    packed.set(header, format.HEADER_LENGTH_BYTES);
+    packed.set(bytes, format.HEADER_LENGTH_BYTES + header.byteLength);
     return packed;
   };
 
@@ -735,7 +734,7 @@ button:disabled {
     const display = pageMode ? { display: 'page' } : {};
     if (access === 'sealed') {
       const metadata = {
-        v: 4, encoding: 'metadata', access, ...display,
+        v: format.versionFor(access), encoding: format.METADATA_ENCODING, access, ...display,
         ...(!privateName ? { filename: file.name, contentType: inferContentType(file) } : {})
       };
       const content = await prepareContent(bytes,
@@ -745,14 +744,14 @@ button:disabled {
       await verifyPayload(payload, '', bytes, undefined, file);
       return payload;
     }
-    const salt = crypto.getRandomValues(new Uint8Array(16));
-    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const salt = crypto.getRandomValues(new Uint8Array(format.SALT_BYTES));
+    const iv = crypto.getRandomValues(new Uint8Array(format.IV_BYTES));
     const metadata = {
-      v: 2,
+      v: format.versionFor(access),
       alg: 'AES-GCM',
       kdf: 'PBKDF2-SHA256',
       iterations: iterationCount,
-      encoding: 'metadata',
+      encoding: format.METADATA_ENCODING,
       ...display,
       ...(!privateName ? { filename: file.name, contentType: inferContentType(file) } : {}),
       access,
@@ -768,8 +767,8 @@ button:disabled {
       key,
       packContent(content.bytes, file, content.header)
     ));
-    const tag = encrypted.subarray(encrypted.byteLength - 16);
-    const ciphertext = encrypted.subarray(0, encrypted.byteLength - 16);
+    const tag = encrypted.subarray(encrypted.byteLength - format.GCM_TAG_BYTES);
+    const ciphertext = encrypted.subarray(0, encrypted.byteLength - format.GCM_TAG_BYTES);
 
     const payload = {
       ...metadata,
@@ -793,11 +792,11 @@ button:disabled {
   };
 
   async function verifyPayload(payload, passphrase, expectedBytes, existingKey, expectedFile) {
-    const decrypted = payload.v >= 4
+    const decrypted = format.isUnencryptedVersion(payload.v)
       ? fromBase64Chunks(payload.content)
       : await decryptPayload(payload, passphrase, fromBase64, fromBase64Chunks, existingKey);
     let content = unpackContent(decrypted, payload);
-    if (payload.v === 3 || payload.v === 5) content = await inflateContent(content);
+    if (format.isCompressedVersion(payload.v)) content = await inflateContent(content, format.MAX_EXPANDED_BYTES);
     if (expectedFile && (content.filename !== expectedFile.name || content.contentType !== inferContentType(expectedFile))) {
       throw new Error('Metadata roundtrip failed.');
     }
@@ -898,9 +897,9 @@ button:disabled {
     }
     const type = inferContentType(file);
     fileMeta.textContent = `${file.name} · ${formatBytes(file.size)} · ${type}`;
-    if (file.size > FILE_MAX_BYTES) {
+    if (file.size > BROWSER_FILE_MAX_BYTES) {
       setStatus('Files above 25 MiB exceed the provisional browser limit.', 'error');
-    } else if (file.size >= FILE_WARN_BYTES) {
+    } else if (file.size >= BROWSER_FILE_WARN_BYTES) {
       setStatus('Files from 5 MiB can use substantial browser memory. Above 10 MiB, confirmation is required; maximum 25 MiB. Mobile limits are not validated.', 'error');
     } else {
       setStatus('');
@@ -953,11 +952,11 @@ button:disabled {
       setStatus('This browser does not expose Web Crypto on this page.', 'error');
       return;
     }
-    if (file.size > FILE_MAX_BYTES) {
+    if (file.size > BROWSER_FILE_MAX_BYTES) {
       setStatus('Files above 25 MiB exceed the provisional browser limit.', 'error');
       return;
     }
-    if (file.size > FILE_CONFIRM_BYTES && !window.confirm('This file exceeds 10 MiB (maximum 25 MiB). Creating and opening it may use substantial memory or freeze the browser, especially on mobile. These provisional limits are not browser-validated. Continue?')) {
+    if (file.size > BROWSER_FILE_CONFIRM_BYTES && !window.confirm('This file exceeds 10 MiB (maximum 25 MiB). Creating and opening it may use substantial memory or freeze the browser, especially on mobile. These provisional limits are not browser-validated. Continue?')) {
       setStatus('Encryption cancelled.', 'error');
       return;
     }

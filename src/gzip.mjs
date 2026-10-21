@@ -1,7 +1,8 @@
-// Standalone: serialized into compressed envelopes only.
-export async function inflateContent(content) {
+// Standalone: serialized into compressed envelopes only. The caller supplies the
+// shared format ceiling explicitly; this function must not close over a module.
+export async function inflateContent(content, maxExpandedBytes) {
   const size = content.originalSize;
-  if (!Number.isSafeInteger(size) || size < 0 || size > 128 * 1024 * 1024) {
+  if (!Number.isSafeInteger(maxExpandedBytes) || !Number.isSafeInteger(size) || size < 0 || size > maxExpandedBytes) {
     throw new Error('Invalid or oversized compressed content.');
   }
   if (typeof DecompressionStream !== 'function') {

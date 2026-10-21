@@ -14,15 +14,17 @@ import { inflateContent } from '../src/gzip.mjs';
 import { isHtmlFile, createPageViewer } from '../src/viewer.mjs';
 import { themeStyle } from '../src/cli-theme.mjs';
 
-const { fromBase64Chunks, unpackContent } = createFormat(value => Buffer.from(value, 'base64'));
+const format = createFormat(value => Buffer.from(value, 'base64'));
+const { fromBase64Chunks, unpackContent } = format;
 const { authenticatedDataFor } = createCrypto();
 
 const VERSION = '1.2.0';
 const DEFAULT_ITERATIONS = 210_000;
 const DEFAULT_CHUNK_SIZE = 64 * 1024;
-const ORIGINAL_MAX_BYTES = 128 * 1024 * 1024;
-const PAYLOAD_MAX_BYTES = 25 * 1024 * 1024;
-const HTML_MAX_BYTES = 35 * 1024 * 1024;
+// CLI product policy; independent of browser creation and technical format limits.
+const CLI_ORIGINAL_MAX_BYTES = 128 * 1024 * 1024;
+const CLI_PAYLOAD_MAX_BYTES = 25 * 1024 * 1024;
+const CLI_HTML_MAX_BYTES = 35 * 1024 * 1024;
 function parseArgs(argv) {
   const args = {
     iterations: DEFAULT_ITERATIONS,
@@ -224,10 +226,11 @@ async function readPassword({ stdinPassword }) {
 }
 
 async function prepareCliContent(bytes, file, metadata, chunkSize) {
-  const content = await prepareContent(bytes, file, metadata, chunkSize, ORIGINAL_MAX_BYTES);
+  const content = await prepareContent(bytes, file, metadata, chunkSize, CLI_ORIGINAL_MAX_BYTES);
   // Include the length prefix, metadata and (when encrypted) the GCM tag.
-  const size = 4 + content.header.byteLength + content.bytes.byteLength + (metadata.access === 'sealed' ? 0 : 16);
-  if (size > PAYLOAD_MAX_BYTES) throw new Error('Binary package exceeds the 25 MiB CLI limit after compression.');
+  const size = format.HEADER_LENGTH_BYTES + content.header.byteLength + content.bytes.byteLength
+    + (metadata.access === 'sealed' ? 0 : format.GCM_TAG_BYTES);
+  if (size > CLI_PAYLOAD_MAX_BYTES) throw new Error('Binary package exceeds the 25 MiB CLI limit after compression.');
   return content;
 }
 
@@ -238,24 +241,24 @@ async function encryptBytes(bytes, password, { iterations, chunkSize, sourceName
   }
   const display = htmlPage ? { display: 'page' } : {};
   if (access === 'sealed') {
-    const metadata = { v: 4, encoding: 'metadata', access, ...display,
+    const metadata = { v: format.versionFor(access), encoding: format.METADATA_ENCODING, access, ...display,
       ...(!privateFilename ? { filename: sourceName, contentType } : {}) };
     const content = await prepareCliContent(bytes, { filename: sourceName, contentType }, metadata, chunkSize);
-    const length = Buffer.alloc(4);
+    const length = Buffer.alloc(format.HEADER_LENGTH_BYTES);
     length.writeUInt32BE(content.header.byteLength);
     const packed = Buffer.concat([length, content.header, content.bytes]);
     const payload = { ...metadata, v: content.v, content: toBase64Chunks(packed, chunkSize) };
     await verifyPayload(payload, '', bytes, undefined, { name: sourceName, type: contentType });
     return payload;
   }
-  const salt = randomBytes(16);
-  const iv = randomBytes(12);
+  const salt = randomBytes(format.SALT_BYTES);
+  const iv = randomBytes(format.IV_BYTES);
   const metadata = {
-    v: 2,
+    v: format.versionFor(access),
     alg: 'AES-GCM',
     kdf: 'PBKDF2-SHA256',
     iterations,
-    encoding: 'metadata',
+    encoding: format.METADATA_ENCODING,
     ...display,
     ...(!privateFilename ? { filename: sourceName, contentType } : {}),
     access,
@@ -268,8 +271,8 @@ async function encryptBytes(bytes, password, { iterations, chunkSize, sourceName
   const cipher = createCipheriv('aes-256-gcm', key, iv);
   cipher.setAAD(authenticatedDataFor(metadata));
   const header = content.header;
-  if (header.length > 65536) throw new Error('Filename metadata is too large.');
-  const length = Buffer.alloc(4);
+  if (header.length > format.MAX_METADATA_BYTES) throw new Error('Filename metadata is too large.');
+  const length = Buffer.alloc(format.HEADER_LENGTH_BYTES);
   length.writeUInt32BE(header.length);
   // Feed the header separately rather than allocating a second full plaintext buffer.
   const ciphertext = Buffer.concat([cipher.update(length), cipher.update(header), cipher.update(content.bytes), cipher.final()]);
@@ -297,9 +300,9 @@ function decryptPayload(payload, password, existingKey) {
 }
 
 async function verifyPayload(payload, password, expectedBytes, existingKey, expectedFile) {
-  const decoded = payload.v >= 4 ? fromBase64Chunks(payload.content) : decryptPayload(payload, password, existingKey);
+  const decoded = format.isUnencryptedVersion(payload.v) ? fromBase64Chunks(payload.content) : decryptPayload(payload, password, existingKey);
   let content = unpackContent(decoded, payload);
-  if (payload.v === 3 || payload.v === 5) content = await inflateContent(content);
+  if (format.isCompressedVersion(payload.v)) content = await inflateContent(content, format.MAX_EXPANDED_BYTES);
   if (expectedFile && (content.filename !== expectedFile.name || content.contentType !== expectedFile.type)) {
     throw new Error('Metadata roundtrip failed.');
   }
@@ -336,7 +339,7 @@ async function main() {
     throw new Error('--no-password cannot be combined with --stdin-password.');
   }
 
-  if ((await stat(inputPath)).size > ORIGINAL_MAX_BYTES) {
+  if ((await stat(inputPath)).size > CLI_ORIGINAL_MAX_BYTES) {
     throw new Error('Original file exceeds the 128 MiB CLI limit.');
   }
 
@@ -347,7 +350,7 @@ async function main() {
   }
 
   const bytes = await readFile(inputPath);
-  if (bytes.byteLength > ORIGINAL_MAX_BYTES) throw new Error('Original file exceeds the 128 MiB CLI limit.');
+  if (bytes.byteLength > CLI_ORIGINAL_MAX_BYTES) throw new Error('Original file exceeds the 128 MiB CLI limit.');
   const payload = await encryptBytes(bytes, password, {
     iterations: args.iterations,
     chunkSize: args.chunkSize,
@@ -366,7 +369,7 @@ async function main() {
   });
   const wrapper = css ? plainWrapper.replace('</head>', () => `<style>${css}</style></head>`) : plainWrapper;
 
-  if (Buffer.byteLength(wrapper, 'utf8') > HTML_MAX_BYTES) {
+  if (Buffer.byteLength(wrapper, 'utf8') > CLI_HTML_MAX_BYTES) {
     throw new Error('HTML package exceeds the 35 MiB CLI limit.');
   }
 

@@ -9,6 +9,8 @@ import { readFile, writeFile, mkdtemp, rm, truncate } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createFormat } from '../src/format.mjs';
+import { createCrypto } from '../src/crypto.mjs';
 import { createPreview } from '../src/preview.mjs';
 import { themeStyle } from '../src/cli-theme.mjs';
 
@@ -53,6 +55,73 @@ function wrapper(html, replacement) {
   const script = html.slice(html.lastIndexOf('<script>') + 8, html.lastIndexOf('</script>'));
   return { payload, ...evaluate(script, 'unlock, renderBlobViewer, fromBase64Chunks, unpackContent, content: () => unlockedContent, confirmWith: (fn) => { window.confirm = fn; }', payload, webcrypto, {}, html.includes('id="password"') ? [] : ['password']) };
 }
+
+test('format rules and metadata bounds survive factory serialization without module scope', async () => {
+  const built = await import('../src/reader-factories.mjs');
+  for (const factory of [createFormat, built.createFormat]) {
+    const format = vm.runInNewContext('(' + factory.toString() + ')()', { Uint8Array, TextDecoder });
+    for (const [version, access, compressed] of [
+      [2, 'passphrase', false], [3, 'passphrase', true], [4, 'sealed', false], [5, 'sealed', true]
+    ]) {
+      assert.equal(format.versionFor(access, compressed), version);
+      assert.equal(format.isSupportedVersion(version), true);
+      assert.equal(format.isEncryptedVersion(version), access === 'passphrase');
+      assert.equal(format.isUnencryptedVersion(version), access === 'sealed');
+      assert.equal(format.isCompressedVersion(version), compressed);
+    }
+    const file = { filename: '', contentType: 'text/plain' };
+    file.filename = 'x'.repeat(65536 - Buffer.byteLength(JSON.stringify(file)));
+    const header = Buffer.from(JSON.stringify(file));
+    assert.equal(header.length, 65536);
+    const packed = Buffer.alloc(4 + header.length + 1);
+    packed.writeUInt32BE(header.length);
+    header.copy(packed, 4);
+    packed[packed.length - 1] = 255;
+    for (const v of [2, 3, 4, 5]) {
+      const unpacked = format.unpackContent(packed, { v, encoding: 'metadata' });
+      assert.equal(unpacked.filename, file.filename);
+      assert.deepEqual(Buffer.from(unpacked.bytes), Buffer.from([255]));
+    }
+    for (const v of [0, 1, 6, -1, 2.5, '2', null, undefined]) {
+      assert.equal(format.isSupportedVersion(v), false);
+      assert.throws(() => format.unpackContent(packed, { v, encoding: 'metadata' }), /Unsupported payload format/);
+    }
+    packed.writeUInt32BE(65537);
+    assert.throws(() => format.unpackContent(packed, { v: 2, encoding: 'metadata' }), /Invalid file metadata/);
+  }
+});
+
+test('authenticated metadata retains its exact historical order and omission rules', () => {
+  // Deliberately scramble input insertion order; the literal expected bytes are the wire contract.
+  const metadata = { display: 'page', iv: 'iv', salt: 'salt', access: 'passphrase',
+    contentType: 'text/html', filename: 'Grüße.html', encoding: 'metadata',
+    iterations: 210000, kdf: 'PBKDF2-SHA256', alg: 'AES-GCM', v: 3, ignored: 'extra' };
+  const aad = createCrypto().authenticatedDataFor;
+  assert.equal(Buffer.from(aad(metadata)).toString('utf8'),
+    '{"v":3,"alg":"AES-GCM","kdf":"PBKDF2-SHA256","iterations":210000,"encoding":"metadata","filename":"Grüße.html","contentType":"text/html","access":"passphrase","salt":"salt","iv":"iv","display":"page"}');
+  assert.equal(Buffer.from(aad({ ...metadata, filename: undefined, contentType: undefined, display: undefined })).toString('utf8'),
+    '{"v":3,"alg":"AES-GCM","kdf":"PBKDF2-SHA256","iterations":210000,"encoding":"metadata","access":"passphrase","salt":"salt","iv":"iv"}');
+  assert.equal(Buffer.from(aad({ ...metadata, unlockKey: 'legacy' })).toString('utf8'),
+    '{"v":3,"alg":"AES-GCM","kdf":"PBKDF2-SHA256","iterations":210000,"encoding":"metadata","filename":"Grüße.html","contentType":"text/html","access":"passphrase","unlockKey":"legacy","salt":"salt","iv":"iv","display":"page"}');
+});
+
+test('historical v2-v5 payloads open in current app and both serialized reader variants', async () => {
+  const fixture = JSON.parse(await readFile(new URL('./fixtures/format-v2-v5.json', import.meta.url), 'utf8'));
+  const { renderWrapper } = await import('../src/wrapper.mjs');
+  for (const { inputIndex, mode, access, payload } of fixture.cases) {
+    const input = fixture.inputs[inputIndex];
+    const bytes = Buffer.from(input.text.repeat(input.repeat));
+    assert.equal(payload.v, (access === 'sealed' ? 4 : 2) + inputIndex);
+    assert.equal(payload.display, mode === 'page' ? 'page' : undefined);
+    await app.verifyPayload(payload, fixture.password, bytes);
+    for (const render of [renderWrapper, app.renderWrapper]) {
+      const reader = wrapper(render({ title: 'Format compatibility', payload }));
+      assert.deepEqual(Buffer.from(await reader.unlock(fixture.password)), bytes);
+      assert.equal(reader.content().filename, 'compat.html');
+      assert.equal(reader.content().contentType, 'text/html');
+    }
+  }
+});
 
 test('minimal opening screens and custom button labels preserve access modes and errors', async () => {
   const { renderWrapper } = await import('../src/wrapper.mjs');
@@ -417,20 +486,23 @@ test('compressed app and CLI envelopes restore 25 MiB exactly with both access a
 test('gzip restoration rejects damaged streams, invalid sizes and unsupported browsers', async () => {
   const bytes = Buffer.alloc(8192, 255);
   const content = { bytes: gzipSync(bytes), originalSize: bytes.length, filename: 'test.bin', contentType: 'application/octet-stream' };
-  assert.deepEqual(Buffer.from((await inflateContent(content)).bytes), bytes);
+  assert.deepEqual(Buffer.from((await inflateContent(content, createFormat().MAX_EXPANDED_BYTES)).bytes), bytes);
   // Exercise the serialized minified helper too; it must have no module closure.
-  const built = evaluate(source.slice(source.indexOf('<script>') + 8, source.lastIndexOf('</script>')), 'inflateContent');
-  for (const inflate of [inflateContent, built.inflateContent]) {
+  const built = await import('../src/reader-factories.mjs');
+  for (const helper of [inflateContent, built.inflateContent]) {
+    const inflate = vm.runInNewContext('(' + helper.toString() + ')', { Blob, DecompressionStream, Uint8Array, DOMException });
+    assert.deepEqual(Buffer.from((await inflate(content, createFormat().MAX_EXPANDED_BYTES)).bytes), bytes);
+    await assert.rejects(inflate(content), /Invalid or oversized compressed content/);
     for (const originalSize of [undefined, -1, 1.5, 128 * 1024 * 1024 + 1, bytes.length - 1, bytes.length + 1]) {
-      await assert.rejects(inflate({ ...content, originalSize }));
+      await assert.rejects(inflate({ ...content, originalSize }, createFormat().MAX_EXPANDED_BYTES));
     }
     for (const data of [new Uint8Array([1, 2, 3]), content.bytes.subarray(0, -1)]) {
-      await assert.rejects(inflate({ ...content, bytes: data }));
+      await assert.rejects(inflate({ ...content, bytes: data }, createFormat().MAX_EXPANDED_BYTES));
     }
   }
   const missing = evaluate(source.slice(source.indexOf('<script>') + 8, source.lastIndexOf('</script>')),
     'inflateContent', undefined, webcrypto, { DecompressionStream: undefined });
-  await assert.rejects(missing.inflateContent(content), /gzip decompression support/);
+  await assert.rejects(missing.inflateContent(content, createFormat().MAX_EXPANDED_BYTES), /gzip decompression support/);
   const payload = await app.encryptBytes(bytes, 'test', 160000,
     { name: content.filename, type: content.contentType }, 'passphrase');
   const html = app.renderWrapper({ title: 'Unsupported browser', payload });

@@ -3,7 +3,8 @@ import { sealLogo } from './logo.mjs';
 import { wrapperTemplate, readerTemplate } from './wrapper-template.mjs';
 
 export function renderWrapper({ title, payload, minimal = false, buttonLabel }) {
-  const { escapeHtml } = createFormat();
+  const format = createFormat();
+  const { escapeHtml } = format;
   const hasPassphrase = payload.access !== 'sealed';
   const isPage = payload.display === 'page';
   const subject = isPage ? 'webpage' : 'file';
@@ -22,11 +23,11 @@ export function renderWrapper({ title, payload, minimal = false, buttonLabel }) 
     PAYLOAD: JSON.stringify(payload).replaceAll('<', '\\u003c'),
     READER: readerTemplate
       .replace('STATICSEAL_INITIAL_STATUS', () => JSON.stringify(minimal ? '' : 'No passphrase required.'))
-      .replace('STATICSEAL_DECODER', () => payload.v >= 4
+      .replace('STATICSEAL_DECODER', () => format.isUnencryptedVersion(payload.v)
         ? '((p,k,b,c)=>c(p.content))'
         : '(' + createCrypto.toString() + ')().decryptPayload')
-      .replace('STATICSEAL_RESTORE;', () => payload.v === 3 || payload.v === 5
-        ? 'unlockedContent=await (' + inflateContent.toString() + ')(unlockedContent);' : '')
+      .replace('STATICSEAL_RESTORE;', () => format.isCompressedVersion(payload.v)
+        ? 'unlockedContent=await (' + inflateContent.toString() + ')(unlockedContent,' + format.MAX_EXPANDED_BYTES + ');' : '')
       .replace('STATICSEAL_FORMAT', () => '(' + createFormat.toString() + ')')
       .replace('STATICSEAL_VIEWER', () => isPage
         ? '(()=>(' + createPageViewer.toString() + ')().renderHtmlPage)'

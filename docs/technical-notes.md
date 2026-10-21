@@ -2,6 +2,49 @@
 
 Implementation details, format constraints, and validation scope for the current single-file tool.
 
+## Shared format rules and creator policies
+
+`createFormat()` in `src/format.mjs` is the common source for supported versions,
+raw/gzip and encrypted/sealed classification, and `versionFor(access, compressed)`.
+The mapping remains v2/v3 for encrypted raw/gzip and v4/v5 for sealed raw/gzip;
+all four use `METADATA_ENCODING` (`metadata`). Tests intentionally retain literal
+version numbers as independent assertions of this stored-format contract.
+
+The same factory owns the four-byte metadata-length prefix, 65,536-byte metadata
+ceiling, 16-byte GCM tag, 16-byte salt, 12-byte IV and 128 MiB expanded-content
+safety ceiling. These technical rules are separate from product policies:
+`src/browser-limits.mjs` defines the browser's 5/10/25 MiB warning/confirmation/
+original-file limits, while `CLI_*_MAX_BYTES` in `bin/self-encrypt.mjs` defines the
+CLI's 128 MiB original, 25 MiB binary-package and 35 MiB final-HTML limits.
+Compression defaults to the browser creation range; the CLI explicitly supplies
+its own original-file limit. The reader ceiling is not inferred from either
+creator, even where values currently coincide. Preview limits remain viewer policy.
+
+All format rules live inside `createFormat`, so its serialized source needs no
+imports or outer variables. The optional `inflateContent(content, maxExpandedBytes)`
+helper receives the shared reader ceiling explicitly. Wrapper generation writes
+that numeric value into the generated call, keeping the helper standalone without
+embedding browser/CLI product policies or including gzip code in raw readers.
+The build remains responsible for all generated production files.
+
+Neither the payload layout nor the ordered authenticated-metadata list in
+`src/crypto.mjs` changed. `test/fixtures/format-v2-v5.json` contains eight frozen
+payloads created by the CLI at commit
+`40658cca516e38bb69410134ae4bc48a601c19cc`, before this refactoring. Its inputs,
+repeat counts and test passphrase are included. They were generated using an
+archived checkout, `compat.html`, `--iterations 100000`, title `Format compatibility`,
+public filenames and the default chunk width, varying `--stdin-password`/
+`--no-password` and `--html-page`. Current app and CLI-template readers must restore
+their exact bytes and metadata. Separate literal AAD tests freeze field order,
+undefined-field omission and the historical `unlockKey` position; detached-factory
+tests exercise readable and minified helpers without module scope.
+
+Running `npm run --silent measure:size` with the recorded baseline's runtime and
+fixtures after this refactoring gives 41,835 bytes for the app (+755), +359 bytes
+per raw reader and +389 bytes per gzip reader. All eight payload JSON sizes remain
+unchanged. The added shared helper code is included in the standalone readers;
+the original `docs/size-baseline.json` remains the historical comparison point.
+
 ## Large files and provisional limits
 
 The browser app warns from **5 MiB**, requires confirmation **above 10 MiB**, and
