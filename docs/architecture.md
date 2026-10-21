@@ -138,3 +138,12 @@ uses forms, DOM and Blob APIs. It verifies actual HTML parsing, previews and pag
 execution in the tested browser. Exact file Blobs are observed before an OS save;
 download-manager behavior, other browsers, mobile capacity and peak RAM remain
 separate validation. See the [AP5 results](refactoring-validation.md).
+
+Large raw fixtures cover 10/25 MiB minus metadata headroom in both access modes,
+using the built browser creator and the real CLI. They focus on chunk counts and
+exact reader roundtrips. Small fixtures cover privacy and authentication permutations,
+including corrupted ciphertext and tags; exact 25 MiB gzip and 128 MiB CLI boundary
+checks remain. The Node cipher audit checks that original-buffer views are consumed
+in order without concatenating them into another plaintext package, rather than
+requiring a particular number of cipher calls. This is a targeted regression check,
+not a measurement of all allocations or peak memory.

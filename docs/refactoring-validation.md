@@ -2,6 +2,12 @@
 
 Stand: 21. Oktober 2026. Aktuelle Beschreibung: [Architektur](architecture.md).
 
+Dieser Bericht hält den AP5-Abschlussstand fest. Der anschließende Test-Feinschliff
+reduziert die Suite auf 38 Tests: große Rohdateien prüfen Chunkzahlen und Roundtrips,
+während kleine Dateien die Authentifizierungs- und Privatsphärevarianten abdecken.
+Die Pufferprüfung akzeptiert nun Original-Views unabhängig von der Anzahl der
+Cipher-Aufrufe. Produktcode, Build und Auslieferungsgrößen bleiben unverändert.
+
 ## Bezugsstände und Ergebnis
 
 - AP1-Ausgangswerte: Produktcommit `74a367b05ec3aa5dcb86099cff44016111d5d737`,

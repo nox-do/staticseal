@@ -119,7 +119,7 @@ test('shared creation preserves metadata order, privacy and raw buffer identity 
   }
 });
 
-test('Node encryption receives prefix, header and original input separately without a plaintext concat', async () => {
+test('Node encryption consumes original input views without a plaintext concat', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'staticseal-parts-'));
   try {
     const inputPath = join(dir, 'raw.bin');
@@ -134,24 +134,29 @@ test('Node encryption receives prefix, header and original input separately with
         if (args[0] === ${JSON.stringify(inputPath)}) inputBytes = bytes;
         return bytes;
       };
+      const overlapsInput = bytes => inputBytes && bytes.buffer === inputBytes.buffer
+        && bytes.byteOffset < inputBytes.byteOffset + inputBytes.byteLength
+        && bytes.byteOffset + bytes.byteLength > inputBytes.byteOffset;
       const concat = Buffer.concat;
       Buffer.concat = (parts, ...args) => {
-        assert.ok(!inputBytes || !parts.includes(inputBytes), 'must not concatenate the original plaintext');
+        assert.ok(!parts.some(overlapsInput), 'must not concatenate the original plaintext');
         return concat(parts, ...args);
       };
       const createCipheriv = crypto.createCipheriv;
       crypto.createCipheriv = (...args) => {
         const cipher = createCipheriv(...args);
         const update = cipher.update.bind(cipher);
-        let count = 0, headerLength;
+        let consumed = 0;
         cipher.update = bytes => {
-          if (count === 0) { assert.equal(bytes.byteLength, 4); headerLength = Buffer.from(bytes).readUInt32BE(); }
-          else if (count === 1) assert.equal(bytes.byteLength, headerLength);
-          else if (count === 2) assert.equal(bytes, inputBytes, 'cipher must receive the original buffer');
-          count++;
+          if (overlapsInput(bytes)) {
+            assert.equal(bytes.byteOffset, inputBytes.byteOffset + consumed, 'consume original views in order');
+            consumed += bytes.byteLength;
+            assert.ok(consumed <= inputBytes.byteLength);
+          }
           return update(bytes);
         };
-        process.on('exit', () => assert.equal(count, 3));
+        process.on('exit', () => assert.equal(consumed, inputBytes.byteLength,
+          'cipher must consume the whole original buffer without a copied plaintext package'));
         return cipher;
       };
       require('node:module').syncBuiltinESMExports();`);
@@ -474,15 +479,15 @@ test('gzip threshold, total-package savings and native API fallback', async () =
   assert.equal((await prepareContent(overLimit, file, metadata, 65536)).v, 2);
 });
 
-test('compressed module-created and CLI envelopes restore 25 MiB exactly with both access and filename modes', async () => {
+test('compressed module-created and CLI envelopes restore exactly 25 MiB in both access modes', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'staticseal-gzip-'));
   try {
     const bytes = Buffer.alloc(25 * 1024 * 1024);
     for (let i = 0; i < bytes.length; i++) bytes[i] = i & 255;
     const file = { name: 'compressed.bin', type: 'application/octet-stream' };
     await writeFile(join(dir, file.name), bytes);
-    for (const access of ['passphrase', 'sealed']) for (const privateName of [false, true]) {
-      const payload = await makePayload(bytes, 'test', 160000, file, access, privateName);
+    for (const access of ['passphrase', 'sealed']) {
+      const payload = await makePayload(bytes, 'test', 160000, file, access, true);
       assert.equal(payload.v, access === 'sealed' ? 5 : 3);
       const appHtml = renderWrapper({ title: 'Compressed', payload });
       assert.ok(appHtml.includes('DecompressionStream'));
@@ -490,8 +495,8 @@ test('compressed module-created and CLI envelopes restore 25 MiB exactly with bo
       assert.ok(Buffer.byteLength(appHtml) < 200000);
       const cli = spawnSync(process.execPath, ['bin/self-encrypt.mjs', '--in', join(dir, file.name),
         '--out', join(dir, 'sealed.html'), '--iterations', '160000',
-        '--chunk-size', privateName ? '65' : '65536',
-        access === 'sealed' ? '--no-password' : '--stdin-password', ...(privateName ? ['--private-filename'] : [])],
+        '--chunk-size', '65', '--private-filename',
+        access === 'sealed' ? '--no-password' : '--stdin-password'],
         { cwd: new URL('..', import.meta.url), input: 'test\n', encoding: 'utf8' });
       assert.equal(cli.status, 0, cli.stderr);
       const cliHtml = await readFile(join(dir, 'sealed.html'), 'utf8');
@@ -500,9 +505,9 @@ test('compressed module-created and CLI envelopes restore 25 MiB exactly with bo
         const secret = reader.payload.unlockKey ?? 'test';
         assert.equal(reader.payload.v, access === 'sealed' ? 5 : 3);
         assert.deepEqual(Buffer.from(await reader.open(secret)), bytes);
-        assert.equal((await decodePayload(reader.payload, 'test')).filename, file.name);
-        assert.equal((await decodePayload(reader.payload, 'test')).contentType, file.type);
-        await verifyPayload(reader.payload, secret, bytes);
+        const restored = await decodePayload(reader.payload, 'test');
+        assert.equal(restored.filename, file.name);
+        assert.equal(restored.contentType, file.type);
         if (access === 'passphrase') {
           await assert.rejects(reader.open('wrong-password'));
           const changed = { ...reader.payload, v: 2 };
@@ -510,9 +515,8 @@ test('compressed module-created and CLI envelopes restore 25 MiB exactly with bo
         } else {
           assert.ok(!html.includes('crypto.subtle'));
           assert.ok(!html.includes('PBKDF2'));
-          assert.deepEqual(Buffer.from(await reader.open('any-value')), bytes);
         }
-        if (privateName) assert.ok(!html.includes(file.name));
+        assert.ok(!html.includes(file.name));
       }
     }
   } finally { await rm(dir, { recursive: true, force: true }); }
@@ -544,63 +548,32 @@ test('gzip restoration rejects damaged streams, invalid sizes and unsupported br
   assert.match(reader.nodes.get('status').textContent, /gzip decompression support/);
 });
 
-for (const size of [10, 25]) {
-  for (const access of ['passphrase', 'sealed']) {
-   for (const privateName of [false, true]) {
-    test(`${size} MiB / ${access} / private name ${privateName}: shared modules, CLI and generated readers`, async () => {
-      // Reserve 1 KiB for metadata/tag under the CLI binary package limit.
-      const bytes = randomFillSync(Buffer.alloc(size * 1024 * 1024 - 1024));
-      const password = 'regression-test-password';
-      const payload = await makePayload(bytes, password, 210000,
-        { name: 'large.bin', type: 'application/octet-stream' }, access, privateName);
-      const packedSize = bytes.length + 4 + Buffer.byteLength(JSON.stringify({ filename: 'large.bin', contentType: 'application/octet-stream' }));
-      assert.equal((payload.content || payload.ciphertext).length, Math.ceil(packedSize / 49152));
-      await verifyPayload(payload, password, bytes);
-      const html = renderWrapper({ title: 'Test', payload, sourceName: 'large.bin' });
-      assert.deepEqual(Buffer.from(await wrapper(html).open(password)), bytes);
-
-      const dir = await mkdtemp(join(tmpdir(), 'staticseal-test-'));
-      try {
-        await writeFile(join(dir, 'large.bin'), bytes);
-        const result = spawnSync(process.execPath, ['bin/self-encrypt.mjs', '--in', join(dir, 'large.bin'),
-          '--out', join(dir, 'locked.html'), access === 'sealed' ? '--no-password' : '--stdin-password', ...(privateName ? ['--private-filename'] : [])],
-          { cwd: new URL('..', import.meta.url), input: password + '\n', encoding: 'utf8' });
-        assert.equal(result.status, 0, result.stderr);
-        const cliHtml = await readFile(join(dir, 'locked.html'), 'utf8');
-        const cli = wrapper(cliHtml);
-        assert.equal(payload.v, access === 'sealed' ? 4 : 2);
-        assert.equal(payload.encoding, 'metadata');
-        assert.equal(cli.payload.v, access === 'sealed' ? 4 : 2);
-        assert.equal(cli.payload.encoding, 'metadata');
-        if (privateName) {
-          assert.ok(!html.includes('large.bin'));
-          assert.ok(!cliHtml.includes('large.bin'));
-        } else {
-          assert.ok(html.includes('<title>Test</title>'));
-          assert.ok(cliHtml.includes('large.bin - protected file'));
-        }
-        const secret = cli.payload.unlockKey ?? password;
-        assert.equal((cli.payload.content || cli.payload.ciphertext).length, Math.ceil(packedSize / 49152));
-        assert.deepEqual(Buffer.from(await cli.open(secret)), bytes);
-        assert.equal((await decodePayload(cli.payload, secret)).filename, 'large.bin');
-        assert.equal((await decodePayload(cli.payload, secret)).contentType, 'application/octet-stream');
-        await verifyPayload(cli.payload, secret, bytes);
-        for (const [generated, data, key] of access === 'passphrase' ? [[html, payload, password], [cliHtml, cli.payload, secret]] : []) {
-          await assert.rejects(wrapper(generated).open('wrong-password'));
-          await assert.rejects(verifyPayload(data, 'wrong-password', bytes));
-          for (const field of ['filename', 'contentType', 'access', 'unlockKey']) {
-            const changed = { ...data, [field]: 'tampered' };
-            await assert.rejects(wrapper(generated, changed).open(key));
-            await assert.rejects(verifyPayload(changed, key, bytes));
-          }
-          const changed = { ...data, tag: Buffer.alloc(16).toString('base64') };
-          await assert.rejects(wrapper(generated, changed).open(key));
-        }
-        console.log(`${size} MiB ${access}: ${(payload.content || payload.ciphertext).length} chunks, module-created HTML ${Buffer.byteLength(html)} bytes`);
-      } finally { await rm(dir, { recursive: true, force: true }); }
-    });
-   }
-  }
+// Large fixtures exercise chunked transport and full restoration. Privacy and
+// authentication permutations are covered with small fixtures below and via UI tests.
+for (const size of [10, 25]) for (const access of ['passphrase', 'sealed']) {
+  test(`${size} MiB minus 1 KiB / ${access}: built app, CLI and raw reader roundtrips`, async () => {
+    // Reserve space for metadata/tag under the CLI binary package limit.
+    const bytes = randomFillSync(Buffer.alloc(size * 1024 * 1024 - 1024));
+    const password = access === 'sealed' ? '' : 'regression-test-password';
+    const file = { name: 'large.bin', type: 'application/octet-stream' };
+    const { html: appHtml } = await createThroughUi(source, bytes, file, { password, privateFilename: true });
+    const dir = await mkdtemp(join(tmpdir(), 'staticseal-test-'));
+    try {
+      await writeFile(join(dir, file.name), bytes);
+      const result = spawnSync(process.execPath, ['bin/self-encrypt.mjs', '--in', join(dir, file.name),
+        '--out', join(dir, 'locked.html'), '--private-filename',
+        access === 'sealed' ? '--no-password' : '--stdin-password'],
+        { cwd: new URL('..', import.meta.url), input: password + '\n', encoding: 'utf8' });
+      assert.equal(result.status, 0, result.stderr);
+      const packedSize = bytes.length + 4 + Buffer.byteLength(JSON.stringify({ filename: file.name, contentType: file.type }));
+      for (const html of [appHtml, await readFile(join(dir, 'locked.html'), 'utf8')]) {
+        const reader = wrapper(html);
+        assert.equal(reader.payload.v, access === 'sealed' ? 4 : 2);
+        assert.equal((reader.payload.content || reader.payload.ciphertext).length, Math.ceil(packedSize / 49152));
+        assert.deepEqual(Buffer.from(await reader.open(password)), bytes);
+      }
+    } finally { await rm(dir, { recursive: true, force: true }); }
+  });
 }
 
 test('public metadata with HTML control sequences survives JSON embedding and wrapper decryption', async () => {
@@ -661,6 +634,16 @@ test('every authenticated metadata field rejects tampering, including KDF parame
       value = raw.toString('base64');
     }
     const changed = { ...payload, [field]: value };
+    await assert.rejects(verifyPayload(changed, key, bytes), field);
+    await assert.rejects(wrapper(html, changed).open(key), field);
+  }
+  for (const field of ['tag', 'ciphertext']) {
+    const changed = { ...payload };
+    const encoded = field === 'tag' ? payload.tag : payload.ciphertext[0];
+    const corrupted = Buffer.from(encoded, 'base64');
+    corrupted[0] ^= 1;
+    changed[field] = field === 'tag' ? corrupted.toString('base64')
+      : [corrupted.toString('base64'), ...payload.ciphertext.slice(1)];
     await assert.rejects(verifyPayload(changed, key, bytes), field);
     await assert.rejects(wrapper(html, changed).open(key), field);
   }
