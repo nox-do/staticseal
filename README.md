@@ -172,6 +172,7 @@ Edit `src/app.html` for the browser UI, `src/wrapper.mjs` for wrapper generation
 unlock/viewer script, `src/format.mjs`, `src/crypto.mjs` and `src/preview.mjs` for shared helpers,
 `src/compression.mjs` for compression selection, `src/gzip.mjs` for the optional
 unpacker, `src/viewer.mjs` for the separate file/page renderers,
+`src/creation.mjs` for shared creator metadata and package preparation,
 `src/browser-limits.mjs` for browser-only creator limits,
 `src/cli-theme.mjs` for CLI-only theme validation, and `src/seal.svg`
 for the logo.

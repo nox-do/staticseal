@@ -39,11 +39,45 @@ their exact bytes and metadata. Separate literal AAD tests freeze field order,
 undefined-field omission and the historical `unlockKey` position; detached-factory
 tests exercise readable and minified helpers without module scope.
 
-Running `npm run --silent measure:size` with the recorded baseline's runtime and
-fixtures after this refactoring gives 41,835 bytes for the app (+755), +359 bytes
+The AP2 run of `npm run --silent measure:size` with the recorded baseline's runtime
+and fixtures gave 41,835 bytes for the app (+755), +359 bytes
 per raw reader and +389 bytes per gzip reader. All eight payload JSON sizes remain
 unchanged. The added shared helper code is included in the standalone readers;
 the original `docs/size-baseline.json` remains the historical comparison point.
+
+## Shared creator preparation
+
+`preparePackage` in `src/creation.mjs` builds outer metadata for both creators,
+including privacy and page-mode fields, then delegates content/header generation
+and raw/gzip selection to `prepareContent` in `src/compression.mjs`. It finalizes
+the selected version, creates the four-byte header-length prefix and computes the
+binary-package size, including the GCM tag only for passphrase access. Metadata
+field insertion order, inner JSON and authenticated-data order are preserved.
+Salt and IV are supplied as Base64 by each environment; sealed metadata never
+includes encryption parameters. There is no platform adapter or crypto callback.
+
+The result holds the prefix, UTF-8 metadata header and content as separate buffers.
+Raw content is the original input object, including when it is a view into a
+larger buffer. Shared preparation never concatenates or copies the whole input.
+The browser's `packContent` still makes its one contiguous package for Web Crypto
+or sealed encoding. Node passes the prefix, header and content separately to
+`cipher.update`; only ciphertext is concatenated on the encrypted path. Node's
+sealed path retains its existing single `Buffer.concat` of the package parts.
+
+UI, file access, page eligibility/error messages, random generation, cryptography,
+Base64 conversion and roundtrip verification remain in their existing environments.
+The CLI checks the shared binary size against its own product limit and keeps
+its original/final-HTML checks; browser limits remain browser policy. The build
+inlines `creation.mjs` only into the creator app. Neither shared reader factories
+nor serialized recipient readers contain package-preparation functions.
+
+Tests compare readable and built preparation against historical metadata for all
+four versions, both display modes and both privacy settings. They assert raw
+buffer identity and instrument real Node encryption to require three separate
+updates and reject concatenating the original plaintext. The representative size
+measurement gives a 42,085-byte app (+250 bytes from AP2); all eight CLI-generated
+readers, their payload JSON sizes and wrapper sizes are unchanged from AP2.
+These checks do not measure process peak memory or replace real-browser validation.
 
 ## Large files and provisional limits
 

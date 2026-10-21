@@ -662,7 +662,6 @@ button:disabled {
   const button = $('encrypt-button');
   const status = $('status');
 
-  const encoder = new TextEncoder();
   /* STATICSEAL_FORMAT */
   const format = createFormat();
   const { fromBase64, fromBase64Chunks, unpackContent } = format;
@@ -717,55 +716,41 @@ button:disabled {
   const fileType = createPreview().inferContentType;
   const inferContentType = (file) => fileType(file.name, file.type);
 
-  const packContent = (bytes, file, header = encoder.encode(JSON.stringify({ filename: file.name, contentType: inferContentType(file) }))) => {
-    if (header.byteLength > format.MAX_METADATA_BYTES) throw new Error('Filename metadata is too large.');
-    const packed = new Uint8Array(format.HEADER_LENGTH_BYTES + header.byteLength + bytes.byteLength);
-    new DataView(packed.buffer).setUint32(0, header.byteLength);
-    packed.set(header, format.HEADER_LENGTH_BYTES);
-    packed.set(bytes, format.HEADER_LENGTH_BYTES + header.byteLength);
+  // Browser packaging needs a contiguous buffer; Node keeps these parts separate.
+  function packContent({ bytes, header, lengthPrefix }) {
+    const packed = new Uint8Array(lengthPrefix.byteLength + header.byteLength + bytes.byteLength);
+    packed.set(lengthPrefix);
+    packed.set(header, lengthPrefix.byteLength);
+    packed.set(bytes, lengthPrefix.byteLength + header.byteLength);
     return packed;
-  };
+  }
 
   async function encryptBytes(bytes, passphrase, iterationCount, file, access, privateName = false, pageMode = false) {
     if (pageMode) {
       if (!isHtmlFile(file.name, inferContentType(file))) throw new Error('Page mode is available for HTML files only.');
       createPageViewer().decodeHtml(bytes);
     }
-    const display = pageMode ? { display: 'page' } : {};
+    let salt, iv;
+    if (access !== 'sealed') {
+      salt = crypto.getRandomValues(new Uint8Array(format.SALT_BYTES));
+      iv = crypto.getRandomValues(new Uint8Array(format.IV_BYTES));
+    }
+    const content = await preparePackage(bytes,
+      { filename: file.name, contentType: inferContentType(file) }, {
+        access, iterations: iterationCount, salt: salt && toBase64(salt), iv: iv && toBase64(iv),
+        privateFilename: privateName, htmlPage: pageMode, chunkSize: DEFAULT_CHUNK_SIZE
+      });
+    const { metadata } = content;
     if (access === 'sealed') {
-      const metadata = {
-        v: format.versionFor(access), encoding: format.METADATA_ENCODING, access, ...display,
-        ...(!privateName ? { filename: file.name, contentType: inferContentType(file) } : {})
-      };
-      const content = await prepareContent(bytes,
-        { filename: file.name, contentType: inferContentType(file) }, metadata, DEFAULT_CHUNK_SIZE);
-      const payload = { ...metadata, v: content.v,
-        content: toBase64Chunks(packContent(content.bytes, file, content.header), DEFAULT_CHUNK_SIZE) };
+      const payload = { ...metadata, content: toBase64Chunks(packContent(content), DEFAULT_CHUNK_SIZE) };
       await verifyPayload(payload, '', bytes, undefined, file);
       return payload;
     }
-    const salt = crypto.getRandomValues(new Uint8Array(format.SALT_BYTES));
-    const iv = crypto.getRandomValues(new Uint8Array(format.IV_BYTES));
-    const metadata = {
-      v: format.versionFor(access),
-      alg: 'AES-GCM',
-      kdf: 'PBKDF2-SHA256',
-      iterations: iterationCount,
-      encoding: format.METADATA_ENCODING,
-      ...display,
-      ...(!privateName ? { filename: file.name, contentType: inferContentType(file) } : {}),
-      access,
-      salt: toBase64(salt),
-      iv: toBase64(iv)
-    };
-    const content = await prepareContent(bytes,
-      { filename: file.name, contentType: inferContentType(file) }, metadata, DEFAULT_CHUNK_SIZE);
-    metadata.v = content.v;
     const key = await deriveKey(passphrase, salt, iterationCount, ['encrypt', 'decrypt']);
     const encrypted = new Uint8Array(await crypto.subtle.encrypt(
       { name: 'AES-GCM', iv, additionalData: authenticatedDataFor(metadata) },
       key,
-      packContent(content.bytes, file, content.header)
+      packContent(content)
     ));
     const tag = encrypted.subarray(encrypted.byteLength - format.GCM_TAG_BYTES);
     const ciphertext = encrypted.subarray(0, encrypted.byteLength - format.GCM_TAG_BYTES);

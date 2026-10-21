@@ -9,7 +9,7 @@ import { createPreview } from '../src/preview.mjs';
 import { createFormat } from '../src/format.mjs';
 import { createCrypto } from '../src/crypto.mjs';
 import { renderWrapper } from '../src/wrapper.mjs';
-import { prepareContent } from '../src/compression.mjs';
+import { preparePackage } from '../src/creation.mjs';
 import { inflateContent } from '../src/gzip.mjs';
 import { isHtmlFile, createPageViewer } from '../src/viewer.mjs';
 import { themeStyle } from '../src/cli-theme.mjs';
@@ -225,57 +225,33 @@ async function readPassword({ stdinPassword }) {
   return password;
 }
 
-async function prepareCliContent(bytes, file, metadata, chunkSize) {
-  const content = await prepareContent(bytes, file, metadata, chunkSize, CLI_ORIGINAL_MAX_BYTES);
-  // Include the length prefix, metadata and (when encrypted) the GCM tag.
-  const size = format.HEADER_LENGTH_BYTES + content.header.byteLength + content.bytes.byteLength
-    + (metadata.access === 'sealed' ? 0 : format.GCM_TAG_BYTES);
-  if (size > CLI_PAYLOAD_MAX_BYTES) throw new Error('Binary package exceeds the 25 MiB CLI limit after compression.');
-  return content;
-}
-
 async function encryptBytes(bytes, password, { iterations, chunkSize, sourceName, contentType, access, privateFilename = false, htmlPage = false }) {
   if (htmlPage) {
     if (!isHtmlFile(sourceName, contentType)) throw new Error('--html-page requires an HTML file.');
     createPageViewer().decodeHtml(bytes);
   }
-  const display = htmlPage ? { display: 'page' } : {};
+  let salt, iv;
+  if (access !== 'sealed') {
+    salt = randomBytes(format.SALT_BYTES);
+    iv = randomBytes(format.IV_BYTES);
+  }
+  const content = await preparePackage(bytes, { filename: sourceName, contentType }, {
+    access, iterations, salt: salt?.toString('base64'), iv: iv?.toString('base64'),
+    privateFilename, htmlPage, chunkSize, maxOriginalSize: CLI_ORIGINAL_MAX_BYTES
+  });
+  if (content.binarySize > CLI_PAYLOAD_MAX_BYTES) throw new Error('Binary package exceeds the 25 MiB CLI limit after compression.');
+  const { metadata, lengthPrefix, header } = content;
   if (access === 'sealed') {
-    const metadata = { v: format.versionFor(access), encoding: format.METADATA_ENCODING, access, ...display,
-      ...(!privateFilename ? { filename: sourceName, contentType } : {}) };
-    const content = await prepareCliContent(bytes, { filename: sourceName, contentType }, metadata, chunkSize);
-    const length = Buffer.alloc(format.HEADER_LENGTH_BYTES);
-    length.writeUInt32BE(content.header.byteLength);
-    const packed = Buffer.concat([length, content.header, content.bytes]);
-    const payload = { ...metadata, v: content.v, content: toBase64Chunks(packed, chunkSize) };
+    const packed = Buffer.concat([lengthPrefix, header, content.bytes]);
+    const payload = { ...metadata, content: toBase64Chunks(packed, chunkSize) };
     await verifyPayload(payload, '', bytes, undefined, { name: sourceName, type: contentType });
     return payload;
   }
-  const salt = randomBytes(format.SALT_BYTES);
-  const iv = randomBytes(format.IV_BYTES);
-  const metadata = {
-    v: format.versionFor(access),
-    alg: 'AES-GCM',
-    kdf: 'PBKDF2-SHA256',
-    iterations,
-    encoding: format.METADATA_ENCODING,
-    ...display,
-    ...(!privateFilename ? { filename: sourceName, contentType } : {}),
-    access,
-    salt: salt.toString('base64'),
-    iv: iv.toString('base64')
-  };
-  const content = await prepareCliContent(bytes, { filename: sourceName, contentType }, metadata, chunkSize);
-  metadata.v = content.v;
   const key = pbkdf2Sync(password, salt, iterations, 32, 'sha256');
   const cipher = createCipheriv('aes-256-gcm', key, iv);
   cipher.setAAD(authenticatedDataFor(metadata));
-  const header = content.header;
-  if (header.length > format.MAX_METADATA_BYTES) throw new Error('Filename metadata is too large.');
-  const length = Buffer.alloc(format.HEADER_LENGTH_BYTES);
-  length.writeUInt32BE(header.length);
   // Feed the header separately rather than allocating a second full plaintext buffer.
-  const ciphertext = Buffer.concat([cipher.update(length), cipher.update(header), cipher.update(content.bytes), cipher.final()]);
+  const ciphertext = Buffer.concat([cipher.update(lengthPrefix), cipher.update(header), cipher.update(content.bytes), cipher.final()]);
   const tag = cipher.getAuthTag();
 
   const payload = {

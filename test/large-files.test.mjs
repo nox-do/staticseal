@@ -11,6 +11,7 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createFormat } from '../src/format.mjs';
 import { createCrypto } from '../src/crypto.mjs';
+import { preparePackage } from '../src/creation.mjs';
 import { createPreview } from '../src/preview.mjs';
 import { themeStyle } from '../src/cli-theme.mjs';
 
@@ -121,6 +122,80 @@ test('historical v2-v5 payloads open in current app and both serialized reader v
       assert.equal(reader.content().contentType, 'text/html');
     }
   }
+});
+
+test('shared creation preserves metadata order, privacy and raw buffer identity in source and built app', async () => {
+  const built = evaluate(source.slice(source.indexOf('<script>') + 8, source.lastIndexOf('</script>')), 'preparePackage');
+  const fixture = JSON.parse(await readFile(new URL('./fixtures/format-v2-v5.json', import.meta.url), 'utf8'));
+  for (const prepare of [preparePackage, built.preparePackage]) {
+    for (const { inputIndex, mode, access, payload } of fixture.cases) for (const privateFilename of [false, true]) {
+      const input = fixture.inputs[inputIndex];
+      // Nonzero offset ensures that the preparation does not assume a whole backing buffer.
+      const storage = Buffer.concat([Buffer.from([255]), Buffer.from(input.text.repeat(input.repeat)), Buffer.from([255])]);
+      const bytes = storage.subarray(1, -1);
+      const file = { filename: 'compat.html', contentType: 'text/html' };
+      const content = await prepare(bytes, file, { access, iterations: 100000, salt: payload.salt, iv: payload.iv,
+        privateFilename, htmlPage: mode === 'page', chunkSize: 65536 });
+      const expectedMetadata = Object.fromEntries(Object.entries(payload).filter(([key]) =>
+        !['content', 'ciphertext', 'tag', ...(privateFilename ? ['filename', 'contentType'] : [])].includes(key)));
+      assert.equal(JSON.stringify(content.metadata), JSON.stringify(expectedMetadata));
+      assert.equal(Buffer.from(content.header).toString('utf8'), JSON.stringify({ ...file,
+        ...(inputIndex === 1 ? { originalSize: bytes.length } : {}) }));
+      assert.equal(content.lengthPrefix.byteLength, 4);
+      assert.equal(Buffer.from(content.lengthPrefix).readUInt32BE(), content.header.byteLength);
+      assert.equal(content.binarySize, 4 + content.header.byteLength + content.bytes.byteLength + (access === 'sealed' ? 0 : 16));
+      if (inputIndex === 0) assert.equal(content.bytes, bytes, 'raw input must be returned without a file copy');
+      const { renderWrapper } = await import('../src/wrapper.mjs');
+      const html = renderWrapper({ title: 'No creator code', payload });
+      assert.doesNotMatch(html, /\b(?:preparePackage|packContent|prepareContent)\b/);
+    }
+  }
+});
+
+test('Node encryption receives prefix, header and original input separately without a plaintext concat', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'staticseal-parts-'));
+  try {
+    const inputPath = join(dir, 'raw.bin');
+    await writeFile(inputPath, randomFillSync(Buffer.alloc(8192)));
+    await writeFile(join(dir, 'parts.cjs'), `const assert = require('node:assert/strict');
+      const fs = require('node:fs/promises');
+      const crypto = require('node:crypto');
+      let inputBytes;
+      const readFile = fs.readFile;
+      fs.readFile = async (...args) => {
+        const bytes = await readFile(...args);
+        if (args[0] === ${JSON.stringify(inputPath)}) inputBytes = bytes;
+        return bytes;
+      };
+      const concat = Buffer.concat;
+      Buffer.concat = (parts, ...args) => {
+        assert.ok(!inputBytes || !parts.includes(inputBytes), 'must not concatenate the original plaintext');
+        return concat(parts, ...args);
+      };
+      const createCipheriv = crypto.createCipheriv;
+      crypto.createCipheriv = (...args) => {
+        const cipher = createCipheriv(...args);
+        const update = cipher.update.bind(cipher);
+        let count = 0, headerLength;
+        cipher.update = bytes => {
+          if (count === 0) { assert.equal(bytes.byteLength, 4); headerLength = Buffer.from(bytes).readUInt32BE(); }
+          else if (count === 1) assert.equal(bytes.byteLength, headerLength);
+          else if (count === 2) assert.equal(bytes, inputBytes, 'cipher must receive the original buffer');
+          count++;
+          return update(bytes);
+        };
+        process.on('exit', () => assert.equal(count, 3));
+        return cipher;
+      };
+      require('node:module').syncBuiltinESMExports();`);
+    const result = spawnSync(process.execPath, ['--require', join(dir, 'parts.cjs'), 'bin/self-encrypt.mjs',
+      '--in', inputPath, '--out', join(dir, 'reader.html'), '--iterations', '100000', '--stdin-password'],
+      { cwd: new URL('..', import.meta.url), input: 'test\n', encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    const reader = wrapper(await readFile(join(dir, 'reader.html'), 'utf8'));
+    assert.equal(reader.payload.v, 2);
+    assert.deepEqual(Buffer.from(await reader.unlock('test')), await readFile(inputPath));
+  } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
 test('minimal opening screens and custom button labels preserve access modes and errors', async () => {

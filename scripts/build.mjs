@@ -5,9 +5,9 @@ import { minify as minifyHtml } from 'html-minifier-terser';
 
 const root = new URL('../', import.meta.url);
 const read = path => readFile(new URL(path, root), 'utf8');
-const [app, format, wrapper, svg, preview, wrapperCss, wrapperHtml, reader, gzip, compression, cryptoHelper, viewer, browserLimits] = await Promise.all([
+const [app, format, wrapper, svg, preview, wrapperCss, wrapperHtml, reader, gzip, compression, cryptoHelper, viewer, browserLimits, creation] = await Promise.all([
   'src/app.html', 'src/format.mjs', 'src/wrapper.mjs', 'src/seal.svg',
-  'src/preview.mjs', 'src/wrapper.css', 'src/wrapper.html', 'src/reader.js', 'src/gzip.mjs', 'src/compression.mjs', 'src/crypto.mjs', 'src/viewer.mjs', 'src/browser-limits.mjs'
+  'src/preview.mjs', 'src/wrapper.css', 'src/wrapper.html', 'src/reader.js', 'src/gzip.mjs', 'src/compression.mjs', 'src/crypto.mjs', 'src/viewer.mjs', 'src/browser-limits.mjs', 'src/creation.mjs'
 ].map(read));
 const minifyCss = css => {
   const result = new CleanCSS({ level: 0, inline: false, rebase: false }).minify(css);
@@ -22,7 +22,7 @@ const minifyCss = css => {
 const inspectedNames = [
   'encryptBytes', 'verifyPayload', 'renderWrapper', 'fromBase64Chunks',
   'toBase64Chunks', 'generateSecret', 'packContent', 'unpackContent',
-  'unlock', 'renderBlobViewer', 'unlockedContent', 'prepareContent', 'inflateContent'
+  'unlock', 'renderBlobViewer', 'unlockedContent', 'prepareContent', 'inflateContent', 'preparePackage'
 ];
 const compactJs = async (source, module = false, sequences = true) => (await minifyJs(source, {
   module,
@@ -61,7 +61,7 @@ let html = replace(app, '<!-- STATICSEAL_LOGO -->', logo);
 html = replace(html, '/* STATICSEAL_BROWSER_LIMITS */', inline(browserLimits));
 html = html.replace(/<style>([\s\S]*?)<\/style>/, (_, css) => '<style>' + minifyCss(css) + '</style>');
 html = replace(html, '/* STATICSEAL_FORMAT */', inline(format) + '\n' + inline(preview)
-  + '\n' + inline(gzip) + '\n' + inline(compression) + '\n' + inline(cryptoHelper) + '\n' + inline(viewer));
+  + '\n' + inline(gzip) + '\n' + inline(compression) + '\n' + inline(creation) + '\n' + inline(cryptoHelper) + '\n' + inline(viewer));
 html = replace(html, '/* STATICSEAL_WRAPPER */', "const sealLogo = document.getElementById('seal-logo').outerHTML;\n"
   + inline(templatesModule) + '\n' + inline(wrapper));
 const script = html.match(/<script>([\s\S]*?)<\/script>/);
