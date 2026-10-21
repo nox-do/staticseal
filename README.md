@@ -75,7 +75,7 @@ code blocks. Markdown offers basic formatting: headings, paragraphs, emphasis, l
 fenced code blocks and links. Markdown HTML remains text; images are not loaded.
 Text previews show at most 128 KiB and support UTF-8 and BOM-marked UTF-16.
 Downloads always contain the complete original file. PDFs offer an optional
-preview after confirmation. Other formats are download-only.
+preview on click, with a discreet trust notice before opening. Other formats are download-only.
 Staticseal packages individual files, including self-contained HTML pages. It does
 not collect dependencies or bundle multi-file websites.
 

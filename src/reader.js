@@ -52,7 +52,4 @@
     }
   });
 
-  if (payload.access === 'sealed') {
-    status.textContent = STATICSEAL_INITIAL_STATUS;
-  }
 })();

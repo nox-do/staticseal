@@ -199,7 +199,7 @@ test('minimal opening screens and custom button labels preserve access modes and
         assert.ok(!html.includes('Passphrase protection depends on'));
         assert.equal(html.includes('in your browser.'), !minimal);
         const reader = wrapper(html);
-        assert.equal(reader.nodes.get('status').textContent, access === 'sealed' && !minimal ? 'No passphrase required.' : '');
+        assert.equal(reader.nodes.get('status').textContent, '');
         if (access === 'passphrase') {
           reader.nodes.get('password').value = '';
           await reader.nodes.get('unlock-form').handlers.submit({ preventDefault() {} });
@@ -816,7 +816,27 @@ test('private filename UI uses neutral output and captures privacy before asynch
 });
 
 
-test('both generated viewers restrict previews and require PDF confirmation', async () => {
+test('PDF notice appears once, before opening when metadata is public', async () => {
+  for (const access of ['sealed', 'passphrase']) for (const privateFilename of [false, true]) {
+    const payload = await makePayload(Buffer.from('%PDF-test'), 'test', 100000,
+      { name: 'document.pdf', type: 'application/pdf' }, access, privateFilename);
+    for (const minimal of [false, true]) {
+      const html = renderWrapper({ title: 'Document', payload, minimal });
+      const opening = html.split('<script')[0];
+      const earlyNotice = !privateFilename && !minimal;
+      assert.equal(opening.includes('PDFs may contain'), earlyNotice);
+      assert.ok(!html.includes('No passphrase'));
+      const reader = wrapper(html);
+      await reader.open('test');
+      assert.equal(reader.nodes.get('vc').innerHTML.includes('PDFs may contain'), !earlyNotice);
+      reader.confirmWith(() => assert.fail('Unexpected confirmation'));
+      reader.nodes.get('pdf').handlers.click();
+      assert.match(reader.nodes.get('vc').innerHTML, /<iframe/);
+    }
+  }
+});
+
+test('both generated viewers restrict previews and open PDFs without a browser dialog', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'staticseal-preview-'));
   const bytes = Buffer.from('Original bytes remain unchanged.');
   try {
@@ -850,14 +870,9 @@ test('both generated viewers restrict previews and require PDF confirmation', as
         if (extension === 'md') assert.ok(viewer.innerHTML.includes('<article><p>Original bytes remain unchanged.</p></article>'));
         assert.deepEqual(Buffer.from(await reader.blobs[0].arrayBuffer()), bytes);
         if (extension === 'pdf') {
-          let confirmations = 0;
-          reader.confirmWith(() => { confirmations++; return false; });
+          assert.ok(viewer.innerHTML.includes('PDFs may contain'));
+          reader.confirmWith(() => { assert.fail('PDF preview must not open a confirmation dialog'); });
           reader.nodes.get('pdf').handlers.click();
-          assert.equal(confirmations, 1);
-          assert.ok(!viewer.innerHTML.includes('<iframe'));
-          reader.confirmWith(() => { confirmations++; return true; });
-          reader.nodes.get('pdf').handlers.click();
-          assert.equal(confirmations, 2);
           assert.ok(viewer.innerHTML.includes('<iframe'));
         }
       }

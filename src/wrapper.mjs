@@ -7,6 +7,7 @@ export function renderWrapper({ title, payload, minimal = false, buttonLabel }) 
   const { escapeHtml } = format;
   const hasPassphrase = payload.access !== 'sealed';
   const isPage = payload.display === 'page';
+  const pdfNoticeShown = !minimal && !isPage && createPreview().previewKind(payload.filename || '', payload.contentType) === 'pdf';
   const subject = isPage ? 'webpage' : 'file';
   const values = {
     TITLE: escapeHtml(payload.filename === undefined ? 'Protected file' : title),
@@ -14,7 +15,8 @@ export function renderWrapper({ title, payload, minimal = false, buttonLabel }) 
     KICKER: (hasPassphrase ? 'Protected ' : 'Sealed ') + subject,
     COPY: minimal ? '' : '<p>' + (hasPassphrase
       ? 'Enter the passphrase to open this ' + subject + ' in your browser.'
-      : 'Open this ' + subject + ' in your browser. No passphrase needed.') + '</p>',
+      : 'Open this ' + subject + ' in your browser.') + '</p>' + (pdfNoticeShown
+        ? '<p class="pn">PDFs may contain links or interactive content. Open only files you trust.</p>' : ''),
     PASSWORD_FIELD: hasPassphrase
       ? '<label for="password">Passphrase</label><input id="password" name="password" type="password" placeholder="Passphrase" autofocus>'
       : '',
@@ -22,7 +24,6 @@ export function renderWrapper({ title, payload, minimal = false, buttonLabel }) 
     // Keep HTML script-parser control sequences out of the JSON data block.
     PAYLOAD: JSON.stringify(payload).replaceAll('<', '\\u003c'),
     READER: readerTemplate
-      .replace('STATICSEAL_INITIAL_STATUS', () => JSON.stringify(minimal ? '' : 'No passphrase required.'))
       .replace('STATICSEAL_DECODER', () => format.isUnencryptedVersion(payload.v)
         ? '((p,k,b,c)=>c(p.content))'
         : '(' + createCrypto.toString() + ')().decryptPayload')
@@ -31,7 +32,7 @@ export function renderWrapper({ title, payload, minimal = false, buttonLabel }) 
       .replace('STATICSEAL_FORMAT', () => '(' + createFormat.toString() + ')')
       .replace('STATICSEAL_VIEWER', () => isPage
         ? '(()=>(' + createPageViewer.toString() + ')().renderHtmlPage)'
-        : '(e=>(' + createFileViewer.toString() + ')(e,' + createPreview.toString() + '))')
+        : '(e=>(' + createFileViewer.toString() + ')(e,' + createPreview.toString() + ',' + pdfNoticeShown + '))')
   };
   // Callback replacement preserves literal $ sequences in filenames and payloads.
   return wrapperTemplate.replace(/STATICSEAL_(TITLE|LOGO|KICKER|COPY|PASSWORD_FIELD|BUTTON|PAYLOAD|READER)\b/g,

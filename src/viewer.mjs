@@ -27,7 +27,7 @@ export function createPageViewer() {
   return { decodeHtml, renderHtmlPage };
 }
 
-export function createFileViewer(escapeHtml, previewFactory) {
+export function createFileViewer(escapeHtml, previewFactory, pdfNoticeShown = false) {
   const $ = id => document.getElementById(id);
   const { inferContentType, previewKind, renderMarkdown, codeLanguage, highlightCode } = previewFactory();
   const brand = $('wrapper-brand').outerHTML;
@@ -81,14 +81,13 @@ export function createFileViewer(escapeHtml, previewFactory) {
     }
     viewer.innerHTML = '<div class="dl">' +
       '<p class="kicker">Ready to download</p><h1>' + safeName + '</h1>' +
-      '<p>Your file has been unlocked. Download the original and open it only if you trust its source.</p>' +
+      '<p>Your file is ready to download.</p>' +
       (isPdf
-        ? '<p>PDF preview uses your browser’s PDF viewer. PDFs may contain links or interactive content. Preview only files you trust.</p><button id="pdf" type="button">Preview PDF…</button>'
+        ? (pdfNoticeShown ? '' : '<p class="pn">PDFs may contain links or interactive content. Open only files you trust.</p>') + '<button id="pdf" type="button">Preview PDF</button>'
         : '<p>This file type is not previewed automatically.</p>') +
       '</div>';
     if (isPdf) {
       $('pdf').addEventListener('click', () => {
-        if (!window.confirm('Open this PDF in the browser viewer? PDFs may contain links or interactive content. Staticseal does not verify that this file is safe. Continue only if you trust its source.')) return;
         viewer.innerHTML = '<iframe class="vf" title="' + safeName + '" src="' + url + '"></iframe>';
       });
     }
