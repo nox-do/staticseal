@@ -10,7 +10,8 @@
     "encrypt": "node ./bin/self-encrypt.mjs",
     "check": "node scripts/build.mjs --check && node ./bin/self-encrypt.mjs --help && npm test",
     "test": "node --test test/large-files.test.mjs",
-    "build": "node scripts/build.mjs"
+    "build": "node scripts/build.mjs",
+    "measure:size": "node scripts/measure-size.mjs"
   },
   "engines": {
     "node": ">=20"

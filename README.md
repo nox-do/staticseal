@@ -187,6 +187,11 @@ Tests exercise the app, CLI and generated wrapper code using Node Web Crypto
 and DOM stubs, including 10/25 MiB files. They do not establish full browser or
 mobile compatibility.
 
+`npm run --silent measure:size` rebuilds the app and reports its UTF-8 size plus
+eight real CLI-generated readers as JSON. Fixed fixtures cover passphrase/no
+passphrase, raw/gzip and file/page modes. See the [measurement method and recorded
+baseline](docs/size-measurement.md) for options, byte definitions and limitations.
+
 ### Release download
 
 Publish a GitHub Release for a tag containing `.github/workflows/release.yml`.
