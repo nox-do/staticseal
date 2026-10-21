@@ -720,11 +720,12 @@ button:disabled {
   const copyGenerated = $('copy-generated');
   let passphraseRevision = 0;
   let generatedVisible = false;
+  const canCopy = () => !!password.value && password.value === passwordRepeat.value;
   const resetCopy = () => {
     passphraseRevision++;
     generatedVisible = false;
     password.type = passwordRepeat.type = 'password';
-    copyGenerated.disabled = !password.value;
+    copyGenerated.disabled = !canCopy();
     copyGenerated.textContent = 'Copy';
     generatorStatus.textContent = '';
   };
@@ -748,7 +749,7 @@ button:disabled {
     }
   });
   copyGenerated.addEventListener('click', async () => {
-    if (!password.value) return;
+    if (!canCopy()) return;
     const revision = passphraseRevision;
     try {
       await navigator.clipboard.writeText(password.value);

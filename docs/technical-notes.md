@@ -209,8 +209,8 @@ including CSS, scripts, interaction, full content and CLI fragment navigation.
 ## Private filenames and passphrase generation
 
 The web app shows file selection, the private-filename option and an optional
-passphrase. Generate fills both password fields immediately; Copy uses the current
-first field. There is no Advanced section or separate adoption/cancellation step.
+passphrase. Generate fills both password fields immediately; Copy is available
+only when both fields contain the same nonempty value. There is no Advanced section or separate adoption/cancellation step.
 Titles and output names are derived from the selected file.
 
 **Hide original filename and file type** is off by default. It puts

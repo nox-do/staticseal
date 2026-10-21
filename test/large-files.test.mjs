@@ -726,18 +726,31 @@ test('generator prefills both fields and copy follows edits without stale confir
   node('password').handlers.input();
   assert.equal(node('password').type, 'password');
   assert.equal(node('password-repeat').type, 'password');
+  assert.equal(node('copy-generated').disabled, true);
+  const previouslyCopied = copied;
+  await click('copy-generated');
+  assert.equal(copied, previouslyCopied, 'mismatched fields must not reach the clipboard');
+  node('password-repeat').value = 'manual secret';
+  node('password-repeat').handlers.input();
+  assert.equal(node('copy-generated').disabled, false);
   await click('copy-generated');
   assert.equal(copied, 'manual secret');
+  node('password-repeat').value = 'different';
+  node('password-repeat').handlers.input();
+  assert.equal(node('copy-generated').disabled, true);
   node('password-repeat').handlers.input();
   assert.equal(node('generator-status').textContent, '');
   node('password').value = '';
   node('password').handlers.input();
   assert.equal(node('copy-generated').disabled, true);
+  node('password-repeat').value = '';
+  node('password-repeat').handlers.input();
+  assert.equal(node('copy-generated').disabled, true, 'matching empty fields are not copyable');
   assert.doesNotMatch(source, /id="(?:generated-password|use-generated|cancel-generator|kdf-strength|output-title|output-name)"/);
   const pending = executeHtml(source, { globals: { navigator: { clipboard: {
     writeText() { return new Promise(resolve => { finishCopy = resolve; }); }
   } } } });
-  pending.nodes.get('password').value = 'old';
+  pending.nodes.get('password').value = pending.nodes.get('password-repeat').value = 'old';
   const copy = pending.nodes.get('copy-generated').handlers.click();
   pending.nodes.get('password').value = 'new';
   pending.nodes.get('password').handlers.input();
