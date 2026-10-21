@@ -233,8 +233,8 @@ neutral wrapper title. Source/output paths printed by the local CLI are not hidd
 The optional web-only generator directly formats 16 fresh bytes from
 `crypto.getRandomValues()` as a 22-character Base64url secret (128 bits).
 One click fills both editable password fields and keeps the generated passphrase
-visible in the first field, including after copying or losing focus. Manual edits
-restore masking. Copy confirmation is reset on
+visible in both fields, including after copying or losing focus. Manual edits
+restore masking in both fields. Copy confirmation is reset on
 generation or edits; pending clipboard operations cannot confirm a newer value.
 Randomness failures preserve existing values. If clipboard access fails, the first
 field is revealed and selected for manual copying; manually entered passphrases

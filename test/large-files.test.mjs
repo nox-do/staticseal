@@ -708,12 +708,14 @@ test('generator prefills both fields and copy follows edits without stale confir
   assert.equal(randomCalls, 1);
   assert.match(node('password').value, /^[A-Za-z0-9_-]{22}$/);
   assert.equal(node('password').type, 'text');
+  assert.equal(node('password-repeat').type, 'text');
   node('password').handlers.blur();
   assert.equal(node('password').type, 'text', 'generated passphrase stays visible after leaving the field');
   assert.equal(node('password-repeat').value, node('password').value);
   await click('copy-generated');
   assert.equal(copied, node('password').value);
   assert.equal(node('password').type, 'text');
+  assert.equal(node('password-repeat').type, 'text');
   assert.equal(node('copy-generated').textContent, 'Copied');
   const generated = node('password').value;
   click('generate-password');
@@ -723,6 +725,7 @@ test('generator prefills both fields and copy follows edits without stale confir
   node('password').value = 'manual secret';
   node('password').handlers.input();
   assert.equal(node('password').type, 'password');
+  assert.equal(node('password-repeat').type, 'password');
   await click('copy-generated');
   assert.equal(copied, 'manual secret');
   node('password-repeat').handlers.input();

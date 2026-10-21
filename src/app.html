@@ -723,7 +723,7 @@ button:disabled {
   const resetCopy = () => {
     passphraseRevision++;
     generatedVisible = false;
-    password.type = 'password';
+    password.type = passwordRepeat.type = 'password';
     copyGenerated.disabled = !password.value;
     copyGenerated.textContent = 'Copy';
     generatorStatus.textContent = '';
@@ -740,7 +740,7 @@ button:disabled {
       random.fill(0);
       password.value = passwordRepeat.value = secret;
       generatedVisible = true;
-      password.type = 'text';
+      password.type = passwordRepeat.type = 'text';
       copyGenerated.disabled = false;
       generatorStatus.textContent = 'Save a copy separately before sharing the protected file.';
     } catch {
