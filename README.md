@@ -42,7 +42,7 @@ guarantee exclusion from search engines or establish GDPR or other legal complia
 ## Use in your browser
 
 1. Choose a file.
-2. Optionally select **Generate passphrase** to fill both fields, or enter and repeat your own. Use **Copy** to save it separately.
+2. Optionally select **Generate passphrase** to fill both fields and show the generated passphrase, or enter and repeat your own. Use **Copy** to save it separately.
 3. Select **Seal & download file**.
 
 Your file and passphrase stay in your browser. No upload, account, or backend is

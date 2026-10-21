@@ -719,8 +719,10 @@ button:disabled {
   const generatorStatus = $('generator-status');
   const copyGenerated = $('copy-generated');
   let passphraseRevision = 0;
+  let generatedVisible = false;
   const resetCopy = () => {
     passphraseRevision++;
+    generatedVisible = false;
     password.type = 'password';
     copyGenerated.disabled = !password.value;
     copyGenerated.textContent = 'Copy';
@@ -728,7 +730,7 @@ button:disabled {
   };
   resetCopy();
   password.addEventListener('input', resetCopy);
-  password.addEventListener('blur', () => { password.type = 'password'; });
+  password.addEventListener('blur', () => { if (!generatedVisible) password.type = 'password'; });
   passwordRepeat.addEventListener('input', resetCopy);
   $('generate-password').addEventListener('click', () => {
     resetCopy();
@@ -737,6 +739,8 @@ button:disabled {
       const secret = toBase64(random).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
       random.fill(0);
       password.value = passwordRepeat.value = secret;
+      generatedVisible = true;
+      password.type = 'text';
       copyGenerated.disabled = false;
       generatorStatus.textContent = 'Save a copy separately before sharing the protected file.';
     } catch {
@@ -756,7 +760,7 @@ button:disabled {
       password.type = 'text';
       password.focus();
       password.select();
-      generatorStatus.textContent = 'Clipboard unavailable. Copy the visible passphrase manually; it hides again when you leave the field.';
+      generatorStatus.textContent = 'Clipboard unavailable. Copy the visible passphrase manually.';
     }
   });
 
