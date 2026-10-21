@@ -9,7 +9,10 @@
 > interne Testnamen. Heute gelten Vorschau plus optionaler HTML-Seitenmodus,
 > v2–v5 mit unverschlüsselten v4/v5, festgeschriebene Entwicklungsabhängigkeiten für den
 > Build und Tests ohne private Namens-Hooks. Die nachfolgende Überschrift
-> „Aktueller Stand“ bezeichnet einen historischen Zwischenstand.
+> „Aktueller Stand“ bezeichnet einen historischen Zwischenstand. Auch der
+> Advanced-Bereich mit Titel-/Namensfeldern, KDF-Auswahl und separater Generator-
+> Übernahme ist entfallen. Generate füllt beide sichtbaren Felder; Copy verlangt
+> gleiche, nicht leere Werte. Die CLI hat jetzt die dokumentierten 128/25/35-MiB-Grenzen.
 
 Stand: 19. Oktober 2026. Grundlage ist der aktuelle Arbeitsstand im Repository einschließlich des bereits implementierten Großdateien-Fixes. F1, F3/F3a und F4 sind auf dem Branch `codex/privacy-and-passphrase-options` implementiert. Die folgenden Abschnitte dokumentieren Anforderungen und verbleibende Validierung.
 

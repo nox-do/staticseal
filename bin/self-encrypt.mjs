@@ -18,7 +18,7 @@ const format = createFormat(value => Buffer.from(value, 'base64'));
 const { fromBase64Chunks, unpackContent } = format;
 const { authenticatedDataFor } = createCrypto();
 
-const VERSION = '1.2.0';
+const VERSION = '1.3.0';
 const DEFAULT_ITERATIONS = 210_000;
 const DEFAULT_CHUNK_SIZE = 64 * 1024;
 // CLI product policy; independent of browser creation and technical format limits.

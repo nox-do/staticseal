@@ -77,9 +77,9 @@ nor serialized recipient readers contain package-preparation functions.
 
 Tests compare preparation through module imports against historical metadata for all
 four versions, both display modes and both privacy settings. They assert raw
-buffer identity and instrument real Node encryption to require three separate
-updates and reject concatenating the original plaintext. The representative size
-measurement gives a 42,085-byte app (+250 bytes from AP2); all eight CLI-generated
+buffer identity and instrument real Node encryption to consume original-buffer
+views in order without concatenating the original plaintext. The recorded AP3 size
+measurement gave a 42,085-byte app (+250 bytes from AP2); all eight CLI-generated
 readers, their payload JSON sizes and wrapper sizes are unchanged from AP2.
 These checks do not measure process peak memory or replace real-browser validation.
 
@@ -98,9 +98,10 @@ minified code. App form cases cover raw/gzip, both access modes, private/public
 filenames, both display modes, KDF derivation counts and UI choices captured before
 asynchronous reads. Warning/confirmation/rejection decisions are checked before
 reading using declared file sizes in the DOM stub; those boundary tests are not
-memory-capacity measurements. Real CLI and generated reader cases retain 10/25 MiB
-roundtrips, tampered fields/tags, wrong passwords, malformed headers, padding,
-gzip errors, encoding checks and original/binary/HTML limit rejection.
+memory-capacity measurements. Large built-app/CLI cases retain 10/25 MiB raw
+roundtrips, while small fixtures cover tampered fields/tags and wrong passwords.
+Malformed headers, padding, gzip errors, encoding checks and original/binary/HTML
+limit rejection remain covered separately.
 
 The production minifier has no test-specific reserved names. The optional reader
 restore marker carries its content argument, so wrapper generation uses the

@@ -124,6 +124,16 @@ Edit the source files, then build; never hand-edit generated production files.
 Reproducibility is verified with the same locked dependency/runtime versions; the
 recorded hashes do not promise identical output after toolchain updates.
 
+## Browser creation controls
+
+File selection exposes the optional private-filename setting and, for HTML,
+webpage display mode. Generate fills both passphrase fields and keeps them visible;
+manual edits restore masking. Copy requires identical nonempty values and clears
+its confirmation on edits. No separate generator preview, adoption or cancellation
+step remains. Browser titles and output filenames are derived automatically;
+PBKDF2 stays at 210,000 rounds. Custom title, output path and iteration settings
+remain available through the CLI.
+
 ## Validation boundaries
 
 Shared rules are imported directly in tests. Selected generated app/CLI readers
