@@ -830,7 +830,8 @@ test('PDF notice appears once, before opening when metadata is public', async ()
       await reader.open('test');
       assert.equal(reader.nodes.get('vc').innerHTML.includes('PDFs may contain'), !earlyNotice);
       reader.confirmWith(() => assert.fail('Unexpected confirmation'));
-      reader.nodes.get('pdf').handlers.click();
+      assert.equal(reader.nodes.get('vc').innerHTML.includes('<iframe'), earlyNotice);
+      if (!earlyNotice) reader.nodes.get('pdf').handlers.click();
       assert.match(reader.nodes.get('vc').innerHTML, /<iframe/);
     }
   }

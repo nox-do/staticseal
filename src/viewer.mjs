@@ -51,6 +51,10 @@ export function createFileViewer(escapeHtml, previewFactory, pdfNoticeShown = fa
       '</div></header><section id="vc"></section></main>';
 
     const viewer = $('vc');
+    if (isPdf && pdfNoticeShown) {
+      viewer.innerHTML = '<iframe class="vf" title="' + safeName + '" src="' + url + '"></iframe>';
+      return;
+    }
     if (kind === 'image') {
       viewer.innerHTML = '<img class="im" alt="' + safeName + '" src="' + url + '">';
       return;
@@ -83,7 +87,7 @@ export function createFileViewer(escapeHtml, previewFactory, pdfNoticeShown = fa
       '<p class="kicker">Ready to download</p><h1>' + safeName + '</h1>' +
       '<p>Your file is ready to download.</p>' +
       (isPdf
-        ? (pdfNoticeShown ? '' : '<p class="pn">PDFs may contain links or interactive content. Open only files you trust.</p>') + '<button id="pdf" type="button">Preview PDF</button>'
+        ? '<p class="pn">PDFs may contain links or interactive content. Open only files you trust.</p><button id="pdf" type="button">Preview PDF</button>'
         : '<p>This file type is not previewed automatically.</p>') +
       '</div>';
     if (isPdf) {
