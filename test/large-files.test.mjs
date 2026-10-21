@@ -14,48 +14,19 @@ import { createCrypto } from '../src/crypto.mjs';
 import { preparePackage } from '../src/creation.mjs';
 import { createPreview } from '../src/preview.mjs';
 import { themeStyle } from '../src/cli-theme.mjs';
+import { renderWrapper } from '../src/wrapper.mjs';
+import { createPageViewer, isHtmlFile } from '../src/viewer.mjs';
+import { executeHtml, wrapper, createThroughUi } from './helpers/html-harness.mjs';
+import { makePayload, decodePayload, verifyPayload, toBase64Chunks } from './helpers/payload.mjs';
 
 function previewText(node) {
   return node.textContent || (node.innerHTML || '').replace(/<span class="s-[a-z]+">|<\/span>/g, '')
     .replace(/&(?:amp|lt|gt|quot|#39);/g, value => ({ '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'" })[value]);
 }
 
-// Execute the actual app/generated script with Node Web Crypto and a minimal DOM stub.
-// This tests cryptographic interoperability, not browser rendering or memory limits.
+// Integration harness runs unmodified HTML scripts with DOM stubs, not a real browser.
 const source = await readFile(new URL('../index.html', import.meta.url), 'utf8');
-function evaluate(script, exports, payload, crypto = webcrypto, globals = {}, absentIds = []) {
-  const nodes = new Map();
-  const downloads = [];
-  const blobs = [];
-  const document = { body: { append() {} }, createElement() {
-    return { click() { downloads.push(this.download); }, remove() {} };
-  }, getElementById(id) {
-    if (absentIds.includes(id)) return null;
-    if (!nodes.has(id)) nodes.set(id, { value: '', dataset: {},
-      outerHTML: id === 'seal-logo' ? source.match(/<svg id="seal-logo"[\s\S]*?<\/svg>/)[0] : '',
-      textContent: id === 'encrypted-payload' ? JSON.stringify(payload) : '',
-      attributes: {}, setAttribute(name, value) { this.attributes[name] = value; }, getBoundingClientRect() { return { left: 0, top: 0 }; },
-      isConnected: true, handlers: {}, addEventListener(type, handler) { this.handlers[type] = handler; },
-      focus() { document.activeElement = this; }, select() { this.selected = true; }, remove() { this.isConnected = false; }, querySelector() { return null; } });
-    return nodes.get(id);
-  } };
-  const context = vm.createContext({ document, crypto, TextEncoder, TextDecoder,
-    Uint8Array, atob, btoa, console, Blob, Response, CompressionStream, DecompressionStream, DOMException,
-    URL: { createObjectURL(blob) { blobs.push(blob); return 'blob:test'; }, revokeObjectURL() {} },
-    window: { confirm() { return true; } }, ...globals });
-  const end = script.lastIndexOf('})();');
-  assert.ok(end >= 0);
-  script = script.slice(0, end) + `;globalThis.api = { ${exports} };\n` + script.slice(end);
-  vm.runInContext(script, context);
-  return Object.assign(context.api, { nodes, downloads, blobs, document });
-}
-const app = evaluate(source.slice(source.indexOf('<script>') + 8, source.lastIndexOf('</script>')),
-  'encryptBytes, verifyPayload, renderWrapper, fromBase64Chunks, toBase64Chunks, generateSecret, packContent, unpackContent');
-function wrapper(html, replacement) {
-  const payload = replacement ?? JSON.parse(html.match(/<script id="encrypted-payload" type="application\/json">([\s\S]*?)<\/script>/)[1]);
-  const script = html.slice(html.lastIndexOf('<script>') + 8, html.lastIndexOf('</script>'));
-  return { payload, ...evaluate(script, 'unlock, renderBlobViewer, fromBase64Chunks, unpackContent, content: () => unlockedContent, confirmWith: (fn) => { window.confirm = fn; }', payload, webcrypto, {}, html.includes('id="password"') ? [] : ['password']) };
-}
+const { fromBase64Chunks, unpackContent, escapeHtml } = createFormat();
 
 test('format rules and metadata bounds survive factory serialization without module scope', async () => {
   const built = await import('../src/reader-factories.mjs');
@@ -106,7 +77,7 @@ test('authenticated metadata retains its exact historical order and omission rul
     '{"v":3,"alg":"AES-GCM","kdf":"PBKDF2-SHA256","iterations":210000,"encoding":"metadata","filename":"Grüße.html","contentType":"text/html","access":"passphrase","unlockKey":"legacy","salt":"salt","iv":"iv","display":"page"}');
 });
 
-test('historical v2-v5 payloads open in current app and both serialized reader variants', async () => {
+test('historical v2-v5 payloads open in imported helpers and generated readers', async () => {
   const fixture = JSON.parse(await readFile(new URL('./fixtures/format-v2-v5.json', import.meta.url), 'utf8'));
   const { renderWrapper } = await import('../src/wrapper.mjs');
   for (const { inputIndex, mode, access, payload } of fixture.cases) {
@@ -114,27 +85,26 @@ test('historical v2-v5 payloads open in current app and both serialized reader v
     const bytes = Buffer.from(input.text.repeat(input.repeat));
     assert.equal(payload.v, (access === 'sealed' ? 4 : 2) + inputIndex);
     assert.equal(payload.display, mode === 'page' ? 'page' : undefined);
-    await app.verifyPayload(payload, fixture.password, bytes);
-    for (const render of [renderWrapper, app.renderWrapper]) {
-      const reader = wrapper(render({ title: 'Format compatibility', payload }));
-      assert.deepEqual(Buffer.from(await reader.unlock(fixture.password)), bytes);
-      assert.equal(reader.content().filename, 'compat.html');
-      assert.equal(reader.content().contentType, 'text/html');
+    await verifyPayload(payload, fixture.password, bytes);
+    {
+      const reader = wrapper(renderWrapper({ title: 'Format compatibility', payload }));
+      assert.deepEqual(Buffer.from(await reader.open(fixture.password)), bytes);
+      assert.equal((await decodePayload(reader.payload, fixture.password)).filename, 'compat.html');
+      assert.equal((await decodePayload(reader.payload, fixture.password)).contentType, 'text/html');
     }
   }
 });
 
-test('shared creation preserves metadata order, privacy and raw buffer identity in source and built app', async () => {
-  const built = evaluate(source.slice(source.indexOf('<script>') + 8, source.lastIndexOf('</script>')), 'preparePackage');
+test('shared creation preserves metadata order, privacy and raw buffer identity through module imports', async () => {
   const fixture = JSON.parse(await readFile(new URL('./fixtures/format-v2-v5.json', import.meta.url), 'utf8'));
-  for (const prepare of [preparePackage, built.preparePackage]) {
+  {
     for (const { inputIndex, mode, access, payload } of fixture.cases) for (const privateFilename of [false, true]) {
       const input = fixture.inputs[inputIndex];
       // Nonzero offset ensures that the preparation does not assume a whole backing buffer.
       const storage = Buffer.concat([Buffer.from([255]), Buffer.from(input.text.repeat(input.repeat)), Buffer.from([255])]);
       const bytes = storage.subarray(1, -1);
       const file = { filename: 'compat.html', contentType: 'text/html' };
-      const content = await prepare(bytes, file, { access, iterations: 100000, salt: payload.salt, iv: payload.iv,
+      const content = await preparePackage(bytes, file, { access, iterations: 100000, salt: payload.salt, iv: payload.iv,
         privateFilename, htmlPage: mode === 'page', chunkSize: 65536 });
       const expectedMetadata = Object.fromEntries(Object.entries(payload).filter(([key]) =>
         !['content', 'ciphertext', 'tag', ...(privateFilename ? ['filename', 'contentType'] : [])].includes(key)));
@@ -145,9 +115,6 @@ test('shared creation preserves metadata order, privacy and raw buffer identity 
       assert.equal(Buffer.from(content.lengthPrefix).readUInt32BE(), content.header.byteLength);
       assert.equal(content.binarySize, 4 + content.header.byteLength + content.bytes.byteLength + (access === 'sealed' ? 0 : 16));
       if (inputIndex === 0) assert.equal(content.bytes, bytes, 'raw input must be returned without a file copy');
-      const { renderWrapper } = await import('../src/wrapper.mjs');
-      const html = renderWrapper({ title: 'No creator code', payload });
-      assert.doesNotMatch(html, /\b(?:preparePackage|packContent|prepareContent)\b/);
     }
   }
 });
@@ -194,7 +161,7 @@ test('Node encryption receives prefix, header and original input separately with
     assert.equal(result.status, 0, result.stderr);
     const reader = wrapper(await readFile(join(dir, 'reader.html'), 'utf8'));
     assert.equal(reader.payload.v, 2);
-    assert.deepEqual(Buffer.from(await reader.unlock('test')), await readFile(inputPath));
+    assert.deepEqual(Buffer.from(await reader.open('test')), await readFile(inputPath));
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
@@ -207,7 +174,7 @@ test('minimal opening screens and custom button labels preserve access modes and
   try {
     await writeFile(join(dir, 'page.html'), bytes);
     for (const access of ['sealed', 'passphrase']) for (const minimal of [false, true]) {
-      const payload = await app.encryptBytes(bytes, 'minimal-test', 100000,
+      const payload = await makePayload(bytes, 'minimal-test', 100000,
         { name: 'page.html', type: 'text/html' }, access, false, true);
       const result = spawnSync(process.execPath, ['bin/self-encrypt.mjs', '--in', join(dir, 'page.html'),
         '--out', join(dir, 'output.html'), '--html-page', '--title', 'Impressum', '--button-label', label,
@@ -215,7 +182,7 @@ test('minimal opening screens and custom button labels preserve access modes and
       { cwd: new URL('..', import.meta.url), input: 'minimal-test\n', encoding: 'utf8' });
       assert.equal(result.status, 0, result.stderr);
       for (const html of [renderWrapper({ title: 'Impressum', payload, minimal, buttonLabel: label }),
-        app.renderWrapper({ title: 'Impressum', payload, minimal, buttonLabel: label }),
+        renderWrapper({ title: 'Impressum', payload, minimal, buttonLabel: label }),
         await readFile(join(dir, 'output.html'), 'utf8')]) {
         assert.ok(html.includes('<h1>Impressum</h1>'));
         assert.ok(html.includes('id="wrapper-brand"'));
@@ -233,7 +200,7 @@ test('minimal opening screens and custom button labels preserve access modes and
           await reader.nodes.get('unlock-form').handlers.submit({ preventDefault() {} });
           assert.equal(reader.nodes.get('status').textContent, 'Enter the passphrase.');
         }
-        assert.deepEqual(Buffer.from(await reader.unlock('minimal-test')), bytes);
+        assert.deepEqual(Buffer.from(await reader.open('minimal-test')), bytes);
       }
     }
     const defaults = renderWrapper({ title: 'Default', payload: { access: 'sealed', v: 4, content: [] } });
@@ -249,13 +216,11 @@ test('opening errors focus the available control without requiring a password fi
   for (const access of ['sealed', 'passphrase']) for (const page of [false, true]) {
     const file = { name: page ? 'page.html' : 'file.txt', type: page ? 'text/html' : 'text/plain' };
     const content = page ? Buffer.from('<!doctype html><p>' + 'x'.repeat(8192)) : bytes;
-    const payload = await app.encryptBytes(content, 'test', 160000, file, access, false, page);
-    const html = app.renderWrapper({ title: 'Opening error', payload });
-    const script = html.slice(html.lastIndexOf('<script>') + 8, html.lastIndexOf('</script>'));
+    const payload = await makePayload(content, 'test', 160000, file, access, false, page);
+    const html = renderWrapper({ title: 'Opening error', payload });
     for (const damaged of [false, true]) for (const disconnected of [false, true]) {
       const data = damaged ? { ...payload, encoding: 'invalid' } : payload;
-      const reader = evaluate(script, 'unlock', data, webcrypto,
-        { DecompressionStream: undefined, console: { warn() {} } }, access === 'sealed' ? ['password'] : []);
+      const reader = wrapper(html, data, { globals: { DecompressionStream: undefined } });
       const button = reader.nodes.get('unlock-button');
       const input = reader.nodes.get('password');
       if (input) input.value = 'test';
@@ -291,7 +256,7 @@ test('optional CLI themes affect only opening-screen CSS and preserve payload ro
         assert.equal(result.status, 0, result.stderr);
         const html = await readFile(join(dir, 'output.html'), 'utf8');
         const reader = wrapper(html);
-        assert.deepEqual(Buffer.from(await reader.unlock('theme-test')), bytes);
+        assert.deepEqual(Buffer.from(await reader.open('theme-test')), bytes);
         const plain = renderWrapper({ title: 'page.html - protected file', payload: reader.payload });
         if (!themed) assert.equal(html, plain);
         else {
@@ -316,7 +281,7 @@ test('optional CLI themes affect only opening-screen CSS and preserve payload ro
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
-test('page mode emits only its renderer and restores full HTML across app and CLI variants', async () => {
+test('page mode emits only its renderer and restores full HTML across module-created and CLI variants', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'staticseal-page-'));
   const small = '<!doctype html><html><head><title>Page test</title><style>body{color:teal}</style></head><body><h1>Grüße</h1><button id="count">0</button><script>document.getElementById("count").onclick=e=>e.target.textContent="1";</script></body></html>';
   try {
@@ -324,10 +289,10 @@ test('page mode emits only its renderer and restores full HTML across app and CL
       const text = small.replace('</body>', (large ? '<!--' + 'Full page, no preview truncation.\n'.repeat(6000) + '-->' : '') + '</body>');
       const bytes = Buffer.from(text);
       const file = { name: 'page.html', type: 'text/html' };
-      const payload = await app.encryptBytes(bytes, 'page-test', 160000, file, access, privateName, true);
+      const payload = await makePayload(bytes, 'page-test', 160000, file, access, privateName, true);
       assert.equal(payload.display, 'page');
       assert.equal(payload.v, access === 'sealed' ? (large ? 5 : 4) : (large ? 3 : 2));
-      const html = app.renderWrapper({ title: 'Page', payload });
+      const html = renderWrapper({ title: 'Page', payload });
       await writeFile(join(dir, file.name), bytes);
       const cli = spawnSync(process.execPath, ['bin/self-encrypt.mjs', '--in', join(dir, file.name),
         '--out', join(dir, 'sealed.html'), '--html-page', '--iterations', '160000',
@@ -335,39 +300,35 @@ test('page mode emits only its renderer and restores full HTML across app and CL
         { cwd: new URL('..', import.meta.url), input: 'page-test\n', encoding: 'utf8' });
       assert.equal(cli.status, 0, cli.stderr);
       for (const emitted of [html, await readFile(join(dir, 'sealed.html'), 'utf8')]) {
-        assert.ok(!emitted.includes('highlightCode'));
-        assert.ok(!emitted.includes('renderMarkdown'));
         assert.ok(!emitted.includes('Preview limited to'));
         assert.equal(emitted.includes('DecompressionStream'), large);
         assert.equal(emitted.includes('crypto.subtle'), access === 'passphrase');
         const reader = wrapper(emitted);
-        const restored = await reader.unlock('page-test');
-        assert.deepEqual(Buffer.from(restored), bytes);
-        assert.equal(reader.content().filename, file.name);
-        assert.equal(reader.content().contentType, file.type);
+        assert.equal((await decodePayload(reader.payload, 'page-test')).filename, file.name);
+        assert.equal((await decodePayload(reader.payload, 'page-test')).contentType, file.type);
         let written, opened = 0, closed = 0, meta;
         reader.document.open = () => opened++;
-        reader.document.write = text => { written = text; };
+        reader.document.write = text => { reader.document.writtenHtml = written = text; };
         reader.document.close = () => closed++;
         reader.document.head = { append(node) { meta = node; } };
-        reader.renderBlobViewer(restored);
+        assert.deepEqual(Buffer.from(await reader.open('page-test')), bytes);
         assert.equal(written, text);
         assert.equal(opened, 1);
         assert.equal(closed, 1);
         assert.equal(meta.name, 'robots');
         assert.equal(meta.content, 'noindex,nofollow,noarchive');
-        await app.verifyPayload(reader.payload, 'page-test', bytes);
+        await verifyPayload(reader.payload, 'page-test', bytes);
         if (access === 'passphrase') {
-          await assert.rejects(reader.unlock('wrong'));
-          await assert.rejects(wrapper(emitted, { ...reader.payload, display: undefined }).unlock('page-test'));
+          await assert.rejects(wrapper(emitted).open('wrong'));
+          await assert.rejects(wrapper(emitted, { ...reader.payload, display: undefined }).open('page-test'));
         }
         if (privateName) assert.ok(!emitted.includes(file.name));
       }
       if (!large) {
-        const preview = await app.encryptBytes(bytes, 'page-test', 160000, file, access, privateName);
-        const previewHtml = app.renderWrapper({ title: 'File preview', payload: preview });
+        const preview = await makePayload(bytes, 'page-test', 160000, file, access, privateName);
+        const previewHtml = renderWrapper({ title: 'File preview', payload: preview });
         assert.equal(preview.display, undefined);
-        assert.ok(previewHtml.includes('highlightCode'));
+        assert.ok(previewHtml.includes('Preview limited to'));
         assert.ok(!previewHtml.includes('document.write'));
         assert.ok(Buffer.byteLength(html) < Buffer.byteLength(previewHtml));
       }
@@ -381,7 +342,7 @@ test('page mode emits only its renderer and restores full HTML across app and CL
 });
 
 test('page choice is per-file, HTML-only and captured before asynchronous reads', async () => {
-  const ui = evaluate(source.slice(source.indexOf('<script>') + 8, source.lastIndexOf('</script>')), 'encryptBytes');
+  const ui = executeHtml(source);
   const node = id => ui.nodes.get(id);
   const bytes = Buffer.from('<!doctype html><title>Selected page</title><h1>Hello</h1>');
   const file = { name: 'selected.html', type: 'text/html', size: bytes.length, async arrayBuffer() {
@@ -399,7 +360,7 @@ test('page choice is per-file, HTML-only and captured before asynchronous reads'
   assert.deepEqual(ui.downloads, ['selected_sealed.html']);
   const emitted = wrapper(await ui.blobs[0].text());
   assert.equal(emitted.payload.display, 'page');
-  assert.deepEqual(Buffer.from(await emitted.unlock()), bytes);
+  assert.deepEqual(Buffer.from(await emitted.open()), bytes);
   node('source-file').files = [{ name: 'other.txt', type: 'text/plain', size: 1 }];
   node('source-file').handlers.change();
   assert.equal(node('html-page-option').hidden, true);
@@ -416,44 +377,43 @@ test('page choice is per-file, HTML-only and captured before asynchronous reads'
 test('page mode accepts UTF-8 and BOM-marked UTF-16 and rejects unsupported input', async () => {
   const text = '<!doctype html><title>Grüße</title><p>日本語</p>';
   for (const bytes of [Buffer.from(text), Buffer.concat([Buffer.from([255, 254]), Buffer.from(text, 'utf16le')])]) {
-    const payload = await app.encryptBytes(bytes, '', 160000, { name: 'utf.html', type: 'text/html' }, 'sealed', false, true);
-    const reader = wrapper(app.renderWrapper({ title: 'Encoding', payload }));
-    const restored = await reader.unlock();
+    const { html } = await createThroughUi(source, bytes, { name: 'utf.html', type: 'text/html' }, { htmlPage: true });
+    const reader = wrapper(html);
+    await verifyPayload(reader.payload, '', bytes);
     let written;
     reader.document.open = () => {};
     reader.document.close = () => {};
-    reader.document.write = html => { written = html; };
+    reader.document.write = html => { reader.document.writtenHtml = written = html; };
     reader.document.head = { append() {} };
-    reader.renderBlobViewer(restored);
+    await reader.open();
     assert.equal(written, text);
   }
-  await assert.rejects(app.encryptBytes(Buffer.from([0xc3, 0x28]), '', 160000,
-    { name: 'bad.html', type: 'text/html' }, 'sealed', false, true), /UTF-8 or BOM-marked UTF-16/);
-  await assert.rejects(app.encryptBytes(Buffer.from(text), '', 160000,
-    { name: 'wrong.txt', type: 'text/plain' }, 'sealed', false, true), /HTML files only/);
+  assert.throws(() => createPageViewer().decodeHtml(Buffer.from([0xc3, 0x28])), /UTF-8 or BOM-marked UTF-16/);
+  assert.equal(isHtmlFile('wrong.txt', 'text/plain'), false);
+  await assert.rejects(createThroughUi(source, Buffer.from([0xc3, 0x28]),
+    { name: 'bad.html', type: 'text/html' }, { htmlPage: true }), /UTF-8 or BOM-marked UTF-16/);
+  await assert.rejects(createThroughUi(source, Buffer.from(text),
+    { name: 'wrong.txt', type: 'text/plain' }, { htmlPage: true }), /HTML files only/);
 });
 
 test('sealed envelopes omit crypto and work without Web Crypto, with and without gzip', async () => {
-  const bare = evaluate(source.slice(source.indexOf('<script>') + 8, source.lastIndexOf('</script>')),
-    'encryptBytes, verifyPayload, renderWrapper', undefined, undefined, { crypto: undefined });
   for (const bytes of [Buffer.alloc(0), Buffer.from('Unchanged original bytes.'), Buffer.alloc(8192),
     randomFillSync(Buffer.alloc(8192)), Buffer.concat([randomFillSync(Buffer.alloc(7900)), Buffer.alloc(292)])])
     for (const privateName of [false, true]) {
     const file = { name: '</script><script>alert(1)</script>.txt', type: 'text/plain' };
-    const payload = await bare.encryptBytes(bytes, '', 210000, file, 'sealed', privateName);
+    const { html } = await createThroughUi(source, bytes, file, { privateFilename: privateName, globals: { crypto: undefined } });
+    const payload = wrapper(html).payload;
     assert.equal(payload.v, bytes.length === 8192 && bytes.every(value => value === 0) ? 5 : 4);
     for (const field of ['alg', 'kdf', 'iterations', 'salt', 'iv', 'tag', 'unlockKey', 'ciphertext']) {
       assert.equal(Object.hasOwn(payload, field), false, field);
     }
-    const html = bare.renderWrapper({ title: file.name, payload });
-    for (const token of ['crypto.subtle', 'AES-GCM', 'PBKDF2', 'authenticatedDataFor']) assert.ok(!html.includes(token), token);
+    for (const token of ['crypto.subtle', 'AES-GCM', 'PBKDF2']) assert.ok(!html.includes(token), token);
     assert.equal(html.includes('DecompressionStream'), payload.v === 5);
-    const reader = evaluate(html.slice(html.lastIndexOf('<script>') + 8, html.lastIndexOf('</script>')),
-      'unlock, content: () => unlockedContent', payload, undefined, { crypto: undefined });
-    assert.deepEqual(Buffer.from(await reader.unlock()), bytes);
-    assert.equal(reader.content().filename, file.name);
-    assert.equal(reader.content().contentType, file.type);
-    await bare.verifyPayload(payload, '', bytes);
+    const reader = wrapper(html, undefined, { globals: { crypto: undefined } });
+    assert.deepEqual(Buffer.from(await reader.open()), bytes);
+    assert.equal((await decodePayload(reader.payload, '')).filename, file.name);
+    assert.equal((await decodePayload(reader.payload, '')).contentType, file.type);
+    await verifyPayload(payload, '', bytes);
   }
   const dir = await mkdtemp(join(tmpdir(), 'staticseal-no-crypto-'));
   try {
@@ -469,7 +429,7 @@ test('sealed envelopes omit crypto and work without Web Crypto, with and without
     assert.equal(cli.status, 0, cli.stderr);
     const reader = wrapper(await readFile(join(dir, 'sealed.html'), 'utf8'));
     assert.equal(reader.payload.v, 5);
-    assert.deepEqual(Buffer.from(await reader.unlock()), Buffer.alloc(8192));
+    assert.deepEqual(Buffer.from(await reader.open()), Buffer.alloc(8192));
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
@@ -480,7 +440,7 @@ test('gzip threshold, total-package savings and native API fallback', async () =
   const asHtml = (content, chunkSize = 65536) => {
     const ciphertext = Buffer.alloc(4 + content.header.length + content.bytes.length);
     return renderWrapper({ title: 'Size test', payload: { ...metadata, v: content.v, tag: '',
-      ciphertext: app.toBase64Chunks(ciphertext, chunkSize) } });
+      ciphertext: toBase64Chunks(ciphertext, chunkSize) } });
   };
   const incompressible = randomFillSync(Buffer.alloc(8192));
   const partlyCompressible = Buffer.concat([randomFillSync(Buffer.alloc(7000)), Buffer.alloc(1192)]);
@@ -504,17 +464,17 @@ test('gzip threshold, total-package savings and native API fallback', async () =
   }
   const fileInfo = { name: 'fallback.txt', type: 'text/plain' };
   for (const missing of ['CompressionStream', 'DecompressionStream']) {
-    const fallback = evaluate(source.slice(source.indexOf('<script>') + 8, source.lastIndexOf('</script>')),
-      'encryptBytes, renderWrapper', undefined, webcrypto, { [missing]: undefined });
-    const payload = await fallback.encryptBytes(Buffer.alloc(8192), 'test', 160000, fileInfo, 'passphrase');
+    const { html } = await createThroughUi(source, Buffer.alloc(8192), fileInfo,
+      { password: 'test', iterations: 160000, globals: { [missing]: undefined } });
+    const payload = wrapper(html).payload;
     assert.equal(payload.v, 2);
-    assert.ok(!fallback.renderWrapper({ title: 'Fallback', payload }).includes('DecompressionStream'));
+    assert.ok(!html.includes('DecompressionStream'));
   }
   const overLimit = Buffer.alloc(25 * 1024 * 1024 + 1);
   assert.equal((await prepareContent(overLimit, file, metadata, 65536)).v, 2);
 });
 
-test('compressed app and CLI envelopes restore 25 MiB exactly with both access and filename modes', async () => {
+test('compressed module-created and CLI envelopes restore 25 MiB exactly with both access and filename modes', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'staticseal-gzip-'));
   try {
     const bytes = Buffer.alloc(25 * 1024 * 1024);
@@ -522,9 +482,9 @@ test('compressed app and CLI envelopes restore 25 MiB exactly with both access a
     const file = { name: 'compressed.bin', type: 'application/octet-stream' };
     await writeFile(join(dir, file.name), bytes);
     for (const access of ['passphrase', 'sealed']) for (const privateName of [false, true]) {
-      const payload = await app.encryptBytes(bytes, 'test', 160000, file, access, privateName);
+      const payload = await makePayload(bytes, 'test', 160000, file, access, privateName);
       assert.equal(payload.v, access === 'sealed' ? 5 : 3);
-      const appHtml = app.renderWrapper({ title: 'Compressed', payload });
+      const appHtml = renderWrapper({ title: 'Compressed', payload });
       assert.ok(appHtml.includes('DecompressionStream'));
       assert.ok(!appHtml.includes('CompressionStream'));
       assert.ok(Buffer.byteLength(appHtml) < 200000);
@@ -539,18 +499,18 @@ test('compressed app and CLI envelopes restore 25 MiB exactly with both access a
         const reader = wrapper(html);
         const secret = reader.payload.unlockKey ?? 'test';
         assert.equal(reader.payload.v, access === 'sealed' ? 5 : 3);
-        assert.deepEqual(Buffer.from(await reader.unlock(secret)), bytes);
-        assert.equal(reader.content().filename, file.name);
-        assert.equal(reader.content().contentType, file.type);
-        await app.verifyPayload(reader.payload, secret, bytes);
+        assert.deepEqual(Buffer.from(await reader.open(secret)), bytes);
+        assert.equal((await decodePayload(reader.payload, 'test')).filename, file.name);
+        assert.equal((await decodePayload(reader.payload, 'test')).contentType, file.type);
+        await verifyPayload(reader.payload, secret, bytes);
         if (access === 'passphrase') {
-          await assert.rejects(reader.unlock('wrong-password'));
+          await assert.rejects(reader.open('wrong-password'));
           const changed = { ...reader.payload, v: 2 };
-          await assert.rejects(wrapper(html, changed).unlock(secret));
+          await assert.rejects(wrapper(html, changed).open(secret));
         } else {
           assert.ok(!html.includes('crypto.subtle'));
           assert.ok(!html.includes('PBKDF2'));
-          assert.deepEqual(Buffer.from(await reader.unlock('any-value')), bytes);
+          assert.deepEqual(Buffer.from(await reader.open('any-value')), bytes);
         }
         if (privateName) assert.ok(!html.includes(file.name));
       }
@@ -575,14 +535,10 @@ test('gzip restoration rejects damaged streams, invalid sizes and unsupported br
       await assert.rejects(inflate({ ...content, bytes: data }, createFormat().MAX_EXPANDED_BYTES));
     }
   }
-  const missing = evaluate(source.slice(source.indexOf('<script>') + 8, source.lastIndexOf('</script>')),
-    'inflateContent', undefined, webcrypto, { DecompressionStream: undefined });
-  await assert.rejects(missing.inflateContent(content, createFormat().MAX_EXPANDED_BYTES), /gzip decompression support/);
-  const payload = await app.encryptBytes(bytes, 'test', 160000,
+  const payload = await makePayload(bytes, 'test', 160000,
     { name: content.filename, type: content.contentType }, 'passphrase');
-  const html = app.renderWrapper({ title: 'Unsupported browser', payload });
-  const reader = evaluate(html.slice(html.lastIndexOf('<script>') + 8, html.lastIndexOf('</script>')),
-    'unlock', payload, webcrypto, { DecompressionStream: undefined, console: { warn() {} } });
+  const html = renderWrapper({ title: 'Unsupported browser', payload });
+  const reader = wrapper(html, undefined, { globals: { DecompressionStream: undefined } });
   reader.nodes.get('password').value = 'test';
   await reader.nodes.get('unlock-form').handlers.submit({ preventDefault() {} });
   assert.match(reader.nodes.get('status').textContent, /gzip decompression support/);
@@ -591,17 +547,17 @@ test('gzip restoration rejects damaged streams, invalid sizes and unsupported br
 for (const size of [10, 25]) {
   for (const access of ['passphrase', 'sealed']) {
    for (const privateName of [false, true]) {
-    test(`${size} MiB / ${access} / private name ${privateName}: app, CLI and both generated readers`, async () => {
+    test(`${size} MiB / ${access} / private name ${privateName}: shared modules, CLI and generated readers`, async () => {
       // Reserve 1 KiB for metadata/tag under the CLI binary package limit.
       const bytes = randomFillSync(Buffer.alloc(size * 1024 * 1024 - 1024));
       const password = 'regression-test-password';
-      const payload = await app.encryptBytes(bytes, password, 210000,
+      const payload = await makePayload(bytes, password, 210000,
         { name: 'large.bin', type: 'application/octet-stream' }, access, privateName);
       const packedSize = bytes.length + 4 + Buffer.byteLength(JSON.stringify({ filename: 'large.bin', contentType: 'application/octet-stream' }));
       assert.equal((payload.content || payload.ciphertext).length, Math.ceil(packedSize / 49152));
-      await app.verifyPayload(payload, password, bytes);
-      const html = app.renderWrapper({ title: 'Test', payload, sourceName: 'large.bin' });
-      assert.deepEqual(Buffer.from(await wrapper(html).unlock(password)), bytes);
+      await verifyPayload(payload, password, bytes);
+      const html = renderWrapper({ title: 'Test', payload, sourceName: 'large.bin' });
+      assert.deepEqual(Buffer.from(await wrapper(html).open(password)), bytes);
 
       const dir = await mkdtemp(join(tmpdir(), 'staticseal-test-'));
       try {
@@ -625,22 +581,22 @@ for (const size of [10, 25]) {
         }
         const secret = cli.payload.unlockKey ?? password;
         assert.equal((cli.payload.content || cli.payload.ciphertext).length, Math.ceil(packedSize / 49152));
-        assert.deepEqual(Buffer.from(await cli.unlock(secret)), bytes);
-        assert.equal(cli.content().filename, 'large.bin');
-        assert.equal(cli.content().contentType, 'application/octet-stream');
-        await app.verifyPayload(cli.payload, secret, bytes);
+        assert.deepEqual(Buffer.from(await cli.open(secret)), bytes);
+        assert.equal((await decodePayload(cli.payload, secret)).filename, 'large.bin');
+        assert.equal((await decodePayload(cli.payload, secret)).contentType, 'application/octet-stream');
+        await verifyPayload(cli.payload, secret, bytes);
         for (const [generated, data, key] of access === 'passphrase' ? [[html, payload, password], [cliHtml, cli.payload, secret]] : []) {
-          await assert.rejects(wrapper(generated).unlock('wrong-password'));
-          await assert.rejects(app.verifyPayload(data, 'wrong-password', bytes));
+          await assert.rejects(wrapper(generated).open('wrong-password'));
+          await assert.rejects(verifyPayload(data, 'wrong-password', bytes));
           for (const field of ['filename', 'contentType', 'access', 'unlockKey']) {
             const changed = { ...data, [field]: 'tampered' };
-            await assert.rejects(wrapper(generated, changed).unlock(key));
-            await assert.rejects(app.verifyPayload(changed, key, bytes));
+            await assert.rejects(wrapper(generated, changed).open(key));
+            await assert.rejects(verifyPayload(changed, key, bytes));
           }
           const changed = { ...data, tag: Buffer.alloc(16).toString('base64') };
-          await assert.rejects(wrapper(generated, changed).unlock(key));
+          await assert.rejects(wrapper(generated, changed).open(key));
         }
-        console.log(`${size} MiB ${access}: ${(payload.content || payload.ciphertext).length} chunks, app HTML ${Buffer.byteLength(html)} bytes`);
+        console.log(`${size} MiB ${access}: ${(payload.content || payload.ciphertext).length} chunks, module-created HTML ${Buffer.byteLength(html)} bytes`);
       } finally { await rm(dir, { recursive: true, force: true }); }
     });
    }
@@ -651,15 +607,15 @@ test('public metadata with HTML control sequences survives JSON embedding and wr
   const bytes = new Uint8Array([0, 1, 128, 255]);
   const names = ['<!--<script>.txt', '</script><script>alert(1)</script>.txt', 'a"&<>内部.txt'];
   for (const name of names) {
-    const payload = await app.encryptBytes(bytes, 'test', 210000,
+    const payload = await makePayload(bytes, 'test', 210000,
       { name, type: 'text/plain' }, 'passphrase');
-    const html = app.renderWrapper({ title: name, sourceName: name, payload });
+    const html = renderWrapper({ title: name, sourceName: name, payload });
     const embedded = html.match(/<script id="encrypted-payload" type="application\/json">([\s\S]*?)<\/script>/)[1];
     assert.ok(!embedded.includes('<'), 'JSON must not contain raw HTML control sequences');
     const reader = wrapper(html);
     assert.equal(reader.payload.filename, name);
-    assert.deepEqual(Buffer.from(await reader.unlock('test')), Buffer.from(bytes));
-    assert.equal(reader.content().filename, name);
+    assert.deepEqual(Buffer.from(await reader.open('test')), Buffer.from(bytes));
+    assert.equal((await decodePayload(reader.payload, 'test')).filename, name);
   }
   // Full HTML parsing for both generators is covered by build-browser-smoke.mjs.
 });
@@ -668,36 +624,34 @@ test('compact JSON preserves every payload value and template-like user text', a
   const { renderWrapper } = await import('../src/wrapper.mjs');
   const name = 'STATICSEAL_TITLE_STATICSEAL_READER_$&_$`_内部.txt';
   const bytes = new Uint8Array([0, 1, 128, 255]);
-  const payload = await app.encryptBytes(bytes, 'test', 210000,
+  const payload = await makePayload(bytes, 'test', 210000,
     { name, type: 'text/plain' }, 'passphrase');
-  for (const render of [app.renderWrapper, renderWrapper]) {
-    const html = render({ title: name, payload });
+  {
+    const html = renderWrapper({ title: name, payload });
     const json = html.match(/<script id="encrypted-payload" type="application\/json">([\s\S]*?)<\/script>/)[1].trim();
     assert.ok(!json.includes('\n'), 'Payload JSON has no formatting line breaks');
     assert.deepEqual(JSON.parse(json), JSON.parse(JSON.stringify(payload)));
     assert.ok(html.includes('<title>' + name.replace('&', '&amp;') + '</title>'));
-    assert.deepEqual(Buffer.from(await wrapper(html).unlock('test')), Buffer.from(bytes));
+    assert.deepEqual(Buffer.from(await wrapper(html).open('test')), Buffer.from(bytes));
   }
 });
 
 test('chunk boundaries, empty input, independently padded chunks and tag', () => {
-  for (const size of [0, 1, 2, 3, 68, 69, 70, 49151, 49152, 49153]) {
-    const bytes = Uint8Array.from({ length: size }, (_, i) => i & 255);
-    for (const width of [64, 65536]) {
-      const chunks = app.toBase64Chunks(bytes, width);
-      assert.deepEqual(app.fromBase64Chunks(chunks, new Uint8Array([1, 2])),
-        new Uint8Array([...bytes, 1, 2]));
-    }
+  assert.deepEqual(fromBase64Chunks([]), new Uint8Array(0));
+  assert.deepEqual(fromBase64Chunks(['YQ==', 'YmM=', 'ZGVm']), new TextEncoder().encode('abcdef'));
+  for (const size of [0, 1, 2, 3, 49_151, 49_152, 49_153]) {
+    const bytes = Buffer.alloc(size, 255);
+    const chunks = [bytes.subarray(0, 49152).toString('base64'), bytes.subarray(49152).toString('base64')];
+    assert.deepEqual(Buffer.from(fromBase64Chunks(chunks, new Uint8Array([1, 2]))), Buffer.concat([bytes, Buffer.from([1, 2])]));
   }
-  assert.deepEqual(app.fromBase64Chunks(['YQ==', 'YmM=', 'ZGVm']), new TextEncoder().encode('abcdef'));
 });
 
 test('every authenticated metadata field rejects tampering, including KDF parameters', async () => {
   const bytes = new Uint8Array([0, 1, 2, 255]);
   const key = 'test-secret';
-  const payload = await app.encryptBytes(bytes, key, 210000,
+  const payload = await makePayload(bytes, key, 210000,
     { name: 'small.bin', type: 'application/octet-stream' }, 'passphrase');
-  const html = app.renderWrapper({ title: 'Test', payload, sourceName: 'small.bin' });
+  const html = renderWrapper({ title: 'Test', payload, sourceName: 'small.bin' });
   for (const field of ['v', 'alg', 'kdf', 'iterations', 'encoding', 'filename', 'contentType',
     'access', 'unlockKey', 'salt', 'iv', 'display']) {
     let value = typeof payload[field] === 'number' ? payload[field] + 1 : 'tampered';
@@ -707,8 +661,8 @@ test('every authenticated metadata field rejects tampering, including KDF parame
       value = raw.toString('base64');
     }
     const changed = { ...payload, [field]: value };
-    await assert.rejects(app.verifyPayload(changed, key, bytes), field);
-    await assert.rejects(wrapper(html, changed).unlock(key), field);
+    await assert.rejects(verifyPayload(changed, key, bytes), field);
+    await assert.rejects(wrapper(html, changed).open(key), field);
   }
 });
 
@@ -725,28 +679,24 @@ test('five KDF choices, one derivation per creation, private metadata and genera
       return typeof value === 'function' ? value.bind(target) : value;
     } })
   };
-  const tracked = evaluate(source.slice(source.indexOf('<script>') + 8, source.lastIndexOf('</script>')),
-    'encryptBytes, renderWrapper', undefined, trackedCrypto);
   const file = { name: 'Quartalszahlen_内部.pdf', type: 'application/pdf' };
   for (const iterations of [160000, 210000, 420000, 600000, 1200000]) {
     const before = derivations;
     const bytes = new Uint8Array([0, 255, 128]);
-    const payload = await tracked.encryptBytes(bytes, 'test', iterations, file, 'passphrase', true);
+    const { html } = await createThroughUi(source, bytes, file,
+      { password: 'test', iterations, privateFilename: true, crypto: trackedCrypto });
+    const payload = wrapper(html).payload;
     assert.equal(derivations, before + 1);
     assert.equal(payload.iterations, iterations);
     assert.equal(payload.filename, undefined);
     assert.equal(payload.contentType, undefined);
-    const html = tracked.renderWrapper({ title: file.name, sourceName: file.name, payload });
     assert.ok(!html.includes(file.name));
-    assert.ok(!html.includes('generateSecret'));
     const reader = wrapper(html);
-    assert.throws(() => reader.unpackContent(new Uint8Array(0), { v: 1, encoding: 'bytes' }), /Unsupported payload format/);
-    assert.throws(() => reader.unpackContent(new Uint8Array(0), { v: 2, encoding: 'private-metadata' }), /Unsupported payload format/);
-    assert.deepEqual(Buffer.from(await reader.unlock('test')), Buffer.from(bytes));
-    assert.equal(reader.content().filename, file.name);
-    assert.equal(reader.content().contentType, file.type);
+    assert.deepEqual(Buffer.from(await reader.open('test')), Buffer.from(bytes));
+    assert.equal((await decodePayload(reader.payload, 'test')).filename, file.name);
+    assert.equal((await decodePayload(reader.payload, 'test')).contentType, file.type);
     // Repeated unlock must not modify authenticated outer metadata.
-    assert.deepEqual(Buffer.from(await reader.unlock('test')), Buffer.from(bytes));
+    assert.deepEqual(Buffer.from(await reader.open('test')), Buffer.from(bytes));
   }
 });
 
@@ -754,18 +704,17 @@ test('private metadata parser rejects malformed headers and unsupported versions
   const meta = { v: 2, encoding: 'metadata' };
   for (const bytes of [new Uint8Array(0), new Uint8Array([0, 0, 0, 8]), new Uint8Array([255,255,255,255]),
     new Uint8Array([0,0,0,2,123,125]), new Uint8Array([0,0,0,1,255])]) {
-    assert.throws(() => app.unpackContent(bytes, meta));
+    assert.throws(() => unpackContent(bytes, meta));
   }
   for (const unsupported of [{ v: 1, encoding: 'bytes' }, { v: 2, encoding: 'private-metadata' }, { v: 6, encoding: 'metadata' }]) {
-    assert.throws(() => app.unpackContent(new Uint8Array(0), unsupported), /Unsupported payload format/);
+    assert.throws(() => unpackContent(new Uint8Array(0), unsupported), /Unsupported payload format/);
   }
 });
 
 test('generator uses browser randomness without hashing, supports explicit adoption and cancellation', () => {
   let randomCalls = 0;
   const crypto = { getRandomValues(bytes) { randomCalls++; return webcrypto.getRandomValues(bytes); } };
-  const ui = evaluate(source.slice(source.indexOf('<script>') + 8, source.lastIndexOf('</script>')),
-    'generateSecret', undefined, crypto);
+  const ui = executeHtml(source, { crypto });
   const node = id => ui.nodes.get(id);
   const click = id => node(id).handlers.click();
   node('password').value = 'existing';
@@ -781,9 +730,7 @@ test('generator uses browser randomness without hashing, supports explicit adopt
   click('generate-password');
   click('cancel-generator');
   assert.equal(node('password').value, generated);
-  const broken = evaluate(source.slice(source.indexOf('<script>') + 8, source.lastIndexOf('</script>')),
-    'generateSecret', undefined, { subtle: webcrypto.subtle, getRandomValues() { throw new Error('unavailable'); } });
-  assert.throws(() => broken.generateSecret(), /unavailable/);
+  const broken = executeHtml(source, { crypto: { subtle: webcrypto.subtle, getRandomValues() { throw new Error('unavailable'); } } });
   broken.nodes.get('generate-password').handlers.click();
   assert.equal(broken.nodes.get('generator-result').hidden, true);
   assert.equal(broken.nodes.get('use-generated').disabled, true);
@@ -808,16 +755,14 @@ test('CLI derives only once per creation and accepts both additional KDF setting
       assert.equal(result.status, 0, result.stderr);
       const reader = wrapper(await readFile(join(dir, 'private.html'), 'utf8'));
       assert.equal(reader.payload.iterations, iterations);
-      assert.throws(() => reader.unpackContent(new Uint8Array(0), { v: 1, encoding: 'bytes' }), /Unsupported payload format/);
-      assert.throws(() => reader.unpackContent(new Uint8Array(0), { v: 2, encoding: 'private-metadata' }), /Unsupported payload format/);
-      assert.equal((await reader.unlock('test')).byteLength, 0);
-      assert.equal(reader.content().filename, 'empty.txt');
+      assert.equal((await reader.open('test')).byteLength, 0);
+      assert.equal((await decodePayload(reader.payload, 'test')).filename, 'empty.txt');
     }
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
 test('private filename UI neutralizes fields and captures privacy before asynchronous reads', async () => {
-  const ui = evaluate(source.slice(source.indexOf('<script>') + 8, source.lastIndexOf('</script>')), 'encryptBytes');
+  const ui = executeHtml(source);
   const node = id => ui.nodes.get(id);
   const file = { name: 'Secret-report.pdf', type: 'application/pdf', size: 3,
     async arrayBuffer() {
@@ -843,8 +788,8 @@ test('private filename UI neutralizes fields and captures privacy before asynchr
   const html = await ui.blobs[0].text();
   assert.ok(!html.includes(file.name));
   const reader = wrapper(html);
-  assert.deepEqual(Buffer.from(await reader.unlock('test')), Buffer.from([1,2,3]));
-  assert.equal(reader.content().filename, file.name);
+  assert.deepEqual(Buffer.from(await reader.open('test')), Buffer.from([1,2,3]));
+  assert.equal((await decodePayload(reader.payload, 'test')).filename, file.name);
 });
 
 
@@ -862,8 +807,8 @@ test('both generated viewers restrict previews and require PDF confirmation', as
       ['constructor', 'application/octet-stream', false], ['__proto__', 'application/octet-stream', false]
     ]) {
       const name = 'example.' + extension;
-      const payload = await app.encryptBytes(bytes, 'test', 210000, { name, type }, 'passphrase', true);
-      const appHtml = app.renderWrapper({ title: 'Test', payload, sourceName: name });
+      const payload = await makePayload(bytes, 'test', 210000, { name, type }, 'passphrase', true);
+      const appHtml = renderWrapper({ title: 'Test', payload, sourceName: name });
       await writeFile(join(dir, name), bytes);
       const cli = spawnSync(process.execPath, ['bin/self-encrypt.mjs', '--in', join(dir, name),
         '--out', join(dir, 'locked.html'), '--private-filename', '--stdin-password'],
@@ -871,7 +816,7 @@ test('both generated viewers restrict previews and require PDF confirmation', as
       assert.equal(cli.status, 0, cli.stderr);
       for (const html of [appHtml, await readFile(join(dir, 'locked.html'), 'utf8')]) {
         const reader = wrapper(html);
-        reader.renderBlobViewer(await reader.unlock('test'));
+        await reader.open('test');
         const viewer = reader.nodes.get('vc');
         assert.equal(viewer.innerHTML.includes('<img '), preview, extension);
         assert.ok(!viewer.innerHTML.includes('<iframe'), extension);
@@ -927,9 +872,9 @@ test('generated text/Markdown previews preserve bytes, bound output and handle e
     ['invalid.txt', Buffer.from([0xff, 0xff]), null],
     ['note.md', Buffer.from('# Hello\n\n<script>alert(1)</script>'), null]
   ]) {
-    const payload = await app.encryptBytes(bytes, 'test', 160000, { name, type: 'application/octet-stream' }, 'sealed', true);
-    const reader = wrapper(app.renderWrapper({ title: 'Test', payload, sourceName: name }));
-    reader.renderBlobViewer(await reader.unlock('test'));
+    const payload = await makePayload(bytes, 'test', 160000, { name, type: 'application/octet-stream' }, 'sealed', true);
+    const reader = wrapper(renderWrapper({ title: 'Test', payload, sourceName: name }));
+    await reader.open('test');
     const html = reader.nodes.get('vc').innerHTML;
     assert.deepEqual(Buffer.from(await reader.blobs[0].arrayBuffer()), bytes);
     if (expected !== null) assert.equal(previewText(reader.nodes.get('tp')), expected);
@@ -962,9 +907,9 @@ test('small highlighter preserves source text and escapes active content in supp
     assert.ok(!/<(script|img|div)\b/i.test(highlighted));
     for (const kind of kinds) assert.ok(highlighted.includes('class="s-' + kind + '"'), name + ': ' + kind);
     const bytes = Buffer.from(text);
-    const payload = await app.encryptBytes(bytes, 'test', 160000, { name, type }, 'sealed');
-    const reader = wrapper(app.renderWrapper({ title: 'Test', payload, sourceName: name }));
-    reader.renderBlobViewer(await reader.unlock('test'));
+    const payload = await makePayload(bytes, 'test', 160000, { name, type }, 'sealed');
+    const reader = wrapper(renderWrapper({ title: 'Test', payload, sourceName: name }));
+    await reader.open('test');
     assert.equal(previewText(reader.nodes.get('tp')), text);
     assert.ok(reader.nodes.get('tp').innerHTML.includes('s-'));
     assert.deepEqual(Buffer.from(await reader.blobs[0].arrayBuffer()), bytes);
@@ -1006,16 +951,59 @@ test('preview review regressions: arbitrary filenames, heading text and bounded 
 
 test('built app and CLI renderer emit matching markup and payload with one logo', async () => {
   const { renderWrapper } = await import('../src/wrapper.mjs');
-  const payload = await app.encryptBytes(new Uint8Array([1, 2, 3]), 'test', 210000,
-    { name: '<!--<script>.txt', type: 'text/plain' }, 'passphrase');
-  const options = { title: 'Test', sourceName: '<!--<script>.txt', payload };
+  const bytes = new Uint8Array([1, 2, 3]);
+  const file = { name: '<!--<script>.txt', type: 'text/plain' };
+  const { html: appHtml } = await createThroughUi(source, bytes, file, { password: 'test' });
+  const payload = wrapper(appHtml).payload;
+  const options = { title: '<!--<script>', payload };
   // Factory-local names can differ after minifying the app and CLI modules.
   // Both actual reader scripts are exercised above; compare their surrounding HTML.
   const normalize = html => html.replace(/<script>[\s\S]*?<\/script>/, '<script>READER</script>');
-  const appHtml = app.renderWrapper(options);
   assert.equal(normalize(appHtml), normalize(renderWrapper(options)));
   assert.equal((appHtml.match(/<svg id="seal-logo"/g) || []).length, 1);
   assert.equal((source.match(/<svg id="seal-logo"/g) || []).length, 1);
+});
+
+test('built creator and reader forms cover raw/gzip, access, privacy and both display modes', async () => {
+  for (const compressed of [false, true]) for (const page of [false, true]) for (const encrypted of [false, true]) {
+    const bytes = Buffer.from('<!doctype html><meta charset="utf-8"><p>Grüße 🔒</p>' + (compressed ? 'Repeated text.\n'.repeat(2048) : ''));
+    const password = encrypted ? 'form-roundtrip' : '';
+    const privateFilename = compressed !== page;
+    const { html } = await createThroughUi(source, bytes, { name: 'original.html', type: 'text/html' },
+      { password, privateFilename, htmlPage: page });
+    const reader = wrapper(html);
+    assert.equal(reader.payload.v, (encrypted ? 2 : 4) + Number(compressed));
+    assert.equal(reader.payload.display, page ? 'page' : undefined);
+    assert.equal(reader.payload.filename, privateFilename ? undefined : 'original.html');
+    if (privateFilename) assert.ok(!html.includes('original.html'));
+    assert.deepEqual(Buffer.from(await reader.open(password)), bytes);
+    await verifyPayload(reader.payload, password, bytes);
+    if (encrypted) {
+      const failed = wrapper(html);
+      await assert.rejects(failed.open('wrong-password'));
+      assert.equal(failed.blobs.length, 0, 'rejected opening must not expose a downloadable file');
+      assert.equal(failed.document.writtenHtml, undefined, 'rejected opening must not write a page');
+    }
+  }
+});
+
+test('browser UI keeps warning, confirmation and rejection boundaries before file reading', async () => {
+  for (const size of [5 * 1024 * 1024 - 1, 5 * 1024 * 1024, 10 * 1024 * 1024,
+    10 * 1024 * 1024 + 1, 25 * 1024 * 1024, 25 * 1024 * 1024 + 1]) {
+    const ui = executeHtml(source), node = id => ui.nodes.get(id);
+    let reads = 0, confirmations = 0;
+    node('source-file').files = [{ name: 'boundary.txt', type: 'text/plain', size,
+      async arrayBuffer() { reads++; return new Uint8Array([65]).buffer; } }];
+    ui.window.confirm = () => { confirmations++; return false; };
+    node('source-file').handlers.change();
+    if (size < 5 * 1024 * 1024) assert.equal(node('status').textContent, '');
+    else assert.equal(node('status').dataset.kind, 'error');
+    await node('encrypt-form').handlers.submit({ preventDefault() {} });
+    assert.equal(confirmations, size > 10 * 1024 * 1024 && size <= 25 * 1024 * 1024 ? 1 : 0);
+    assert.equal(reads, size <= 10 * 1024 * 1024 ? 1 : 0);
+    if (size > 25 * 1024 * 1024) assert.match(node('status').textContent, /25 MiB/);
+    else if (size > 10 * 1024 * 1024) assert.match(node('status').textContent, /cancelled/);
+  }
 });
 
 test('CLI accepts 128 MiB HTML and rejects original, binary and HTML budget overflow without overwriting output', async () => {
@@ -1034,7 +1022,7 @@ test('CLI accepts 128 MiB HTML and rejects original, binary and HTML budget over
       const reader = wrapper(await readFile(outputPath, 'utf8'));
       assert.equal(reader.payload.display, 'page');
       assert.equal(reader.payload.v, access === '--no-password' ? 5 : 3);
-      assert.deepEqual(Buffer.from(await reader.unlock('test')), bytes);
+      assert.deepEqual(Buffer.from(await reader.open('test')), bytes);
     }
     await writeFile(outputPath, 'keep existing output');
     await truncate(inputPath, 128 * 1024 * 1024 + 1);

@@ -13,7 +13,7 @@
 
   async function unlock(password) {
     unlockedContent = unpackContent(await decodeContent(payload, password, fromBase64, fromBase64Chunks), payload);
-    STATICSEAL_RESTORE;
+    STATICSEAL_RESTORE(unlockedContent);
     return unlockedContent.bytes;
   }
 

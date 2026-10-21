@@ -34,7 +34,7 @@ payloads created by the CLI at commit
 repeat counts and test passphrase are included. They were generated using an
 archived checkout, `compat.html`, `--iterations 100000`, title `Format compatibility`,
 public filenames and the default chunk width, varying `--stdin-password`/
-`--no-password` and `--html-page`. Current app and CLI-template readers must restore
+`--no-password` and `--html-page`. Imported helpers and generated CLI-template readers must restore
 their exact bytes and metadata. Separate literal AAD tests freeze field order,
 undefined-field omission and the historical `unlockKey` position; detached-factory
 tests exercise readable and minified helpers without module scope.
@@ -71,13 +71,47 @@ its original/final-HTML checks; browser limits remain browser policy. The build
 inlines `creation.mjs` only into the creator app. Neither shared reader factories
 nor serialized recipient readers contain package-preparation functions.
 
-Tests compare readable and built preparation against historical metadata for all
+Tests compare preparation through module imports against historical metadata for all
 four versions, both display modes and both privacy settings. They assert raw
 buffer identity and instrument real Node encryption to require three separate
 updates and reject concatenating the original plaintext. The representative size
 measurement gives a 42,085-byte app (+250 bytes from AP2); all eight CLI-generated
 readers, their payload JSON sizes and wrapper sizes are unchanged from AP2.
 These checks do not measure process peak memory or replace real-browser validation.
+
+## Tests independent of private implementation names
+
+Shared creation, compression, format parsing, authenticated metadata and preview
+logic are tested through module imports. Test-only payload fixtures combine those
+exports with Node Web Crypto; they are not presented as executions of the browser
+creator. A few detached readable/minified factory checks retain coverage of the
+standalone serialization contract through exported module functions.
+
+Integration tests execute unchanged script elements from built app/reader HTML.
+They submit forms and observe errors, download Blobs, written page text and viewer
+output. No local functions or variables are exposed by inserting source text into
+minified code. App form cases cover raw/gzip, both access modes, private/public
+filenames, both display modes, KDF derivation counts and UI choices captured before
+asynchronous reads. Warning/confirmation/rejection decisions are checked before
+reading using declared file sizes in the DOM stub; those boundary tests are not
+memory-capacity measurements. Real CLI and generated reader cases retain 10/25 MiB
+roundtrips, tampered fields/tags, wrong passwords, malformed headers, padding,
+gzip errors, encoding checks and original/binary/HTML limit rejection.
+
+The production minifier has no test-specific reserved names. The optional reader
+restore marker carries its content argument, so wrapper generation uses the
+minified local identifier rather than relying on a fixed variable name. Reader
+factories still preserve the scopes needed for serialization. The separate
+real-browser harness also uses only forms and DOM/Blob APIs; it copies built
+creator and CLI files unchanged and adds no private-function hooks.
+
+AP4 validation (2026-10-21): `npm run check` passed all 41 Node tests. The separate
+Chromium 155 smoke run passed all 21 cases and reached DONE, including creation
+and opening through the forms, 10/25 MiB exact file Blobs, previews, page scripts,
+CSS, interaction and CLI fragment links. It does not establish Firefox, Safari,
+mobile, OS download-manager or peak-memory behavior. The size command reports
+41,488 bytes for the built app (-597 from AP3) and reader savings of 204–304 bytes;
+all eight payload JSON sizes remain unchanged. No baseline or size budget changed.
 
 ## Large files and provisional limits
 
@@ -123,8 +157,8 @@ cannot prevent out-of-memory failures on constrained devices.
 
 ### Regression checks and remaining browser validation
 
-Run `npm test` (also included in `npm run check`). The dependency-free tests run
-actual app code and scripts extracted from generated HTML with **Node Web Crypto
+Run `npm test` (also included in `npm run check`). Tests import shared modules,
+execute selected built app/reader scripts through forms with **Node Web Crypto
 and a minimal DOM stub**, and invoke the real CLI. They cover 10 and 25 MiB in both
 passphrase and sealed modes, public/private filenames, byte-exact roundtrips, chunk
 boundaries, wrong passwords, modified authenticated metadata and modified tags.
@@ -154,13 +188,18 @@ node test/build-browser-smoke.mjs /tmp/staticseal-browser-smoke
 python3 -m http.server 8766 --bind 127.0.0.1 --directory /tmp/staticseal-browser-smoke
 ```
 
-Open `http://127.0.0.1:8766/smoke.html` and check for twelve PASS lines and DONE.
-The harness uses the actual app and generated wrapper scripts in browser iframes;
-its test hooks are absent from production output.
+Open `http://127.0.0.1:8766/smoke.html` and check for 21 PASS lines and DONE.
+The harness uses unmodified app and generated wrapper HTML in browser iframes.
+It creates files through the actual app form, opens readers through their forms,
+and observes original file Blobs at the browser's object-URL API. It suppresses
+creator download clicks so running the tests does not save test files.
 Two cases parse complete app/CLI wrappers with a public filename containing
 HTML script-parser control sequences and verify decryption and the restored name.
 Six preview cases verify escaped HTML/JSON, Markdown and code colors, text
 truncation and its end notice, dense-code fallback, and SVG rendering in a real DOM.
+Four cases create and restore 10/25 MiB files. The remaining cases check the page
+choice UI and all eight app/CLI × raw/gzip × passphrase/sealed page combinations,
+including CSS, scripts, interaction, full content and CLI fragment navigation.
 
 
 ## Private filenames and passphrase generation
@@ -312,8 +351,8 @@ function inlining, variable collapsing, scope hoisting and property mangling are
 disabled. This preserves the standalone function boundaries needed by `.toString()`.
 The app and CLI both emit minified readers. Their local variable names can differ;
 the regression suite executes both actual readers and compares their surrounding
-HTML and payload values. A small list of helper names remains stable for disposable
-test instrumentation; production output contains no test hooks.
+HTML and payload values. Local names can be freely mangled; no test-specific names
+are reserved and production output contains no test hooks.
 
 The wrapper's HTML, CSS and script have separate editable sources. Generated
 `wrapper-template.mjs` and `reader-factories.mjs` keep the CLI free of runtime

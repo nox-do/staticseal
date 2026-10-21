@@ -185,9 +185,12 @@ Build dependencies are not needed to run the CLI or the generated files.
 The browser app and generated wrappers remain standalone HTML files.
 
 `npm run check` checks generated files, CLI help, and the regression suite.
-Tests exercise the app, CLI and generated wrapper code using Node Web Crypto
-and DOM stubs, including 10/25 MiB files. They do not establish full browser or
-mobile compatibility.
+Tests import shared modules directly and invoke the real CLI. Selected integration
+checks run unchanged built app/reader scripts through forms with Node Web Crypto
+and DOM stubs, including large-file roundtrips. These stubs are not real browser
+checks and do not establish browser or mobile compatibility. The separate
+[browser smoke harness](docs/technical-notes.md#regression-checks-and-remaining-browser-validation)
+uses unchanged app and reader HTML in real browser iframes.
 
 `npm run --silent measure:size` rebuilds the app and reports its UTF-8 size plus
 eight real CLI-generated readers as JSON. Fixed fixtures cover passphrase/no

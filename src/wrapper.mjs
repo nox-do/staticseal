@@ -26,8 +26,8 @@ export function renderWrapper({ title, payload, minimal = false, buttonLabel }) 
       .replace('STATICSEAL_DECODER', () => format.isUnencryptedVersion(payload.v)
         ? '((p,k,b,c)=>c(p.content))'
         : '(' + createCrypto.toString() + ')().decryptPayload')
-      .replace('STATICSEAL_RESTORE;', () => format.isCompressedVersion(payload.v)
-        ? 'unlockedContent=await (' + inflateContent.toString() + ')(unlockedContent,' + format.MAX_EXPANDED_BYTES + ');' : '')
+      .replace(/STATICSEAL_RESTORE\(([$\w]+)\);/, (_, content) => format.isCompressedVersion(payload.v)
+        ? content + '=await (' + inflateContent.toString() + ')(' + content + ',' + format.MAX_EXPANDED_BYTES + ');' : '')
       .replace('STATICSEAL_FORMAT', () => '(' + createFormat.toString() + ')')
       .replace('STATICSEAL_VIEWER', () => isPage
         ? '(()=>(' + createPageViewer.toString() + ')().renderHtmlPage)'
