@@ -20,18 +20,20 @@ function previewText(node) {
 // Execute the actual app/generated script with Node Web Crypto and a minimal DOM stub.
 // This tests cryptographic interoperability, not browser rendering or memory limits.
 const source = await readFile(new URL('../index.html', import.meta.url), 'utf8');
-function evaluate(script, exports, payload, crypto = webcrypto, globals = {}) {
+function evaluate(script, exports, payload, crypto = webcrypto, globals = {}, absentIds = []) {
   const nodes = new Map();
   const downloads = [];
   const blobs = [];
   const document = { body: { append() {} }, createElement() {
     return { click() { downloads.push(this.download); }, remove() {} };
   }, getElementById(id) {
+    if (absentIds.includes(id)) return null;
     if (!nodes.has(id)) nodes.set(id, { value: '', dataset: {},
       outerHTML: id === 'seal-logo' ? source.match(/<svg id="seal-logo"[\s\S]*?<\/svg>/)[0] : '',
       textContent: id === 'encrypted-payload' ? JSON.stringify(payload) : '',
       attributes: {}, setAttribute(name, value) { this.attributes[name] = value; }, getBoundingClientRect() { return { left: 0, top: 0 }; },
-      handlers: {}, addEventListener(type, handler) { this.handlers[type] = handler; }, focus() {}, select() {}, remove() {}, querySelector() { return null; } });
+      isConnected: true, handlers: {}, addEventListener(type, handler) { this.handlers[type] = handler; },
+      focus() { document.activeElement = this; }, select() { this.selected = true; }, remove() { this.isConnected = false; }, querySelector() { return null; } });
     return nodes.get(id);
   } };
   const context = vm.createContext({ document, crypto, TextEncoder, TextDecoder,
@@ -49,7 +51,7 @@ const app = evaluate(source.slice(source.indexOf('<script>') + 8, source.lastInd
 function wrapper(html, replacement) {
   const payload = replacement ?? JSON.parse(html.match(/<script id="encrypted-payload" type="application\/json">([\s\S]*?)<\/script>/)[1]);
   const script = html.slice(html.lastIndexOf('<script>') + 8, html.lastIndexOf('</script>'));
-  return { payload, ...evaluate(script, 'unlock, renderBlobViewer, fromBase64Chunks, unpackContent, content: () => unlockedContent, confirmWith: (fn) => { window.confirm = fn; }', payload) };
+  return { payload, ...evaluate(script, 'unlock, renderBlobViewer, fromBase64Chunks, unpackContent, content: () => unlockedContent, confirmWith: (fn) => { window.confirm = fn; }', payload, webcrypto, {}, html.includes('id="password"') ? [] : ['password']) };
 }
 
 test('minimal opening screens and custom button labels preserve access modes and errors', async () => {
@@ -73,6 +75,8 @@ test('minimal opening screens and custom button labels preserve access modes and
         await readFile(join(dir, 'output.html'), 'utf8')]) {
         assert.ok(html.includes('<h1>Impressum</h1>'));
         assert.ok(html.includes('id="wrapper-brand"'));
+        assert.equal(html.includes('id="password"'), access === 'passphrase');
+        assert.equal(html.includes('<label for="password">'), access === 'passphrase');
         assert.ok(html.includes('type="submit">' + safeLabel + '</button>'));
         assert.ok(!html.includes('<script>bad()'));
         assert.ok(!html.includes('Anyone with this file can open it.'));
@@ -94,6 +98,35 @@ test('minimal opening screens and custom button labels preserve access modes and
     assert.equal(invalid.status, 1);
     assert.match(invalid.stderr, /Missing value for --button-label/);
   } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('opening errors focus the available control without requiring a password field', async () => {
+  const bytes = Buffer.alloc(8192, 255);
+  for (const access of ['sealed', 'passphrase']) for (const page of [false, true]) {
+    const file = { name: page ? 'page.html' : 'file.txt', type: page ? 'text/html' : 'text/plain' };
+    const content = page ? Buffer.from('<!doctype html><p>' + 'x'.repeat(8192)) : bytes;
+    const payload = await app.encryptBytes(content, 'test', 160000, file, access, false, page);
+    const html = app.renderWrapper({ title: 'Opening error', payload });
+    const script = html.slice(html.lastIndexOf('<script>') + 8, html.lastIndexOf('</script>'));
+    for (const damaged of [false, true]) for (const disconnected of [false, true]) {
+      const data = damaged ? { ...payload, encoding: 'invalid' } : payload;
+      const reader = evaluate(script, 'unlock', data, webcrypto,
+        { DecompressionStream: undefined, console: { warn() {} } }, access === 'sealed' ? ['password'] : []);
+      const button = reader.nodes.get('unlock-button');
+      const input = reader.nodes.get('password');
+      if (input) input.value = 'test';
+      button.isConnected = !disconnected;
+      if (input) input.isConnected = !disconnected;
+      await reader.nodes.get('unlock-form').handlers.submit({ preventDefault() {} });
+      assert.equal(button.disabled, false);
+      assert.equal(reader.nodes.get('status').dataset.kind, 'error');
+      assert.match(reader.nodes.get('status').textContent, damaged
+        ? access === 'sealed' ? /Damaged file/ : /Wrong passphrase/
+        : /gzip decompression support/);
+      assert.equal(reader.document.activeElement, disconnected ? undefined : input || button);
+      if (input && !disconnected) assert.equal(input.selected, true);
+    }
+  }
 });
 
 test('optional CLI themes affect only opening-screen CSS and preserve payload roundtrips', async () => {
@@ -559,7 +592,6 @@ test('five KDF choices, one derivation per creation, private metadata and genera
     const html = tracked.renderWrapper({ title: file.name, sourceName: file.name, payload });
     assert.ok(!html.includes(file.name));
     assert.ok(!html.includes('generateSecret'));
-    assert.ok(!html.includes('entropy-pad'));
     const reader = wrapper(html);
     assert.throws(() => reader.unpackContent(new Uint8Array(0), { v: 1, encoding: 'bytes' }), /Unsupported payload format/);
     assert.throws(() => reader.unpackContent(new Uint8Array(0), { v: 2, encoding: 'private-metadata' }), /Unsupported payload format/);
@@ -582,18 +614,15 @@ test('private metadata parser rejects malformed headers and unsupported versions
   }
 });
 
-test('generator uses browser randomness, supports explicit adoption and cancellation', async () => {
+test('generator uses browser randomness without hashing, supports explicit adoption and cancellation', () => {
   let randomCalls = 0;
-  const crypto = { getRandomValues(bytes) { randomCalls++; return webcrypto.getRandomValues(bytes); }, subtle: webcrypto.subtle };
+  const crypto = { getRandomValues(bytes) { randomCalls++; return webcrypto.getRandomValues(bytes); } };
   const ui = evaluate(source.slice(source.indexOf('<script>') + 8, source.lastIndexOf('</script>')),
     'generateSecret', undefined, crypto);
   const node = id => ui.nodes.get(id);
   const click = id => node(id).handlers.click();
   node('password').value = 'existing';
   click('generate-password');
-  assert.equal(node('finish-generator').disabled, true);
-  for (let i = 0; i < 24; i++) node('entropy-pad').handlers.keydown({ type: 'keydown', key: 'a', timeStamp: i });
-  await click('finish-generator');
   assert.equal(randomCalls, 1);
   assert.match(node('generated-password').value, /^[A-Za-z0-9_-]{22}$/);
   assert.equal(node('password').value, 'existing');
@@ -607,7 +636,11 @@ test('generator uses browser randomness, supports explicit adoption and cancella
   assert.equal(node('password').value, generated);
   const broken = evaluate(source.slice(source.indexOf('<script>') + 8, source.lastIndexOf('</script>')),
     'generateSecret', undefined, { subtle: webcrypto.subtle, getRandomValues() { throw new Error('unavailable'); } });
-  await assert.rejects(broken.generateSecret([]));
+  assert.throws(() => broken.generateSecret(), /unavailable/);
+  broken.nodes.get('generate-password').handlers.click();
+  assert.equal(broken.nodes.get('generator-result').hidden, true);
+  assert.equal(broken.nodes.get('use-generated').disabled, true);
+  assert.match(broken.nodes.get('generator-status').textContent, /unavailable/);
 });
 
 test('CLI derives only once per creation and accepts both additional KDF settings', async () => {

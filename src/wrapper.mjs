@@ -14,6 +14,9 @@ export function renderWrapper({ title, payload, minimal = false, buttonLabel }) 
     COPY: minimal ? '' : '<p>' + (hasPassphrase
       ? 'Enter the passphrase to open this ' + subject + ' in your browser.'
       : 'Open this ' + subject + ' in your browser. No passphrase needed.') + '</p>',
+    PASSWORD_FIELD: hasPassphrase
+      ? '<label for="password">Passphrase</label><input id="password" name="password" type="password" placeholder="Passphrase" autofocus>'
+      : '',
     BUTTON: escapeHtml(buttonLabel ?? (hasPassphrase ? 'Unlock file' : 'Open sealed file')),
     // Keep HTML script-parser control sequences out of the JSON data block.
     PAYLOAD: JSON.stringify(payload).replaceAll('<', '\\u003c'),
@@ -30,6 +33,6 @@ export function renderWrapper({ title, payload, minimal = false, buttonLabel }) 
         : '(e=>(' + createFileViewer.toString() + ')(e,' + createPreview.toString() + '))')
   };
   // Callback replacement preserves literal $ sequences in filenames and payloads.
-  return wrapperTemplate.replace(/STATICSEAL_(TITLE|LOGO|KICKER|COPY|BUTTON|PAYLOAD|READER)\b/g,
+  return wrapperTemplate.replace(/STATICSEAL_(TITLE|LOGO|KICKER|COPY|PASSWORD_FIELD|BUTTON|PAYLOAD|READER)\b/g,
     (_, key) => values[key]);
 }

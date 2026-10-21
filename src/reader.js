@@ -43,14 +43,16 @@
       status.textContent = error.name === 'NotSupportedError' ? error.message
         : sealedMode ? 'Damaged file or unsupported format.' : 'Wrong passphrase or damaged file.';
       button.disabled = false;
-      input.select();
-      input.focus();
+      if (input?.isConnected) {
+        input.select();
+        input.focus();
+      } else if (button?.isConnected) {
+        button.focus();
+      }
     }
   });
 
   if (payload.access === 'sealed') {
-    input.remove();
-    form.querySelector('label')?.remove();
     status.textContent = STATICSEAL_INITIAL_STATUS;
   }
 })();

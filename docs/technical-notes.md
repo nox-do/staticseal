@@ -109,13 +109,12 @@ node bin/self-encrypt.mjs --in report.pdf --out protected_file.html --private-fi
 Choose a neutral `--out` path yourself; private mode ignores `--title` and uses a
 neutral wrapper title. Source/output paths printed by the local CLI are not hidden.
 
-The optional web-only generator mixes 24 mouse, touch or keyboard events with
-32 fresh bytes from `crypto.getRandomValues()` using SHA-256. It formats 16 digest
-bytes as a 22-character Base64url secret. Event count measures interaction, not
-entropy; secure browser randomness is mandatory. Copy or explicitly adopt the
-result into both fields. Cancel preserves existing passphrases. Generator code and
-interaction data are never included in generated wrappers. There is no enforced
-passphrase-strength policy.
+The optional web-only generator directly formats 16 fresh bytes from
+`crypto.getRandomValues()` as a 22-character Base64url secret (128 bits).
+One click generates and displays the result; copy or explicitly adopt it into
+both fields. Cancel preserves existing passphrases. Secure browser randomness is
+mandatory; no user-event collection or hashing is needed. Generator code is never
+included in generated wrappers. There is no enforced passphrase-strength policy.
 
 PBKDF2 options are 160k, 210k (unchanged default), 420k, 600k and 1.2M. The CLI still
 defaults to 210k and accepts higher values via `--iterations`. Higher values increase
@@ -193,8 +192,11 @@ No-password creation and reading work without Web Crypto; they do not generate a
 random key or call encryption/decryption APIs. The CLI follows the same policy.
 Already distributed HTML remains independent and retains its original decoder.
 
-The movement area shows a bounded SVG trail (up to 48 points), solely as input
-feedback. It is not an entropy meter and adds no code to generated wrappers.
+Wrapper generation includes the passphrase label and input only in passphrase
+mode. Sealed wrappers contain only the opening button in the form. On failure,
+the reader selects and focuses a connected passphrase input, or focuses the
+connected opening button when no input is available. Successful opening adds no
+focus handling.
 
 
 ## Compact offline previews

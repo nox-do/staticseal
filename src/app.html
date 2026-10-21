@@ -267,7 +267,7 @@ input[type="checkbox"] {
   vertical-align: -3px;
   margin-right: 7px;
 }
-input:focus-visible, select:focus-visible, button:focus-visible, summary:focus-visible, a:focus-visible, #entropy-pad:focus-visible {
+input:focus-visible, select:focus-visible, button:focus-visible, summary:focus-visible, a:focus-visible {
   outline: 3px solid #27665d40;
   outline-offset: 3px;
 }
@@ -355,27 +355,6 @@ button:disabled {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 12px;
-}
-#entropy-pad {
-  position: relative;
-  overflow: hidden;
-  min-height: 110px;
-  border: 1px dashed #a2bbb4;
-  padding: 24px;
-  touch-action: none;
-  user-select: none;
-  border-radius: 8px;
-  background: #edf3f1;
-  font-size: 13px;
-}
-#entropy-pad svg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  color: var(--accent);
-  opacity: .65;
 }
 .guide {
   padding-top: 12px;
@@ -592,8 +571,7 @@ button:disabled {
         <div class="row">
           <button id="generate-password" type="button">Generate a strong passphrase</button>
           <div id="generator-panel" hidden>
-            <p class="meta">Move inside the area, draw with your finger, or focus it and press keys. Your input is mixed with secure browser randomness and stays on this device.</p>
-            <div id="entropy-pad" tabindex="0" role="group" aria-label="Randomness input: move, draw or press keys">Move, draw or press keys here<svg aria-hidden="true"><polyline id="entropy-trail" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" /></svg></div>
+            <p class="meta">Generated locally using secure browser randomness.</p>
             <p id="generator-status" class="meta" role="status" aria-live="polite"></p>
             <div id="generator-result" hidden>
               <label for="generated-password">Generated passphrase (keep a copy before sending)</label>
@@ -604,7 +582,6 @@ button:disabled {
               </div>
             </div>
             <div class="generator-actions">
-              <button id="finish-generator" type="button" disabled>Create passphrase</button>
               <button id="cancel-generator" type="button">Cancel</button>
             </div>
           </div>
@@ -846,93 +823,35 @@ button:disabled {
   // Creation UI only: none of this generator code is emitted in the wrapper.
   const generatorPanel = $('generator-panel');
   const generatorResult = $('generator-result');
-  const entropyPad = $('entropy-pad');
   const generatorStatus = $('generator-status');
   const generatedPassword = $('generated-password');
-  const finishGenerator = $('finish-generator');
   const copyGenerated = $('copy-generated');
   const useGenerated = $('use-generated');
-  const entropyTrail = $('entropy-trail');
-  let trail = [];
-  const clearTrail = () => { trail = []; entropyTrail.setAttribute('points', ''); };
-  let samples = [];
-  let generatorSession = 0;
-  let collecting = false;
 
-  const generateSecret = async (events) => {
-    // User events are supplemental; security must not depend on their unpredictability.
-    const random = crypto.getRandomValues(new Uint8Array(32));
-    const extra = encoder.encode(JSON.stringify(events));
-    const input = new Uint8Array(random.length + extra.length);
-    input.set(random);
-    input.set(extra, random.length);
-    const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', input));
+  const generateSecret = () => {
+    const random = crypto.getRandomValues(new Uint8Array(16));
+    const secret = toBase64(random).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
     random.fill(0);
-    input.fill(0);
-    return toBase64(digest.subarray(0, 16)).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
+    return secret;
   };
   const resetGenerator = () => {
-    generatorSession += 1;
-    clearTrail();
-    collecting = false;
-    samples = [];
     generatedPassword.value = '';
     generatorResult.hidden = true;
-    finishGenerator.hidden = false;
-    finishGenerator.disabled = true;
     copyGenerated.disabled = true;
     useGenerated.disabled = true;
   };
   $('generate-password').addEventListener('click', () => {
     resetGenerator();
     generatorPanel.hidden = false;
-    if (!crypto.subtle || !crypto.getRandomValues) {
-      generatorStatus.textContent = 'Secure browser randomness is unavailable. Enter your own passphrase.';
-      return;
-    }
-    collecting = true;
-    generatorStatus.textContent = 'Add some movement or key presses (0/24). This measures interaction, not entropy.';
-    entropyPad.focus();
-  });
-  const collectSample = (event) => {
-    if (!collecting || samples.length >= 24 || event.repeat) return;
-    if (event.type === 'keydown' && (event.key === 'Tab' || event.key === 'Escape')) return;
-    if (event.type === 'keydown') event.preventDefault?.();
-    samples.push([event.timeStamp, event.clientX ?? 0, event.clientY ?? 0]);
-    generatorStatus.textContent = 'Input collected: ' + samples.length + '/24. Secure browser randomness is always included.';
-    finishGenerator.disabled = samples.length < 24;
-  };
-  const collectPointer = (event) => {
-    if (!collecting) return;
-    const bounds = entropyPad.getBoundingClientRect();
-    trail.push((event.clientX - bounds.left) + ',' + (event.clientY - bounds.top));
-    if (trail.length > 48) trail.shift();
-    entropyTrail.setAttribute('points', trail.join(' '));
-    collectSample(event);
-  };
-  entropyPad.addEventListener('pointerleave', clearTrail);
-  entropyPad.addEventListener('pointercancel', clearTrail);
-  entropyPad.addEventListener('pointermove', collectPointer);
-  entropyPad.addEventListener('pointerdown', (event) => { clearTrail(); collectPointer(event); });
-  entropyPad.addEventListener('keydown', collectSample);
-  finishGenerator.addEventListener('click', async () => {
-    if (samples.length < 24 || !collecting) return;
-    collecting = false;
-    finishGenerator.disabled = true;
-    const session = generatorSession;
     try {
-      const secret = await generateSecret(samples);
-      if (session !== generatorSession) return;
-      generatedPassword.value = secret;
+      generatedPassword.value = generateSecret();
       generatorResult.hidden = false;
-      finishGenerator.hidden = true;
       copyGenerated.disabled = false;
       useGenerated.disabled = false;
       generatorStatus.textContent = 'Ready. Save the passphrase separately; it is not included in the protected file.';
+      generatedPassword.focus();
     } catch {
-      if (session === generatorSession) generatorStatus.textContent = 'Generation failed. Try again or enter your own passphrase.';
-    } finally {
-      if (session === generatorSession) samples = [];
+      generatorStatus.textContent = 'Secure browser randomness is unavailable. Enter your own passphrase.';
     }
   });
   copyGenerated.addEventListener('click', async () => {
