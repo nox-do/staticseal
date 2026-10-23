@@ -1,9 +1,12 @@
 # Build outputs
-index.html
-fatseal.html
+/index.html
+/fatseal.html
 src/logo.mjs
 src/wrapper-template.mjs
 src/reader-factories.mjs
+examples/fatseal/demo-*.html
+examples/jupyter/bericht.html
+examples/jupyter/sealed.html
 
 # Exact HTML build markers and compact CSS (quotes/leading zeroes affect output size)
 src/*.html

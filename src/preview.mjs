@@ -1,6 +1,6 @@
 // Small, offline preview helpers. Markdown intentionally supports a basic subset.
 // All source HTML is escaped; only explicitly permitted link schemes are emitted.
-export function createPreview() {
+export function createFileTypes() {
   const textExtensions =
     'txt log csv tsv json jsonl xml yaml yml toml ini cfg conf env css scss less js mjs cjs jsx ts tsx py rb php sh bash zsh fish sql c h cpp hpp cs java go rs swift kt lua r vue svelte html htm xhtml tex diff patch'.split(
       ' '
@@ -45,6 +45,10 @@ export function createPreview() {
       return 'text';
     return 'download';
   }
+  return { inferContentType, previewKind };
+}
+
+export function createCodePreview() {
   const escape = value =>
     value.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
   function codeLanguage(filename, type = '') {
@@ -105,6 +109,12 @@ export function createPreview() {
     }
     return output + escape(text.slice(start));
   }
+  return { codeLanguage, highlightCode };
+}
+
+export function createMarkdownPreview(highlightCode) {
+  const escape = value =>
+    value.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
   function inline(text, depth = 0) {
     if (depth > 8) return escape(text);
     const pattern =
@@ -191,5 +201,10 @@ export function createPreview() {
     flush();
     return output.split('<', 8194).length > 8193 ? plain() : output;
   }
-  return { inferContentType, previewKind, renderMarkdown, codeLanguage, highlightCode };
+  return { renderMarkdown };
+}
+
+export function createPreview() {
+  const code = createCodePreview();
+  return { ...createFileTypes(), ...code, ...createMarkdownPreview(code.highlightCode) };
 }

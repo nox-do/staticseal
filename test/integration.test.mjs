@@ -10,9 +10,19 @@ import { wrapper, createThroughUi } from './helpers/html-harness.mjs';
 const source = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 
 for (const access of ['passphrase', 'sealed']) {
-  test(`25 MiB minus 1 KiB / ${access}: built app, CLI and raw reader roundtrips`, async () => {
-    // Reserve space for metadata/tag under the CLI binary package limit.
-    const bytes = randomFillSync(Buffer.alloc(25 * 1024 * 1024 - 1024));
+  test(`18 MiB raw / ${access}: built app, CLI and raw reader roundtrips`, async () => {
+    // Base64, metadata and the reader must fit inside 25 MiB of final HTML.
+    const oversized = randomFillSync(Buffer.alloc(20 * 1024 * 1024));
+    await assert.rejects(
+      createThroughUi(
+        source,
+        oversized,
+        { name: 'large.bin', type: 'application/octet-stream' },
+        { password: access === 'sealed' ? '' : 'test' }
+      ),
+      /HTML package exceeds the 25 MiB/
+    );
+    const bytes = oversized.subarray(0, 18 * 1024 * 1024);
     const password = access === 'sealed' ? '' : 'regression-test-password';
     const file = { name: 'large.bin', type: 'application/octet-stream' };
     const { html: appHtml } = await createThroughUi(source, bytes, file, { password });
@@ -35,6 +45,7 @@ for (const access of ['passphrase', 'sealed']) {
       const packedSize =
         bytes.length + 4 + Buffer.byteLength(JSON.stringify({ filename: file.name, contentType: file.type }));
       for (const html of [appHtml, await readFile(join(dir, 'locked.html'), 'utf8')]) {
+        assert.ok(Buffer.byteLength(html) <= 25 * 1024 * 1024);
         const reader = wrapper(html);
         assert.equal(reader.payload.v, access === 'sealed' ? 4 : 2);
         assert.equal((reader.payload.content || reader.payload.ciphertext).length, Math.ceil(packedSize / 49152));
@@ -49,15 +60,25 @@ for (const access of ['passphrase', 'sealed']) {
 test('browser and CLI roundtrip matrix preserves privacy, viewer isolation and standalone readers', async () => {
   const factories = await import('../src/reader-factories.mjs');
   assert.deepEqual(Object.keys(factories).sort(), [
+    'createCodePreview',
     'createCollection',
+    'createCollectionReader',
     'createCollectionViewer',
     'createCrypto',
+    'createFileTypes',
     'createFileViewer',
     'createFormat',
+    'createFramedPageViewer',
+    'createMarkdownPreview',
     'createPageViewer',
     'createPreview',
+    'createZip',
     'inflateContent',
-    'isHtmlFile'
+    'isHtmlFile',
+    'openWebsite',
+    'renderImagePreview',
+    'renderPdfPreview',
+    'renderTextPreview'
   ]);
   const readOnlyCrypto = {
     getRandomValues() {

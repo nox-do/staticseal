@@ -1,22 +1,26 @@
 // Creator only: selected File objects are the entire resource authority. Never fetch URLs.
 import { process as parseSrcset, serialize as serializeSrcset } from './srcset-parser.mjs';
+import { PREPARED_MAX_BYTES } from './limits.mjs';
+import { openWebsite } from './reader-factories.mjs';
 
 export function inspectHtmlSelection(files) {
   const html = files.filter(file => /\.html?$/i.test(file.path));
   const indexes = html.filter(file => /(^|\/)index\.html?$/i.test(file.path));
-  const entry = indexes.length === 1 ? indexes[0] : indexes.length === 0 && html.length === 1 ? html[0] : null;
+  const roots = indexes.filter(file =>
+    html.every(other => other.path.startsWith(file.path.slice(0, file.path.lastIndexOf('/') + 1)))
+  );
+  const entry = roots.length === 1 ? roots[0] : indexes.length === 0 && html.length === 1 ? html[0] : null;
   return { entry, ambiguous: html.length > 0 && !entry };
 }
 
 export async function embedSelectedHtml(
   files,
   entry,
-  { parse = text => new DOMParser().parseFromString(text, 'text/html'), signal } = {}
+  { parse = text => new DOMParser().parseFromString(text, 'text/html'), signal, onSize, inspectedFrames } = {}
 ) {
   const base = 'https://staticseal.invalid/';
-  const limit = 25 * 1024 * 1024;
+  const limit = PREPARED_MAX_BYTES;
   const pathUrl = path => new URL(path.split('/').map(encodeURIComponent).join('/'), base).href;
-  const entryUrl = pathUrl(entry.path);
   // The selected top-level folder containing the entry is the website root.
   // Additional loose files must not change that root.
   const root = entry.path.includes('/') ? pathUrl(entry.path.split('/')[0] + '/') : base;
@@ -26,10 +30,16 @@ export async function embedSelectedHtml(
     warnings = new Set();
   const cache = new Map(),
     prepared = new Map();
+  const pageFiles = [entry],
+    pages = [],
+    pageIndexes = new Map([[entry, 0]]),
+    links = [];
+  let websiteCharacters = 0;
   let steps = 0;
   const check = () => signal?.throwIfAborted();
   const sizeCheck = size => {
-    if (size > limit) throw new Error('Prepared content exceeds the 25 MiB total limit.');
+    if (size > limit) throw new Error('Prepared content exceeds the 128 MiB working limit.');
+    onSize?.(size);
   };
   const checkpoint = async () => {
     check();
@@ -43,6 +53,10 @@ export async function embedSelectedHtml(
     const url = pathUrl(file.path);
     byUrl.set(url, byUrl.has(url) ? null : file);
   });
+  for (const file of files.filter(file => /(^|\/)index\.html?$/i.test(file.path))) {
+    const url = pathUrl(file.path.replace(/index\.html?$/i, ''));
+    byUrl.set(url, byUrl.has(url) ? null : file);
+  }
   const toBase64 = bytes => {
     let text = '';
     for (let offset = 0; offset < bytes.length; offset += 32768)
@@ -80,6 +94,9 @@ export async function embedSelectedHtml(
     }[file.path.split('.').pop().toLowerCase()] ||
     'application/octet-stream';
   function find(ref, from) {
+    if (/^blob:/i.test(ref)) warnings.add('Non-portable blob reference: ' + ref);
+    if (/^data:(?:text\/(?:html|css)|application\/xhtml\+xml|image\/svg\+xml)[;,]/i.test(ref))
+      warnings.add('Embedded document dependencies need manual checking.');
     if (!ref || /^(?:data:|blob:|#)/i.test(ref)) return null;
     let url;
     try {
@@ -98,7 +115,8 @@ export async function embedSelectedHtml(
     url.hash = '';
     url.search = '';
     let file = byUrl.get(url.href);
-    if (file === undefined && flat) {
+    if (file === undefined) file = byUrl.get(url.href + '/');
+    if (file === undefined && flat && !url.pathname.endsWith('/')) {
       try {
         file = byUrl.get(pathUrl(decodeURIComponent(url.pathname.split('/').pop())));
       } catch {
@@ -205,84 +223,153 @@ export async function embedSelectedHtml(
       bytes[0] === 255 && bytes[1] === 254 ? 'utf-16le' : bytes[0] === 254 && bytes[1] === 255 ? 'utf-16be' : 'utf-8',
       { fatal: true }
     ).decode(bytes);
-  const doc = parse(decodeHtml(await read(entry)));
-  let htmlCharacters = doc.documentElement.outerHTML.length + 16;
-  function attribute(element, name, value) {
-    htmlCharacters += value.length - (element.getAttribute(name) || '').length;
-    sizeCheck(htmlCharacters);
-    element.setAttribute(name, value);
-  }
-  if (doc.querySelector('meta[http-equiv="Content-Security-Policy" i]'))
-    warnings.add('The page security policy may block embedded resources. Check the prepared HTML.');
-  const baseElement = doc.querySelector('base[href]');
-  const htmlBase = baseElement ? new URL(baseElement.getAttribute('href'), entryUrl).href : entryUrl;
-  if (baseElement) warnings.add('Page declares a base URL; links may still require the original location.');
-  for (const element of doc.querySelectorAll(
-    'img[src],input[type="image"][src],video[poster],image[href],image[xlink\\:href],link[rel~="icon"][href]'
-  )) {
-    const attr = element.hasAttribute('poster')
-      ? 'poster'
-      : element.hasAttribute('src')
-        ? 'src'
-        : element.hasAttribute('href')
-          ? 'href'
-          : 'xlink:href';
-    attribute(element, attr, await data(element.getAttribute(attr), htmlBase));
-  }
-  for (const element of doc.querySelectorAll('img[srcset],source[srcset]')) {
-    const candidates = parseSrcset(element.getAttribute('srcset'));
-    for (const candidate of candidates) candidate.url = await data(candidate.url, htmlBase);
-    attribute(element, 'srcset', serializeSrcset(candidates));
-  }
-  for (const element of doc.querySelectorAll('link[rel~="stylesheet"][href]')) {
-    const ref = element.getAttribute('href');
-    const value = await data(ref, htmlBase, new Set(), 'css');
-    if (value !== ref) {
-      attribute(element, 'href', value);
-      element.removeAttribute('integrity');
+  async function page(pageFile) {
+    const doc = parse(decodeHtml(await read(pageFile)));
+    websiteCharacters += doc.documentElement.outerHTML.length + 16;
+    sizeCheck(websiteCharacters);
+    function attribute(element, name, value) {
+      const delta = value.length - (element.getAttribute(name) || '').length;
+      websiteCharacters += delta;
+      sizeCheck(websiteCharacters);
+      element.setAttribute(name, value);
     }
+    if (doc.querySelector('meta[http-equiv="Content-Security-Policy" i]'))
+      warnings.add('The page security policy may block embedded resources. Check the prepared HTML.');
+    const baseElement = doc.querySelector('base[href]');
+    const pageUrl = pathUrl(pageFile.path);
+    const htmlBase = baseElement ? new URL(baseElement.getAttribute('href'), pageUrl).href : pageUrl;
+    if (baseElement) warnings.add('Page declares a base URL; links may still require the original location.');
+    for (const element of doc.querySelectorAll(
+      'img[src],input[type="image"][src],video[poster],image[href],image[xlink\\:href],link[rel~="icon"][href]'
+    )) {
+      const attr = element.hasAttribute('poster')
+        ? 'poster'
+        : element.hasAttribute('src')
+          ? 'src'
+          : element.hasAttribute('href')
+            ? 'href'
+            : 'xlink:href';
+      attribute(element, attr, await data(element.getAttribute(attr), htmlBase));
+    }
+    for (const element of doc.querySelectorAll('img[srcset],source[srcset]')) {
+      const candidates = parseSrcset(element.getAttribute('srcset'));
+      for (const candidate of candidates) candidate.url = await data(candidate.url, htmlBase);
+      attribute(element, 'srcset', serializeSrcset(candidates));
+    }
+    for (const element of doc.querySelectorAll('link[rel~="stylesheet"][href]')) {
+      const ref = element.getAttribute('href');
+      const value = await data(ref, htmlBase, new Set(), 'css');
+      if (value !== ref) {
+        attribute(element, 'href', value);
+        element.removeAttribute('integrity');
+      }
+    }
+    for (const element of doc.querySelectorAll('style')) {
+      const value = await css(element.textContent, htmlBase);
+      const delta = value.length - element.textContent.length;
+      websiteCharacters += delta;
+      sizeCheck(websiteCharacters);
+      element.textContent = value;
+    }
+    for (const element of doc.querySelectorAll('[style]'))
+      attribute(element, 'style', await css(element.getAttribute('style'), htmlBase));
+    for (const element of doc.querySelectorAll(
+      'script[src],iframe[src],frame[src],audio[src],video[src],source[src],track[src],object[data],embed[src],use[href],use[xlink\\:href]'
+    )) {
+      unsupported(
+        element.getAttribute('src') ||
+          element.getAttribute('data') ||
+          element.getAttribute('href') ||
+          element.getAttribute('xlink:href'),
+        htmlBase
+      );
+    }
+    for (const element of doc.querySelectorAll('iframe[srcdoc]')) {
+      if (!inspectedFrames?.has(element.getAttribute('srcdoc')))
+        retainAll('Embedded frame dependencies need manual checking.');
+    }
+    for (const element of doc.querySelectorAll('a[href]')) {
+      const ref = element.getAttribute('href');
+      // Ordinary external hyperlinks are navigation, not page dependencies.
+      if (/^(?:[a-z][\w+.-]*:|\/\/)/i.test(ref) && !element.hasAttribute('download')) continue;
+      const resolved = find(ref, htmlBase);
+      if (!resolved) continue;
+      const target = resolved.file;
+      if (
+        !element.hasAttribute('download') &&
+        (/\.html?$/i.test(target.path) || /^text\/html(?:;|$)/i.test(type(target)))
+      ) {
+        if (!pageIndexes.has(target)) {
+          pageIndexes.set(target, pageFiles.length);
+          pageFiles.push(target);
+          used.add(target);
+        }
+        attribute(element, 'data-seal-page', String(pageIndexes.get(target)));
+        attribute(element, 'href', resolved.fragment || '#');
+      } else {
+        links.push({ element, ref, htmlBase, target, attribute });
+      }
+    }
+    if (doc.querySelector('script[type="module"]')) warnings.add('JavaScript module dependencies are not bundled.');
+    for (const meta of doc.querySelectorAll('meta[charset],meta[http-equiv="Content-Type" i]')) meta.remove();
+    const charset = doc.createElement('meta');
+    charset.setAttribute('charset', 'utf-8');
+    doc.head.prepend(charset);
+    check();
+    return doc;
   }
-  for (const element of doc.querySelectorAll('style')) {
-    const value = await css(element.textContent, htmlBase);
-    htmlCharacters += value.length - element.textContent.length;
-    sizeCheck(htmlCharacters);
-    element.textContent = value;
+  const documents = [];
+  for (const file of pageFiles) {
+    documents.push(await page(file));
   }
-  for (const element of doc.querySelectorAll('[style]'))
-    attribute(element, 'style', await css(element.getAttribute('style'), htmlBase));
-  for (const element of doc.querySelectorAll(
-    'script[src],iframe[src],audio[src],video[src],source[src],track[src],object[data],embed[src],use[href],use[xlink\\:href]'
-  )) {
-    unsupported(
-      element.getAttribute('src') ||
-        element.getAttribute('data') ||
-        element.getAttribute('href') ||
-        element.getAttribute('xlink:href'),
-      htmlBase
-    );
-  }
-  for (const element of doc.querySelectorAll('a[href]')) {
-    const ref = element.getAttribute('href');
-    // Ordinary external hyperlinks are navigation, not page dependencies.
-    if (/^(?:[a-z][\w+.-]*:|\/\/)/i.test(ref) && !element.hasAttribute('download')) continue;
-    const resolved = find(ref, htmlBase);
-    if (!resolved) continue;
-    if (element.hasAttribute('download') && used.has(resolved.file)) {
-      // A stylesheet download must keep the original bytes, not its transformed
-      // contents. Other non-embedded attachments stay separate in the collection.
+  // Resolve attachment links after every page's resources are known, independent
+  // of link order. Downloads use original bytes, including transformed CSS.
+  for (const { element, ref, htmlBase, target, attribute } of links) {
+    if (used.has(target) || pageIndexes.has(target))
       attribute(element, 'href', await data(ref, htmlBase, new Set(), 'raw'));
-    } else {
-      retained.add(resolved.file);
+    else {
+      retained.add(target);
       warnings.add('Link target kept as a separate file; link is not rewritten: ' + ref);
     }
   }
-  if (doc.querySelector('script[type="module"]')) warnings.add('JavaScript module dependencies are not bundled.');
-  for (const meta of doc.querySelectorAll('meta[charset],meta[http-equiv="Content-Type" i]')) meta.remove();
-  const charset = doc.createElement('meta');
-  charset.setAttribute('charset', 'utf-8');
-  doc.head.prepend(charset);
-  check();
-  const bytes = new TextEncoder().encode('<!DOCTYPE html>\n' + doc.documentElement.outerHTML);
-  sizeCheck(bytes.length);
-  return { bytes, used, retained, warnings: Array.from(warnings) };
+  let total = 0;
+  for (const doc of documents) {
+    const text = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+    const bytes = new TextEncoder().encode(text);
+    total += bytes.length;
+    sizeCheck(total);
+    pages.push(text);
+  }
+  let bytes = new TextEncoder().encode(pages[0]);
+  if (pages.length > 1) {
+    // Store shared data URLs once; expand only the page being shown. Choose a
+    // marker absent from the original HTML so literal page text cannot collide.
+    const assets = [];
+    let prefix = 'seal-resource:',
+      token = 0;
+    while (pages.some(text => text.includes(prefix))) {
+      await checkpoint();
+      prefix = 'seal-resource:' + ++token + ':';
+    }
+    for (const value of [...new Set(prepared.values())].sort((a, b) => b.length - a.length)) {
+      await checkpoint();
+      if (value.length < 128 || pages.filter(text => text.includes(value)).length < 2) continue;
+      const marker = prefix + assets.length + ';';
+      for (let n = 0; n < pages.length; n++) pages[n] = pages[n].split(value).join(marker);
+      assets.push(value);
+    }
+    const shell = parse(
+      '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;height:100%;overflow:hidden}iframe{display:block;width:100%;height:100%;border:0}</style></head><body></body></html>'
+    );
+    shell.title = documents[0].title;
+    const icon = documents[0].querySelector('link[rel~="icon"]');
+    if (icon) shell.head.append(icon.cloneNode(true));
+    const script = shell.createElement('script');
+    script.textContent =
+      '(' + openWebsite.toString() + ')(' + JSON.stringify([pages, assets, prefix]).replaceAll('<', '\\u003c') + ');';
+    shell.body.append(script);
+    bytes = new TextEncoder().encode('<!DOCTYPE html>\n' + shell.documentElement.outerHTML);
+    sizeCheck(bytes.length);
+  }
+  return { bytes, used, retained, pageCount: pages.length, warnings: Array.from(warnings) };
 }

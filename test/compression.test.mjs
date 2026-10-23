@@ -70,24 +70,26 @@ test('gzip threshold, total-package savings and native API fallback', async () =
     assert.equal(payload.v, 2);
     assert.ok(!html.includes('DecompressionStream'));
   }
-  const overLimit = Buffer.alloc(25 * 1024 * 1024 + 1);
-  assert.equal((await prepareContent(overLimit, file, metadata, 65536)).v, 2);
+  const overLimit = Buffer.alloc(128 * 1024 * 1024 + 1);
+  await assert.rejects(prepareContent(overLimit, file, metadata, 65536), /128 MiB working limit/);
 });
 
-test('compressed module-created and CLI envelopes restore exactly 25 MiB in both access modes', async () => {
+test('browser and CLI compress and restore 100 MiB in both access modes', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'staticseal-gzip-'));
   try {
-    const bytes = Buffer.alloc(25 * 1024 * 1024);
+    const bytes = Buffer.alloc(100 * 1024 * 1024);
     for (let i = 0; i < bytes.length; i++) bytes[i] = i & 255;
     const file = { name: 'compressed.bin', type: 'application/octet-stream' };
     await writeFile(join(dir, file.name), bytes);
     for (const access of ['passphrase', 'sealed']) {
-      const payload = await makePayload(bytes, 'test', 160000, file, access, true);
+      const { html: appHtml } = await createThroughUi(source, bytes, file, {
+        password: access === 'sealed' ? '' : 'test'
+      });
+      const payload = wrapper(appHtml).payload;
       assert.equal(payload.v, access === 'sealed' ? 5 : 3);
-      const appHtml = renderWrapper({ title: 'Compressed', payload });
       assert.ok(appHtml.includes('DecompressionStream'));
       assert.ok(!appHtml.includes('CompressionStream'));
-      assert.ok(Buffer.byteLength(appHtml) < 200000);
+      assert.ok(Buffer.byteLength(appHtml) < 1024 * 1024);
       const cli = spawnSync(
         process.execPath,
         [

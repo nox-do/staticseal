@@ -68,6 +68,81 @@ await writeFile(
 );
 await writeFile(
   join(out, 'index.html'),
-  '<!doctype html><meta charset="utf-8"><title>Browser checks</title><h1>Browser checks</h1><p><a href="smoke.html">Staticseal</a></p><p><a href="fatseal-smoke.html">FatSeal</a></p>'
+  '<!doctype html><meta charset="utf-8"><title>Browser checks</title><h1>Browser checks</h1><p><a href="smoke.html">Staticseal</a></p><p><a href="fatseal-smoke.html">FatSeal</a></p><p><a href="readers.html">Specialized readers</a></p>'
 );
 console.log(out);
+
+// Exercise specialized readers in a real browser, including the one-page warning view.
+const { makePayload } = await import('./helpers/payload.mjs');
+const { packCollection } = await import('../src/collection.mjs');
+const { renderWrapper } = await import('../src/wrapper.mjs');
+const readerCases = [];
+for (const [kind, files] of [
+  [
+    'image',
+    [
+      {
+        filename: 'pixel.svg',
+        contentType: 'image/svg+xml',
+        bytes: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"/>')
+      }
+    ]
+  ],
+  [
+    'markdown',
+    [
+      {
+        filename: 'note.md',
+        contentType: 'text/markdown',
+        bytes: Buffer.from('# Heading\n\n```json\n{"ok":true}\n```')
+      }
+    ]
+  ],
+  [
+    'framed',
+    [
+      {
+        filename: 'report.html',
+        contentType: 'text/html',
+        page: true,
+        bytes: Buffer.from(
+          '<h1>Report</h1><a href="#end">Jump</a><div style="height:900px"></div><h2 id="end">End</h2>'
+        )
+      }
+    ]
+  ],
+  [
+    'collection',
+    [
+      { filename: 'note.txt', contentType: 'text/plain', bytes: Buffer.from('First entry') },
+      {
+        filename: 'image.svg',
+        contentType: 'image/svg+xml',
+        bytes: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"/>')
+      }
+    ]
+  ]
+]) {
+  const collection = kind === 'framed' || kind === 'collection';
+  const payload = await makePayload(
+    collection ? packCollection(files) : files[0].bytes,
+    '',
+    100000,
+    {
+      name: collection ? 'files.seal' : files[0].filename,
+      type: collection ? 'application/vnd.staticseal.collection' : files[0].contentType
+    },
+    'sealed',
+    true,
+    false,
+    collection
+  );
+  readerCases.push({ kind, html: renderWrapper({ payload, files }) });
+}
+await writeFile(
+  join(out, 'readers.html'),
+  '<!doctype html><title>Reader checks running</title><h1>Specialized reader checks</h1><div id="results"></div><script>window.readerCases=' +
+    JSON.stringify(readerCases).replaceAll('<', '\\u003c') +
+    ';</script><script src="readers.js"></script>'
+);
+await writeFile(join(out, 'readers.js'), await readFile(new URL('./readers-smoke-runner.js', import.meta.url)));

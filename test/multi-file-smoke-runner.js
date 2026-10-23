@@ -91,12 +91,67 @@
     check($('source-file').multiple && $('source-folder').webkitdirectory, 'separate file and folder selection');
     check(!$('private-filename'), 'filename privacy is automatic with no checkbox');
     check($('source-folder').getBoundingClientRect().height <= 60, 'folder picker stays inside its own control');
+    const dropZone = $('source-file').closest('.file-picker');
+    check(dropZone.contains($('source-folder')), 'both pickers are inside the drop zone');
+    const drop = items => {
+      const event = new Event('drop', { bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'dataTransfer', { value: { items, files: [] } });
+      dropZone.dispatchEvent(event);
+      check(event.defaultPrevented, 'drop prevents native file navigation');
+    };
+    const directory = (name, batches) => ({
+      name,
+      isDirectory: true,
+      createReader: () => {
+        let next = 0;
+        return { readEntries: resolve => resolve(batches[next++] || []) };
+      }
+    });
+    const droppedFile = (name, text, type) => ({
+      name,
+      isFile: true,
+      file: resolve => resolve(file(name, text, type))
+    });
+    drop([
+      {
+        kind: 'file',
+        webkitGetAsEntry: () =>
+          directory('dropped-site', [
+            [droppedFile('index.html', '<link rel="stylesheet" href="css/main.css"><h1>Dropped</h1>', 'text/html')],
+            [directory('css', [[droppedFile('main.css', 'h1{color:green}', 'text/css')]])]
+          ])
+      }
+    ]);
+    await wait(() => $('selection-list').children.length === 2 && !$('encrypt-button').disabled, 'directory drop');
+    check(
+      $('selection-list').textContent.includes('dropped-site/css/main.css') &&
+        $('selection-report').textContent.includes('1 resource(s) embedded'),
+      'directory drop preserves nested paths and reads all directory batches'
+    );
+    check(!document.querySelector('[aria-label^="Move up"]'), 'website selection has no ordering controls');
+    drop([
+      {
+        kind: 'file',
+        webkitGetAsEntry: () => ({
+          name: 'unreadable',
+          isDirectory: true,
+          createReader: () => ({ readEntries: (_, reject) => reject(new Error('denied')) })
+        })
+      }
+    ]);
+    await wait(() => $('status').textContent.includes('denied'), 'directory read error');
+    check($('selection-list').children.length === 2, 'failed drop preserves the previous selection');
+    await clear();
+    drop([{ kind: 'file', getAsFile: () => file('dropped.txt', 'Dropped file', 'text/plain') }]);
+    await wait(() => $('selection-list').children.length === 1 && !$('encrypt-button').disabled, 'plain file drop');
+    check(!!document.querySelector('[aria-label^="Move up"]'), 'independent files retain ordering controls');
+    await clear();
     const png = Uint8Array.from(
       atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=='),
       c => c.charCodeAt(0)
     );
     const source =
-      '<!doctype html><html><head><title>Folder test</title><link rel="stylesheet" href="css/main.css"></head><body><h1>HTML page</h1><img src="images/logo.png"><picture><source srcset="images/logo.png 1x, images/logo.png 2x"><img src="images/logo.png"></picture><script>window.HTML_IMPORT_EXECUTED=true;window.addEventListener("load",()=>parent.postMessage({probe:"html-ready",image:document.querySelector("img").naturalWidth,color:getComputedStyle(document.querySelector("h1")).color},"*"));<' +
+      '<!doctype html><html><head><title>Folder test</title><link rel="stylesheet" href="css/main.css"></head><body><h1>HTML page</h1><a id="jump" href="#local">Jump</a><div style="height:700px"></div><h2 id="local">Local anchor</h2><img src="images/logo.png"><picture><source srcset="images/logo.png 1x, images/logo.png 2x"><img src="images/logo.png"></picture><script>window.HTML_IMPORT_EXECUTED=true;window.addEventListener("load",()=>parent.postMessage({probe:"html-ready",image:document.querySelector("img").naturalWidth,color:getComputedStyle(document.querySelector("h1")).color},"*"));<' +
       '/script></body></html>';
     await choose(
       [
@@ -107,7 +162,7 @@
           '@import "nested.css";body{background:url(../images/logo.png)}@font-face{font-family:Demo;src:url(../font.woff2)}p:before{content:"url(fake.png)"}/* url(fake2.png) */',
           'text/css'
         ),
-        file('site/css/nested.css', 'h1{color:green}', 'text/css'),
+        file('site/css/nested.css', 'h1{color:green}.vb{display:none}', 'text/css'),
         file('site/font.woff2', 'font test', 'font/woff2'),
         file('site/notes.txt', 'Original notes ä', 'text/plain')
       ],
@@ -136,15 +191,54 @@
       collection.doc.getElementById('choose-file').options.length === 2,
       'embedded assets are omitted from collection navigation'
     );
+    const toolbar = collection.doc.querySelector('.vb');
     check(
-      collection.doc.querySelector('#vc iframe').getAttribute('sandbox').includes('allow-scripts'),
-      'HTML page has a separate sandboxed preview'
+      ['prev-file', 'next-file', 'choose-file', 'download-all'].every(id =>
+        toolbar.contains(collection.doc.getElementById(id))
+      ) && toolbar.getBoundingClientRect().height < 60,
+      'collection navigation and downloads share one compact desktop toolbar'
     );
+    check(
+      collection.win.getComputedStyle(collection.doc.getElementById('download-all')).backgroundColor ===
+        collection.win.getComputedStyle(collection.doc.querySelector('.va a')).backgroundColor,
+      'individual and ZIP downloads use matching button styles'
+    );
+    const pageFrame = collection.doc.querySelector('#vc iframe');
+    check(!pageFrame.hasAttribute('sandbox'), 'HTML page keeps its iframe without sandbox restrictions');
     await wait(() => collection.messages.some(message => message.probe === 'html-ready'), 'prepared HTML renders');
     const pageState = collection.messages.find(message => message.probe === 'html-ready');
     check(
       pageState.image > 0 && pageState.color === 'rgb(0, 128, 0)',
-      'sandboxed HTML renders its embedded image and nested stylesheet'
+      'HTML renders its embedded image and nested stylesheet'
+    );
+    const pageDoc = pageFrame.contentDocument;
+    pageDoc.getElementById('jump').click();
+    await wait(() => pageDoc.defaultView.scrollY > 0, 'single-page fragment scrolls inside its preview');
+    check(
+      pageFrame.contentDocument === pageDoc && !pageDoc.querySelector('iframe, #unlock-form'),
+      'single-page anchor keeps its document and never embeds the package again'
+    );
+    check(
+      pageDoc.querySelector('h1').textContent === 'HTML page' &&
+        pageFrame.contentWindow.parent.document === collection.doc,
+      'viewer and HTML page can access each other directly'
+    );
+    const localLink = pageDoc.createElement('a');
+    localLink.href = 'notes.txt';
+    localLink.textContent = 'Notes';
+    pageDoc.body.append(localLink);
+    let intercepted = false;
+    pageDoc.addEventListener('click', event => {
+      if (event.target === localLink) {
+        event.preventDefault();
+        intercepted = true;
+      }
+    });
+    localLink.click();
+    check(intercepted, 'viewer can intercept page links without injected scripts or postMessage');
+    check(
+      collection.win.getComputedStyle(collection.doc.querySelector('.vb')).display !== 'none',
+      'page CSS remains isolated from viewer navigation and downloads'
     );
     collection.doc.getElementById('next-file').click();
     check(
@@ -163,6 +257,114 @@
     zipEvidence.textContent = JSON.stringify({ base64: btoa(String.fromCharCode(...zipBytes)) });
     document.body.append(zipEvidence);
     collection.frame.remove();
+    await clear();
+    const siteFiles = [
+      file(
+        'site/index.html',
+        '<link rel="stylesheet" href="shared.css"><h1>Home</h1><a id="jump" href="#local">Jump</a><div style="height:700px"></div><h2 id="local">Local anchor</h2><a id="guide" href="guide/#chapter">Guide</a><img src="pic.png"><a id="asset" href="pic.png">Image</a>',
+        'text/html'
+      ),
+      file(
+        'site/guide/index.html',
+        '<link rel="stylesheet" href="../shared.css"><div style="height:700px"></div><h1 id="chapter">Guide</h1><img src="../pic.png"><a id="contact" href="../contact.html">Contact</a><a id="home" href="../index.html">Home</a><script>window.visits=(window.visits||0)+1;<' +
+          '/script>',
+        'text/html'
+      ),
+      file('site/contact.html', '<h1>Contact</h1><a id="home" href="index.html">Home</a>', 'text/html'),
+      file('site/shared.css', 'h1{color:green}', 'text/css'),
+      file('site/pic.png', png, 'image/png'),
+      file('site/notes.txt', 'Independent attachment', 'text/plain')
+    ];
+    await choose(siteFiles, true);
+    check(
+      $('selection-report').textContent.includes('2 linked page(s)'),
+      'root index accepts nested indexes and discovers recursive subpages'
+    );
+    $('download-prepared').click();
+    const websiteHtml = await downloads.at(-1).blob.text();
+    const website = await open(await seal('browser-test-only'), 'browser-test-only');
+    const siteDoc = () =>
+      website.doc.querySelector('#vc > iframe')?.contentDocument?.querySelector('iframe')?.contentDocument;
+    await wait(() => siteDoc()?.getElementById('guide'), 'website home loads');
+    check(
+      website.doc.getElementById('choose-file').options.length === 2,
+      'embedded pages, shared CSS and linked images are absent from file navigation'
+    );
+    check(
+      siteDoc().getElementById('asset').getAttribute('href').startsWith('data:image/png'),
+      'ordinary image links use embedded assets without duplicate files'
+    );
+    const homeDoc = siteDoc();
+    homeDoc.defaultView.anchorProbe = 'preserved';
+    homeDoc.getElementById('jump').click();
+    await wait(() => siteDoc()?.defaultView.scrollY > 0, 'website fragment scrolls locally');
+    check(
+      siteDoc() === homeDoc &&
+        siteDoc().defaultView.anchorProbe === 'preserved' &&
+        !siteDoc().querySelector('iframe, #unlock-form'),
+      'website anchor preserves script state and avoids nested package viewers'
+    );
+    siteDoc().getElementById('guide').click();
+    await wait(() => siteDoc()?.getElementById('contact'), 'directory-index link opens guide');
+    await wait(() => siteDoc()?.defaultView.scrollY > 0, 'cross-page anchor scrolls to the target');
+    check(
+      siteDoc().getElementById('chapter') &&
+        website.win.getComputedStyle(siteDoc().querySelector('h1')).color === 'rgb(0, 128, 0)',
+      'subpage restores its anchor, shared styles and fresh scripts'
+    );
+    check(siteDoc().defaultView.visits === 1, 'subpage JavaScript executes in a fresh page context');
+    siteDoc().getElementById('contact').click();
+    await wait(() => siteDoc()?.querySelector('h1')?.textContent === 'Contact', 'recursive link opens contact');
+    website.doc.querySelector('#vc > iframe').contentWindow.history.back();
+    await wait(() => siteDoc()?.getElementById('contact'), 'browser Back restores guide');
+    check(siteDoc().defaultView.visits === 1, 'back navigation does not reuse stale script globals');
+    siteDoc().getElementById('home').click();
+    await wait(() => siteDoc()?.getElementById('guide'), 'cyclic link returns home');
+    const siteWindow = website.doc.querySelector('#vc > iframe').contentWindow;
+    const siteErrors = [];
+    siteWindow.addEventListener('error', event => siteErrors.push(event.message));
+    const imageLoaded = new Promise(resolve =>
+      siteWindow.document.querySelector('iframe').addEventListener('load', resolve, { once: true })
+    );
+    siteDoc().getElementById('asset').click();
+    await imageLoaded;
+    check(!siteDoc() && !siteErrors.length, 'opening an embedded image handles its opaque origin without a DOM error');
+    siteWindow.history.back();
+    await wait(() => siteDoc()?.getElementById('guide'), 'Back returns from the embedded image');
+    website.doc.getElementById('next-file').click();
+    check(
+      website.doc.getElementById('vc').textContent.includes('Independent attachment'),
+      'file navigation still reaches independent attachments'
+    );
+    website.doc.getElementById('prev-file').click();
+    await wait(() => siteDoc()?.getElementById('guide'), 'file navigation returns to website');
+    website.frame.remove();
+    const standalone = document.createElement('iframe');
+    standalone.srcdoc = websiteHtml;
+    document.body.append(standalone);
+    const standaloneDoc = () => standalone.contentDocument?.querySelector('iframe')?.contentDocument;
+    await wait(() => standaloneDoc()?.getElementById('guide'), 'prepared website loads independently');
+    standaloneDoc().getElementById('guide').click();
+    await wait(() => standaloneDoc()?.getElementById('contact'), 'prepared HTML alone supports subpage navigation');
+    check(true, 'prepared website is self-contained without the collection viewer');
+    standalone.remove();
+    await clear();
+    await choose(siteFiles.slice(0, -1), true);
+    const onlyWebsite = await open(await seal(''));
+    await wait(
+      () => onlyWebsite.doc.querySelector('iframe')?.contentDocument?.getElementById('guide'),
+      'website-only package opens'
+    );
+    check(
+      !onlyWebsite.doc.querySelector('.vb, #choose-file'),
+      'a website without independent attachments has no viewer header'
+    );
+    onlyWebsite.doc.querySelector('iframe').contentDocument.getElementById('guide').click();
+    await wait(
+      () => onlyWebsite.doc.querySelector('iframe')?.contentDocument?.getElementById('contact'),
+      'header-free website still navigates'
+    );
+    onlyWebsite.frame.remove();
     await clear();
     await choose([
       file('a.pdf', '%PDF-1.4\n' + 'fixture content\n'.repeat(1024), 'application/pdf'),
@@ -216,6 +418,15 @@
         $('selection-report').textContent.includes('missing.css'),
       'missing resources warn without blocking recognized HTML'
     );
+    const incomplete = await open(await seal(''));
+    check(
+      incomplete.doc.querySelector('.vb') &&
+        !incomplete.doc.getElementById('choose-file') &&
+        !incomplete.doc.getElementById('download-all') &&
+        incomplete.doc.querySelector('#vc > iframe'),
+      'an incomplete single website keeps the viewer header'
+    );
+    incomplete.frame.remove();
     await clear();
     await choose([
       file('index.html', '<img src="pic.png"><a download href="pic.png">Original</a>', 'text/html'),

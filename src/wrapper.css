@@ -128,6 +128,10 @@ input:focus-visible, button:focus-visible, a:focus-visible {
 .status:empty {
   display: none;
 }
+@media (max-width: 560px) {
+  body { padding: 16px; }
+}
+/* VIEWER */
 .vp {
   display: block;
   place-items: normal;
@@ -218,6 +222,7 @@ input:focus-visible, button:focus-visible, a:focus-visible {
   border: 0;
   background: var(--panel);
 }
+/* TEXT */
 .tf {
   width: 100%;
   height: 100%;
@@ -235,6 +240,7 @@ input:focus-visible, button:focus-visible, a:focus-visible {
   overflow-wrap: anywhere;
   tab-size: 4;
 }
+/* MARKDOWN */
 .md > article { max-width: 80ch; margin: auto; overflow-wrap: anywhere; }
 .md p { color: inherit; font-size: inherit; }
 .md p, .md pre, .md blockquote { margin: 0 0 1em; }
@@ -243,17 +249,17 @@ input:focus-visible, button:focus-visible, a:focus-visible {
 .md :not(pre) > code { padding: 2px 4px; background: var(--bg); }
 .md blockquote { margin-left: 0; padding-left: 16px; border-left: 3px solid var(--line); }
 .md a { color: var(--accent); }
+/* NOTES */
 .pn { margin-bottom: 16px; color: var(--muted); font-size: 13px; }
 .pe { margin: 24px 0 0; padding: 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+/* CODE */
 .s-comment { color: #64736a; font-style: italic; }
 .s-string { color: #21633c; }
 .s-number { color: #995014; }
 .s-keyword, .s-tag { color: #7043a0; }
 .s-key { color: #1d638e; }
+/* RESPONSIVE */
 @media (max-width: 560px) {
-  body {
-    padding: 16px;
-  }
   .vb {
     gap: 8px;
     padding: 6px 8px;

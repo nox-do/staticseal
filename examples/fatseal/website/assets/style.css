@@ -1,0 +1,123 @@
+@import 'palette.css';
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font:
+    17px/1.6 system-ui,
+    sans-serif;
+}
+header,
+main,
+footer {
+  max-width: 1000px;
+  margin: auto;
+  padding: 24px;
+}
+header {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  border-bottom: 1px solid var(--line);
+}
+a {
+  color: var(--green);
+}
+nav {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.brand {
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+h1,
+h2 {
+  font-family: Georgia, serif;
+  font-weight: 400;
+  line-height: 1.15;
+}
+h1 {
+  font-size: clamp(38px, 6vw, 62px);
+  margin: 18px 0;
+}
+h2 {
+  font-size: 32px;
+}
+.hero {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  align-items: center;
+  gap: 35px;
+  padding: 35px 0;
+}
+.hero img {
+  width: 100%;
+  border-radius: 24px;
+}
+.eyebrow {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--green);
+}
+.lead {
+  font-size: 20px;
+  color: var(--muted);
+}
+button,
+.button {
+  display: inline-block;
+  padding: 12px 18px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--green);
+  color: white;
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+.panel {
+  margin: 28px 0;
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: white;
+}
+.green {
+  background: var(--green);
+  color: white;
+}
+.green button {
+  background: var(--paper);
+  color: var(--ink);
+}
+output {
+  display: block;
+  margin-top: 16px;
+}
+li {
+  margin: 8px 0;
+}
+footer {
+  font-size: 13px;
+  color: var(--muted);
+}
+@media (max-width: 650px) {
+  .hero {
+    grid-template-columns: 1fr;
+  }
+  header {
+    flex-direction: column;
+  }
+  header,
+  main,
+  footer {
+    padding: 18px;
+  }
+}

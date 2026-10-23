@@ -109,6 +109,27 @@ try {
 } finally {
   await rm(directory, { recursive: true, force: true });
 }
+// Deterministic envelope overhead, excluding payload JSON, with explicit file inventories.
+const { renderWrapper } = await import('../src/wrapper.mjs');
+const viewerProfiles = [
+  ['page', 'page', []],
+  ['image', undefined, [{ filename: 'image.png', contentType: 'image/png' }]],
+  ['text', undefined, [{ filename: 'note.txt', contentType: 'text/plain' }]],
+  ['pdf', undefined, [{ filename: 'report.pdf', contentType: 'application/pdf' }]],
+  ['markdown', undefined, [{ filename: 'note.md', contentType: 'text/markdown' }]],
+  ['framed-page', 'collection', [{ filename: 'report.html', contentType: 'text/html', page: true }]],
+  [
+    'text-and-image',
+    'collection',
+    [
+      { filename: 'note.txt', contentType: 'text/plain' },
+      { filename: 'image.png', contentType: 'image/png' }
+    ]
+  ]
+].map(([id, display, files]) => {
+  const payload = { v: 4, access: 'sealed', encoding: 'metadata', content: [''], ...(display ? { display } : {}) };
+  return { id, wrapperBytes: utf8Bytes(renderWrapper({ payload, files })) - utf8Bytes(JSON.stringify(payload)) };
+});
 console.log(
   JSON.stringify(
     {
@@ -124,7 +145,8 @@ console.log(
       })),
       app: { path: 'index.html', utf8Bytes: app.byteLength, sha256: sha256(app) },
       fatApp: { path: 'fatseal.html', utf8Bytes: fatApp.byteLength, sha256: sha256(fatApp) },
-      readers
+      readers,
+      viewerProfiles
     },
     null,
     2

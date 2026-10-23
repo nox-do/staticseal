@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
 import { createFormat } from '../src/format.mjs';
+import { PREPARED_MAX_BYTES } from '../src/limits.mjs';
 import { createCrypto } from '../src/crypto.mjs';
 import { preparePackage } from '../src/creation.mjs';
 import { renderWrapper } from '../src/wrapper.mjs';
@@ -15,6 +16,7 @@ test('format rules and metadata bounds survive factory serialization without mod
   const built = await import('../src/reader-factories.mjs');
   for (const factory of [createFormat, built.createFormat]) {
     const format = vm.runInNewContext('(' + factory.toString() + ')()', { Uint8Array, TextDecoder });
+    assert.equal(format.MAX_EXPANDED_BYTES, PREPARED_MAX_BYTES);
     for (const [version, access, compressed] of [
       [2, 'passphrase', false],
       [3, 'passphrase', true],
@@ -143,10 +145,6 @@ test('shared creation preserves metadata order, privacy and raw buffer identity 
       );
       assert.equal(content.lengthPrefix.byteLength, 4);
       assert.equal(Buffer.from(content.lengthPrefix).readUInt32BE(), content.header.byteLength);
-      assert.equal(
-        content.binarySize,
-        4 + content.header.byteLength + content.bytes.byteLength + (access === 'sealed' ? 0 : 16)
-      );
       if (inputIndex === 0) assert.equal(content.bytes, bytes, 'raw input must be returned without a file copy');
     }
   }

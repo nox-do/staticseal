@@ -28,7 +28,7 @@ test('collection keeps original bytes, paths and page flags and disambiguates du
 test('collection rejects traversal, corrupt lengths, overlapping entries and oversized inputs', () => {
   for (const filename of ['../a', '/a', 'a/../b', 'a\\b', 'a:b', 'a//b'])
     assert.throws(() => packCollection([{ ...files[0], filename }]));
-  assert.throws(() => packCollection([{ ...files[0], bytes: new Uint8Array(25 * 1024 * 1024) }]));
+  assert.throws(() => packCollection([{ ...files[0], bytes: new Uint8Array(128 * 1024 * 1024) }]));
   const bytes = packCollection(files);
   assert.throws(() => codec.unpack(bytes.subarray(0, -1)));
   assert.throws(() => codec.unpack(new Uint8Array([...bytes, 0])));
@@ -47,6 +47,7 @@ test('collection rejects traversal, corrupt lengths, overlapping entries and ove
 test('HTML detection accepts unique index variants and a single named page, otherwise falls back', () => {
   const inspect = paths => inspectHtmlSelection(paths.map(path => ({ path })));
   assert.equal(inspect(['folder/INDEX.HTM', 'folder/about.html']).entry.path, 'folder/INDEX.HTM');
+  assert.equal(inspect(['site/index.html', 'site/help/index.htm']).entry.path, 'site/index.html');
   assert.equal(inspect(['report.html', 'a.png']).entry.path, 'report.html');
   for (const paths of [
     ['index.html', 'index.htm'],
@@ -115,10 +116,7 @@ test('collection display is authenticated and normal reader output omits collect
     codec.unpack((await decodePayload(payload)).bytes).map(file => file.filename),
     files.map(file => file.filename)
   );
-  const large = packCollection([
-    { ...files[0], bytes: new TextEncoder().encode('Compressible collection data.\n'.repeat(2000)) },
-    files[1]
-  ]);
+  const large = packCollection([{ ...files[0], bytes: new Uint8Array(30 * 1024 * 1024) }, files[1]]);
   for (const access of ['sealed', 'passphrase']) {
     const encrypted = await makePayload(
       large,

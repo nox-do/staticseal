@@ -195,7 +195,11 @@ test('optional CLI themes affect only opening-screen CSS and preserve payload ro
           const html = await readFile(join(dir, 'output.html'), 'utf8');
           const reader = wrapper(html);
           assert.deepEqual(Buffer.from(await reader.open('theme-test')), bytes);
-          const plain = renderWrapper({ title: 'Protected file', payload: reader.payload });
+          const plain = renderWrapper({
+            title: 'Protected file',
+            payload: reader.payload,
+            files: [{ filename: 'page.html', contentType: 'text/html' }]
+          });
           if (!themed) assert.equal(html, plain);
           else {
             const css = themeStyle({
@@ -307,7 +311,7 @@ test('CLI hides original metadata by default and keeps explicit opening titles i
   }
 });
 
-test('CLI accepts 128 MiB HTML and rejects original, binary and HTML budget overflow without overwriting output', async () => {
+test('CLI accepts 128 MiB HTML and rejects source and final HTML budget overflow without overwriting output', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'staticseal-cli-limits-'));
   const inputPath = join(dir, 'page.html');
   const outputPath = join(dir, 'sealed.html');
@@ -329,26 +333,56 @@ test('CLI accepts 128 MiB HTML and rejects original, binary and HTML budget over
       assert.equal(reader.payload.v, access === '--no-password' ? 5 : 3);
       assert.deepEqual(Buffer.from(await reader.open('test')), bytes);
     }
+    // Bundling has its own prepared-content budget, independent of transport.
+    await truncate(inputPath, 30 * 1024 * 1024);
+    for (const access of ['--no-password', '--stdin-password']) {
+      const result = run(access, '--bundle');
+      assert.equal(result.status, 0, result.stderr);
+      const html = await readFile(outputPath, 'utf8');
+      assert.ok(Buffer.byteLength(html) < 128 * 1024);
+      assert.ok((await wrapper(html).open('test')).length > 25 * 1024 * 1024);
+    }
     await writeFile(outputPath, 'keep existing output');
     await truncate(inputPath, 128 * 1024 * 1024 + 1);
     let result = run('--no-password');
     assert.equal(result.status, 1);
     assert.match(result.stderr, /128 MiB CLI limit/);
     assert.equal(await readFile(outputPath, 'utf8'), 'keep existing output');
-    // A raw 25 MiB file cannot fit once metadata and the length prefix are included.
-    await writeFile(inputPath, randomFillSync(Buffer.alloc(25 * 1024 * 1024)));
+    // 20 MiB of raw input fits the working budget but exceeds transport after Base64.
+    await writeFile(inputPath, randomFillSync(Buffer.alloc(20 * 1024 * 1024)));
     for (const access of ['--no-password', '--stdin-password']) {
       result = run(access);
       assert.equal(result.status, 1);
-      assert.match(result.stderr, /Binary package exceeds the 25 MiB/);
+      assert.match(result.stderr, /HTML package exceeds the 25 MiB/);
       assert.equal(await readFile(outputPath, 'utf8'), 'keep existing output');
     }
     // Small Base64 chunks increase JSON overhead beyond the transport budget.
-    await truncate(inputPath, 25 * 1024 * 1024 - 1024);
+    await truncate(inputPath, 18 * 1024 * 1024);
     result = run('--no-password', '--chunk-size', '40');
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /HTML package exceeds the 35 MiB/);
+    assert.match(result.stderr, /HTML package exceeds the 25 MiB/);
     assert.equal(await readFile(outputPath, 'utf8'), 'keep existing output');
+    // Count UTF-8 title bytes and the final theme, including the exact boundary.
+    await truncate(inputPath, (25 * 1024 * 1024 * 3) / 4 - 64 * 1024);
+    for (const access of ['--no-password', '--stdin-password']) {
+      const options = [access, '--theme-bg', '#abcdef'];
+      result = run(...options, '--title', 'x', '--button-label', 'x');
+      assert.equal(result.status, 0, result.stderr);
+      const remaining = 25 * 1024 * 1024 - (await readFile(outputPath)).length;
+      assert.ok(remaining > 0);
+      // The title occurs twice; the button label accounts for an odd byte.
+      const titleBytes = Math.floor(remaining / 2) + 1;
+      const title = 'ä'.repeat(Math.floor(titleBytes / 2)) + 'x'.repeat(titleBytes % 2);
+      const label = 'x'.repeat(1 + (remaining % 2));
+      result = run(...options, '--title', title, '--button-label', label);
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal((await readFile(outputPath)).length, 25 * 1024 * 1024);
+      await writeFile(outputPath, 'keep existing output');
+      result = run(...options, '--title', title, '--button-label', label + 'x');
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /25 MiB transport limit/);
+      assert.equal(await readFile(outputPath, 'utf8'), 'keep existing output');
+    }
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

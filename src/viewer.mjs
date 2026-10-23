@@ -28,9 +28,10 @@ export function createPageViewer() {
   return { decodeHtml, renderHtmlPage };
 }
 
-export function createFileViewer(escapeHtml, previewFactory) {
+export function createFileViewer(escapeHtml, previewFactory, renderers) {
   const $ = id => document.getElementById(id);
-  const { inferContentType, previewKind, renderMarkdown, codeLanguage, highlightCode } = previewFactory();
+  const helpers = previewFactory();
+  const { inferContentType, previewKind } = helpers;
   const brand = $('wrapper-brand').outerHTML;
   let currentUrl;
   return function renderFile(bytes, unlockedContent) {
@@ -38,7 +39,6 @@ export function createFileViewer(escapeHtml, previewFactory) {
     document.title = filename;
     const contentType = inferContentType(filename, unlockedContent.contentType);
     const kind = previewKind(filename, contentType);
-    const isPdf = kind === 'pdf';
     const blob = new Blob([bytes], { type: contentType });
     if (currentUrl) URL.revokeObjectURL(currentUrl);
     const url = (currentUrl = URL.createObjectURL(blob));
@@ -64,57 +64,62 @@ export function createFileViewer(escapeHtml, previewFactory) {
       '</div></header><section id="vc"></section></main>';
 
     const viewer = $('vc');
-    if (kind === 'image') {
-      viewer.innerHTML = '<img class="im" alt="' + safeName + '" src="' + url + '">';
-      return;
-    }
-    if (kind === 'text' || kind === 'markdown') {
-      const limit = 128 * 1024;
-      const truncated = bytes.length > limit;
-      const encoding =
-        bytes[0] === 255 && bytes[1] === 254 ? 'utf-16le' : bytes[0] === 254 && bytes[1] === 255 ? 'utf-16be' : 'utf-8';
-      let text;
-      try {
-        text = new TextDecoder(encoding, { fatal: true }).decode(bytes.subarray(0, limit), { stream: truncated });
-      } catch {
-        viewer.innerHTML =
-          '<div class="dl"><h1>Text preview unavailable</h1><p>Unsupported text encoding. Download the original file to open it.</p></div>';
-        return;
-      }
+    const render = renderers[kind];
+    if (render) render(viewer, { bytes, url, safeName, filename, contentType, kind }, helpers);
+    else
       viewer.innerHTML =
-        '<section class="tf' +
-        (kind === 'markdown' ? ' md' : '') +
-        '">' +
-        (truncated
-          ? '<p class="pn">Preview limited to the first 128 KiB. Download contains the complete file.</p>'
-          : '') +
-        (kind === 'markdown' ? '<article>' + renderMarkdown(text) + '</article>' : '<pre id="tp"></pre>') +
-        (truncated
-          ? '<aside class="pn pe" role="note"><strong>Preview ends here — the file continues.</strong><br>Only the first 128 KiB are shown. Use Download above to read the complete original file.</aside>'
-          : '') +
-        '</section>';
-      if (kind === 'text') {
-        const pre = $('tp');
-        const language = codeLanguage(filename, contentType);
-        if (language) pre.innerHTML = highlightCode(text, language);
-        else pre.textContent = text;
-      }
-      return;
-    }
-    viewer.innerHTML =
-      '<div class="dl">' +
-      '<p class="kicker">Ready to download</p><h1>' +
-      safeName +
-      '</h1>' +
-      '<p>Your file is ready to download.</p>' +
-      (isPdf
-        ? '<p class="pn">PDFs may contain links or interactive content. Open only files you trust.</p><button id="pdf" type="button">Preview PDF</button>'
-        : '<p>This file type is not previewed automatically.</p>') +
-      '</div>';
-    if (isPdf) {
-      $('pdf').addEventListener('click', () => {
-        viewer.innerHTML = '<iframe class="vf" title="' + safeName + '" src="' + url + '"></iframe>';
-      });
-    }
+        '<div class="dl"><p class="kicker">Ready to download</p><h1>' +
+        safeName +
+        '</h1><p>Your file is ready to download.</p><p>This file type is not previewed automatically.</p></div>';
   };
+}
+
+export function renderImagePreview(viewer, { safeName, url }) {
+  viewer.innerHTML = '<img class="im" alt="' + safeName + '" src="' + url + '">';
+}
+
+export function renderTextPreview(
+  viewer,
+  { bytes, kind, filename, contentType },
+  { renderMarkdown, codeLanguage, highlightCode }
+) {
+  const $ = id => document.getElementById(id);
+  const limit = 128 * 1024;
+  const truncated = bytes.length > limit;
+  const encoding =
+    bytes[0] === 255 && bytes[1] === 254 ? 'utf-16le' : bytes[0] === 254 && bytes[1] === 255 ? 'utf-16be' : 'utf-8';
+  let text;
+  try {
+    text = new TextDecoder(encoding, { fatal: true }).decode(bytes.subarray(0, limit), { stream: truncated });
+  } catch {
+    viewer.innerHTML =
+      '<div class="dl"><h1>Text preview unavailable</h1><p>Unsupported text encoding. Download the original file to open it.</p></div>';
+    return;
+  }
+  viewer.innerHTML =
+    '<section class="tf' +
+    (kind === 'markdown' ? ' md' : '') +
+    '">' +
+    (truncated ? '<p class="pn">Preview limited to the first 128 KiB. Download contains the complete file.</p>' : '') +
+    (kind === 'markdown' ? '<article>' + renderMarkdown(text) + '</article>' : '<pre id="tp"></pre>') +
+    (truncated
+      ? '<aside class="pn pe" role="note"><strong>Preview ends here — the file continues.</strong><br>Only the first 128 KiB are shown. Use Download above to read the complete original file.</aside>'
+      : '') +
+    '</section>';
+  if (kind === 'text') {
+    const pre = $('tp');
+    const language = codeLanguage?.(filename, contentType);
+    if (language) pre.innerHTML = highlightCode(text, language);
+    else pre.textContent = text;
+  }
+}
+
+export function renderPdfPreview(viewer, { safeName, url }) {
+  viewer.innerHTML =
+    '<div class="dl"><p class="kicker">Ready to download</p><h1>' +
+    safeName +
+    '</h1><p>Your file is ready to download.</p><p class="pn">PDFs may contain links or interactive content. Open only files you trust.</p><button id="pdf" type="button">Preview PDF</button></div>';
+  document.getElementById('pdf').addEventListener('click', () => {
+    viewer.innerHTML = '<iframe class="vf" title="' + safeName + '" src="' + url + '"></iframe>';
+  });
 }

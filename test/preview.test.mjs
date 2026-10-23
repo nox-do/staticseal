@@ -65,7 +65,10 @@ test('file viewer routes supported formats and keeps downloads byte-exact', asyn
   ]) {
     const name = 'example.' + extension;
     const payload = await makePayload(bytes, '', 100000, { name, type }, 'sealed', true);
-    const html = renderWrapper({ payload });
+    const html = renderWrapper({ payload, files: [{ filename: name, contentType: type }] });
+    assert.equal(html.includes('Formatting simplified for this large document'), extension === 'md');
+    assert.equal(html.includes('PDFs may contain'), extension === 'pdf');
+    assert.equal(html.includes('Preview limited to'), ['txt', 'html', 'xhtml', 'json', 'ts', 'md'].includes(extension));
     const reader = wrapper(html);
     await reader.open();
     const viewer = reader.nodes.get('vc');

@@ -376,8 +376,9 @@ test('browser UI keeps warning, confirmation and rejection boundaries before fil
     5 * 1024 * 1024,
     10 * 1024 * 1024,
     10 * 1024 * 1024 + 1,
-    25 * 1024 * 1024,
-    25 * 1024 * 1024 + 1
+    25 * 1024 * 1024 + 1,
+    128 * 1024 * 1024,
+    128 * 1024 * 1024 + 1
   ]) {
     const ui = executeHtml(source),
       node = id => ui.nodes.get(id);
@@ -402,9 +403,9 @@ test('browser UI keeps warning, confirmation and rejection boundaries before fil
     if (size < 5 * 1024 * 1024) assert.equal(node('status').textContent, '');
     else assert.equal(node('status').dataset.kind, 'error');
     await node('encrypt-form').handlers.submit({ preventDefault() {} });
-    assert.equal(confirmations, size > 10 * 1024 * 1024 && size <= 25 * 1024 * 1024 ? 1 : 0);
+    assert.equal(confirmations, size > 10 * 1024 * 1024 && size <= 128 * 1024 * 1024 ? 1 : 0);
     assert.equal(reads, size <= 10 * 1024 * 1024 ? 1 : 0);
-    if (size > 25 * 1024 * 1024) assert.match(node('status').textContent, /25 MiB/);
+    if (size > 128 * 1024 * 1024) assert.match(node('status').textContent, /128 MiB/);
     else if (size > 10 * 1024 * 1024) assert.match(node('status').textContent, /cancelled/);
   }
 });

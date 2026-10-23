@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>FatSeal ausprobieren · Dateien richtig einpacken</title>
+    <meta
+      name="description"
+      content="FatSeal an drei Beispielen ausprobieren: vollständige Website, unabhängige Anhänge und fehlende Ressourcen. Mit Anleitung zur Ordnerauswahl."
+    />
+    <link rel="icon" href="website/assets/favicon.svg" />
+    <link rel="stylesheet" href="guide.css" />
+  </head>
+  <body>
+    <header>
+      <span class="brand">STATICSEAL / FATSEAL</span>
+      <nav class="links">
+        <a href="../../fatseal.html">FatSeal öffnen ↗</a><a href="#auswahl">Dateien auswählen</a
+        ><a href="../jupyter/index.html">Jupyter-Beispiel</a><a href="#fragen">Fragen</a>
+      </nav>
+    </header>
+    <main>
+      <section class="hero">
+        <span class="eyebrow">Selbst ausprobieren</span>
+        <h1>Was kommt mit?<br />Was bleibt einzeln?</h1>
+        <p class="lead">
+          Eine kleine Website, drei Packvarianten. Erlebe, wie FatSeal Seiten und Ressourcen zusammenfügt – und warum
+          die Dateileiste manchmal bleibt.
+        </p>
+        <a class="button" href="demo-website.html">Mit der Website starten →</a>
+      </section>
+      <section id="beispiele">
+        <span class="eyebrow">Drei nachvollziehbare Fälle</span>
+        <div class="cards">
+          <article class="card">
+            <div class="number">01 / ALLES EINGEBETTET</div>
+            <h3>Nur die Website.</h3>
+            <p>
+              Drei verknüpfte Seiten mit Bild, Favicon und CSS. Keine weiteren Dateien und keine erkannten Warnungen:
+              Nach dem Öffnen verschwindet der FatSeal-Header.
+            </p>
+            <a class="button" href="demo-website.html">Ohne Header erleben →</a
+            ><small><a href="website.zip" download>Quellordner als ZIP herunterladen</a></small>
+          </article>
+          <article class="card">
+            <div class="number">02 / ZWEI EXTRAS</div>
+            <h3>Website mit Gepäck.</h3>
+            <p>
+              Ein unbenutztes Bild und eine nicht verlinkte Packliste liegen zusätzlich im Ordner. Sie bleiben separate
+              Einträge – mit Vorschau, Einzel- und ZIP-Download.
+            </p>
+            <a class="button" href="demo-extras.html">Mit Dateileiste erleben →</a
+            ><small><a href="website-mit-extras.zip" download>Quellordner mit Extras als ZIP herunterladen</a></small>
+          </article>
+          <article class="card">
+            <div class="number">03 / EINE DATEI FEHLT</div>
+            <h3>Fast vollständig.</h3>
+            <p>
+              Das Landschaftsbild wurde nicht mit ausgewählt. FatSeal meldet die fehlende Ressource. Trotz nur einer
+              Website bleibt die Dateileiste erhalten.
+            </p>
+            <a class="button secondary" href="demo-warning.html">Warnfall ansehen →</a
+            ><small><a href="website-mit-luecke.zip" download>Quellordner mit Lücke als ZIP herunterladen</a></small>
+          </article>
+        </div>
+      </section>
+      <section id="auswahl">
+        <span class="eyebrow">Der wichtige erste Schritt</span>
+        <h2>Öffnen ist noch nicht auswählen.</h2>
+        <p>
+          ZIP herunterladen, entpacken und <a href="../../fatseal.html">FatSeal öffnen</a>. Wähle dann genau den
+          entpackten Ordner <code>Website</code> – nicht den übergeordneten Download-Ordner. Du kannst den Ordner auch
+          direkt in die Dropzone ziehen; Unterordner und ihre Pfade bleiben erhalten.
+        </p>
+        <div class="two">
+          <article class="panel">
+            <span class="tag">Choose a folder</span>
+            <h3>Für eine Website mit Unterordnern.</h3>
+            <ol>
+              <li>Im Ordnerdialog zum entpackten Beispiel navigieren.</li>
+              <li>Den Ordner <code>Website</code> auswählen und die Auswahl bestätigen.</li>
+              <li>
+                Ein Doppelklick öffnet einen Ordner zunächst nur im Dialog. Danach muss der gewünschte Ordner noch
+                bestätigt werden.
+              </li>
+              <li>
+                Die abschließende Schaltfläche heißt je nach Browser und System etwa „Auswählen“, „Öffnen“ oder
+                „Hochladen“.
+              </li>
+            </ol>
+          </article>
+          <article class="panel">
+            <span class="tag">Choose files</span>
+            <h3>Für gezielt ausgewählte Einzeldateien.</h3>
+            <ol>
+              <li>Alle benötigten Dateien gemeinsam markieren; Mehrfachauswahl ist möglich.</li>
+              <li>HTML allein reicht nicht, wenn Bilder oder CSS separat gespeichert sind.</li>
+              <li>
+                Bei Einzeldateien fehlen oft die ursprünglichen Unterordnerpfade. Eindeutige Dateinamen können trotzdem
+                zugeordnet werden.
+              </li>
+              <li>Für gleichnamige Dateien in verschiedenen Unterordnern die Ordnerauswahl verwenden.</li>
+            </ol>
+          </article>
+        </div>
+        <aside class="note">
+          <strong>„Hochladen“ ist die Bezeichnung des Browserdialogs.</strong> Die ausgewählten Dateien werden lokal in
+          FatSeal verarbeitet. Die App sendet sie nicht an einen Server.
+        </aside>
+      </section>
+      <section class="flow">
+        <h2>Danach: erst prüfen, dann verpacken.</h2>
+        <p>
+          Lass die Webseiten-Darstellung aktiviert und lies den Ressourcenbericht unter der Dateiliste. Eine eindeutige
+          Startseite, erkannte Unterseiten und verfügbare Ressourcen werden zusammengeführt. Mit „Download prepared
+          HTML“ kannst du die vorbereitete Website vorab ansehen. Anschließend „Seal &amp; download file“ wählen und das
+          fertige Paket öffnen.
+        </p>
+      </section>
+      <section>
+        <span class="eyebrow">Was oben in der Dateiauswahl landet</span>
+        <h2>Mit ausgewählt heißt mit im Paket.</h2>
+        <div class="scroll">
+          <table class="matrix">
+            <thead>
+              <tr>
+                <th>Ausgewählter Inhalt</th>
+                <th>Was FatSeal damit macht</th>
+                <th>Eigener Eintrag?</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Startseite und verlinkte HTML-Unterseiten</td>
+                <td>Eine gemeinsam navigierbare Website</td>
+                <td>Zusammen ein Eintrag</td>
+              </tr>
+              <tr>
+                <td>Verwendetes Bild, Favicon, CSS oder Font</td>
+                <td>Direkt in die Website einbetten</td>
+                <td>Normalerweise nein</td>
+              </tr>
+              <tr>
+                <td>Nicht verlinktes Bild, Markdown, PDF oder andere Datei</td>
+                <td>Als unabhängigen Anhang behalten</td>
+                <td>Ja</td>
+              </tr>
+              <tr>
+                <td>Ressource mit nicht auflösbaren Verweisen</td>
+                <td>Warnen; benötigte Originaldateien gegebenenfalls separat behalten</td>
+                <td>Gegebenenfalls ja</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <aside class="note">
+          <strong>Nicht benötigte Dateien vor dem Verpacken entfernen.</strong> FatSeal errät nicht, ob ein unbenutztes
+          Bild oder ein alter Entwurf versehentlich im Ordner liegt. Auch diese Dateien werden mit aufgenommen.
+        </aside>
+      </section>
+      <section class="two">
+        <article class="panel">
+          <h3>So sieht der Beispielordner aus.</h3>
+          <pre>
+Website/
+  index.html             ← Startseite
+  kontakt.html           ← verlinkte Unterseite
+  unterwegs/index.html   ← verlinkte Unterseite
+  assets/style.css       ← lädt palette.css
+  assets/ausflug.svg      ← verwendetes Bild
+  assets/favicon.svg     ← verwendetes Favicon
+  assets/extra.svg        ← nur im Beispiel mit Extras
+  packliste.md            ← nur im Beispiel mit Extras</pre>
+        </article>
+        <article class="panel">
+          <h3>Wann verschwindet der Header?</h3>
+          <p>
+            Wenn genau eine vorbereitete Website übrig bleibt und FatSeal keine Warnungen erkannt hat. Verknüpfte
+            Unterseiten zählen dabei zur selben Website.
+          </p>
+          <p>
+            Unabhängige Anhänge oder erkannte Probleme lassen die Leiste stehen. Dort bleiben Vorschau und Downloads
+            erreichbar.
+          </p>
+          <p>
+            <strong>Eine wichtige Grenze:</strong> Nicht jede dynamische JavaScript-Abhängigkeit lässt sich aus den
+            Dateien erkennen. Ein Bericht ohne Warnungen ist deshalb keine Garantie für jede beliebige Web-App.
+          </p>
+        </article>
+      </section>
+      <section id="fragen">
+        <span class="eyebrow">Gut zu wissen</span>
+        <h2>Kleine Details, die den Unterschied machen.</h2>
+        <details>
+          <summary>Welche index.html ist die richtige?</summary>
+          <p>
+            FatSeal sucht eine eindeutige Startseite an der Wurzel der ausgewählten Website. Eine index.html im
+            Unterordner ist eine normale Unterseite. Zwei konkurrierende Startseiten wie index.html und index.htm oder
+            mehrere unabhängige Websites erzeugen eine Warnung; die Dateien bleiben einzeln.
+          </p>
+        </details>
+        <details>
+          <summary>Was passiert, wenn ich die Webseiten-Darstellung ausschalte?</summary>
+          <p>
+            Die Originaldateien werden einzeln verpackt. HTML erscheint als Quelltext statt als laufende Webseite. Das
+            ist praktisch, wenn du alle ursprünglichen Dateien unverändert weitergeben möchtest.
+          </p>
+        </details>
+        <details>
+          <summary>Werden Dateien aus dem Internet nachgeladen?</summary>
+          <p>
+            Beim Einbetten verwendet FatSeal ausschließlich die ausgewählten Dateien. Externe Bilder, CDNs oder
+            Stylesheets werden nicht heruntergeladen. Fehlende und externe Abhängigkeiten werden gemeldet. Geöffnete
+            HTML-Inhalte können selbst weiterhin Netzwerkzugriffe ausführen.
+          </p>
+        </details>
+        <details>
+          <summary>Welche Interaktionen bleiben erhalten?</summary>
+          <p>
+            Statische Links zu ausgewählten HTML-Unterseiten, Sprungmarken und eingebettetes JavaScript funktionieren im
+            Beispiel. Separate JavaScript-Dateien, Module, dynamisches Nachladen und serverseitige Funktionen werden
+            nicht automatisch gebündelt. Öffne nur Inhalte, deren Code du vertraust.
+          </p>
+        </details>
+        <details>
+          <summary>Was ist „Download prepared HTML“?</summary>
+          <p>
+            Das ist nur die zusammengesetzte Website: ohne Öffnungsbildschirm, Passphrase, Dateileiste oder separate
+            Anhänge. Die Header-Regel gilt für das fertige Paket aus „Seal &amp; download file“. Das vorbereitete HTML
+            dient zum Vorabprüfen oder zur direkten Weiterverwendung der Website.
+          </p>
+        </details>
+        <details>
+          <summary>Was steckt im ZIP-Download des fertigen Pakets?</summary>
+          <p>
+            Die vorbereitete Website ist eine HTML-Datei mit ihren eingebetteten Unterseiten und Assets. Unabhängige
+            Anhänge kommen separat dazu, mit ihren Dateinamen und Ordnerpfaden. Das ZIP ist kein unverändertes Backup
+            des ursprünglichen Website-Ordners.
+          </p>
+        </details>
+        <details>
+          <summary>Kann ich eine Passphrase verwenden?</summary>
+          <p>
+            Ja. Sie schützt das ganze Paket, einschließlich Unterseiten und Anhängen. Teile die Passphrase separat. Die
+            fertigen Beispiele hier benötigen keine Passphrase; sie enthalten nur öffentliche Beispieldaten.
+          </p>
+        </details>
+        <details>
+          <summary>Wie groß darf meine Auswahl sein?</summary>
+          <p>
+            Bis zu 1.000 Dateien; Quelldaten und vorbereitete Inhalte dürfen jeweils 128 MiB groß sein. Das fertige
+            Transport-HTML darf höchstens 25 MiB haben. Ab 5 MiB Quell- oder vorbereiteten Daten erscheint ein Hinweis,
+            oberhalb von 10 MiB ist eine Bestätigung nötig. Wie gut große Pakete funktionieren, hängt auch vom Gerät ab.
+          </p>
+        </details>
+      </section>
+    </main>
+    <footer>
+      <div class="links">
+        <a href="../../fatseal.html">FatSeal öffnen</a
+        ><a href="website/index.html">Unverpackte Beispiel-Website ansehen</a
+        ><a href="https://github.com/nox-do/staticseal">Quellcode auf GitHub ↗</a>
+      </div>
+      <p>Das FatSeal-Beispiel ist Teil des Repositorys. Es nutzt keine externen Schriften, Tracker oder Dienste.</p>
+    </footer>
+  </body>
+</html>

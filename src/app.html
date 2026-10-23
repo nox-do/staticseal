@@ -617,9 +617,9 @@ button:disabled {
 
   const formatBytes = (bytes) => {
     if (bytes < 1024 * 1024) {
-      return `${Math.ceil(bytes / 1024)} KB`;
+      return `${Math.ceil(bytes / 1024)} KiB`;
     }
-    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+    return `${(bytes / 1024 / 1024).toFixed(1)} MiB`;
   };
 
   const fileType = createPreview().inferContentType;
@@ -647,7 +647,7 @@ button:disabled {
     const content = await preparePackage(bytes,
       { filename: file.name, contentType: inferContentType(file) }, {
         access, iterations: iterationCount, salt: salt && toBase64(salt), iv: iv && toBase64(iv),
-        htmlPage: pageMode, collection: !!file.collection, chunkSize: DEFAULT_CHUNK_SIZE
+        readerFiles: file.readerFiles || [{ filename: file.name, contentType: inferContentType(file) }], htmlPage: pageMode, collection: !!file.collection, chunkSize: DEFAULT_CHUNK_SIZE
       });
     const { metadata } = content;
     if (access === 'sealed') {
@@ -701,8 +701,9 @@ button:disabled {
 
   /* STATICSEAL_WRAPPER */
 
-  function downloadHtml(filename, html) {
+  function downloadHtml(filename, html, maxBytes = HTML_MAX_BYTES) {
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    if (blob.size > maxBytes) throw new Error('HTML package exceeds the ' + (maxBytes / 1024 / 1024) + ' MiB limit.');
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -777,10 +778,10 @@ button:disabled {
     }
     const type = inferContentType(file);
     fileMeta.textContent = `${file.name} · ${formatBytes(file.size)} · ${type}`;
-    if (file.size > BROWSER_FILE_MAX_BYTES) {
-      setStatus('Files above 25 MiB exceed the provisional browser limit.', 'error');
+    if (file.size > SOURCE_MAX_BYTES) {
+      setStatus('Source exceeds the 128 MiB working limit.', 'error');
     } else if (file.size >= BROWSER_FILE_WARN_BYTES) {
-      setStatus('Files from 5 MiB can use substantial browser memory. Above 10 MiB, confirmation is required; maximum 25 MiB. Mobile limits are not validated.', 'error');
+      setStatus('Source data from 5 MiB can use substantial memory; above 10 MiB, confirmation is required. Working limit: 128 MiB; final HTML: 25 MiB.', 'error');
     } else {
       setStatus('');
     }
@@ -812,11 +813,11 @@ button:disabled {
       setStatus('This browser does not expose Web Crypto on this page.', 'error');
       return;
     }
-    if (file.size > BROWSER_FILE_MAX_BYTES) {
-      setStatus('Files above 25 MiB exceed the provisional browser limit.', 'error');
+    if (file.size > SOURCE_MAX_BYTES) {
+      setStatus('Source exceeds the 128 MiB working limit.', 'error');
       return;
     }
-    if (file.size > BROWSER_FILE_CONFIRM_BYTES && !window.confirm('This file exceeds 10 MiB (maximum 25 MiB). Creating and opening it may use substantial memory or freeze the browser, especially on mobile. These provisional limits are not browser-validated. Continue?')) {
+    if (file.size > BROWSER_FILE_CONFIRM_BYTES && !window.confirm('Source data exceeds 10 MiB. Creating and opening may use substantial memory, especially on mobile. Working limit: 128 MiB; final HTML: 25 MiB. Device capacities are not validated. Continue?')) {
       setStatus('Encryption cancelled.', 'error');
       return;
     }
@@ -828,7 +829,7 @@ button:disabled {
       setStatus(access === 'sealed' ? 'Sealing locally ...' : 'Encrypting locally ...');
       const payload = await encryptBytes(bytes, passphrase, iterationCount, file, access, pageMode);
 
-      const wrapper = renderWrapper({ payload });
+      const wrapper = renderWrapper({ payload, files: [{ filename: file.name, contentType: inferContentType(file) }] });
       downloadHtml(output, wrapper);
       setStatus('Original: ' + formatBytes(bytes.byteLength) + ' → HTML package: ' + formatBytes(new Blob([wrapper]).size) + '.');
     } catch (error) {

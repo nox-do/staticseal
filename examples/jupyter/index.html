@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Jupyter-Bericht versiegeln · Staticseal</title>
+    <link rel="stylesheet" href="../fatseal/guide.css" />
+  </head>
+  <body>
+    <header>
+      <span class="brand">STATICSEAL / JUPYTER</span>
+      <nav class="links">
+        <a href="../fatseal/index.html">Weitere Beispiele</a><a href="../../index.html">Staticseal öffnen ↗</a>
+      </nav>
+    </header>
+    <main>
+      <section class="hero">
+        <span class="eyebrow">Vom Notebook zum Offline-Bericht</span>
+        <h1>Berechnen. Exportieren.<br />Versiegeln.</h1>
+        <p class="lead">
+          Ein echter Jupyter-Export mit pandas-Tabelle, Gesamtumsatz und Matplotlib-Diagramm. Ohne Python auf dem
+          Rechner des Empfängers.
+        </p>
+        <div class="links">
+          <a class="button" href="sealed.html">Versiegelten Bericht öffnen →</a
+          ><a class="button secondary" href="bericht.html">HTML-Export vergleichen</a>
+        </div>
+        <p><a href="jupyter.zip" download>Beispiel mit Quellen als ZIP herunterladen</a></p>
+      </section>
+      <section>
+        <h2>1. Bericht erzeugen</h2>
+        <p>
+          ZIP entpacken und im Beispielordner arbeiten. <a href="bericht.ipynb" download>bericht.ipynb</a> verbindet
+          erklärenden Text mit <a href="auswertung.py" download>auswertung.py</a>. Die vier Monate ergeben 6.050 €;
+          April hat den höchsten Umsatz.
+        </p>
+        <pre style="overflow: auto"><code>uv venv --python 3.12 .venv
+uv pip install --python .venv/bin/python -r requirements.txt
+.venv/bin/python -m nbconvert --execute --to html --no-input \
+  --embed-images --template-file offline.html.j2 bericht.ipynb --output bericht.html</code></pre>
+        <p>
+          Getestet mit Python 3.12.9. Die Paketversionen stehen in <a href="requirements.txt">requirements.txt</a>.
+          Unter Windows heißt der Python-Pfad <code>.venv\Scripts\python.exe</code>.
+        </p>
+        <p>
+          <code>--no-input</code> blendet Programmcode aus; <code>--embed-images</code> bettet Bilder ein. Die kleine
+          Vorlage <a href="offline.html.j2">offline.html.j2</a> entfernt unbenutzte RequireJS-, MathJax- und
+          Mermaid-Skripte. Sie eignet sich für diesen statischen Bericht, nicht für Formeln, Widgets oder Mermaid.
+        </p>
+      </section>
+      <section>
+        <h2>2. HTML versiegeln</h2>
+        <p>
+          Der Export ist bereits eigenständig. Im Browser <a href="../../index.html">Staticseal</a> öffnen,
+          <code>bericht.html</code> auswählen, „Display as a webpage“ aktivieren und das Paket erstellen. Mit Passwort
+          bleibt der Inhalt bis zum Öffnen verschlüsselt.
+        </p>
+        <p>Alternativ aus dem Staticseal-Repository, nachdem dessen npm-Abhängigkeiten installiert wurden:</p>
+        <pre style="overflow: auto"><code>node bin/self-encrypt.mjs --in examples/jupyter/bericht.html \
+  --out examples/jupyter/sealed.html --html-page --no-password</code></pre>
+        <p>
+          Ohne <code>--no-password</code> fragt die CLI nach einem Passwort. Für andere Exporte mit separatem CSS,
+          Bildern oder klassischen Skripten <code>--bundle</code> statt <code>--html-page</code> verwenden. Das
+          verändert die HTML-Arbeitskopie und kann Ressourcen nachladen; Warnungen prüfen.
+        </p>
+      </section>
+      <section>
+        <h2>3. Wirklich offline prüfen</h2>
+        <p>
+          Das versiegelte HTML separat kopieren, den Quellordner unzugänglich machen und das Netzwerk abschalten. Nach
+          dem Öffnen müssen Kennzahl, alle vier Tabellenzeilen und das Diagramm erhalten bleiben. Genau dieser Vergleich
+          wurde in Chrome geprüft.
+        </p>
+        <aside class="note">
+          Das öffentliche Beispiel hat kein Passwort. Es ist eine Demonstration, kein vertraulicher Bericht. Formeln,
+          Mermaid und serverabhängige Inhalte sind damit nicht getestet.
+        </aside>
+      </section>
+    </main>
+  </body>
+</html>

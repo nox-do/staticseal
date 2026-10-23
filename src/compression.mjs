@@ -1,11 +1,12 @@
 import { renderWrapper } from './wrapper.mjs';
 import { createFormat } from './format.mjs';
-import { BROWSER_FILE_MAX_BYTES } from './browser-limits.mjs';
+import { PREPARED_MAX_BYTES } from './limits.mjs';
 
 export const COMPRESSION_THRESHOLD = 4 * 1024;
 
 // Creator only. Compare exact output lengths without encrypting/encoding twice.
-export async function prepareContent(bytes, file, metadata, chunkSize, maxOriginalSize = BROWSER_FILE_MAX_BYTES) {
+export async function prepareContent(bytes, file, metadata, chunkSize, files) {
+  if (bytes.byteLength > PREPARED_MAX_BYTES) throw new Error('Prepared content exceeds the 128 MiB working limit.');
   const format = createFormat();
   const encoder = new TextEncoder();
   const header = encoder.encode(JSON.stringify(file));
@@ -13,10 +14,8 @@ export async function prepareContent(bytes, file, metadata, chunkSize, maxOrigin
   const rawVersion = format.versionFor(metadata.access);
   const compressedVersion = format.versionFor(metadata.access, true);
   const original = { bytes, header, v: rawVersion };
-  // The browser keeps its original limit; the CLI opts into a larger range.
   if (
     bytes.byteLength < COMPRESSION_THRESHOLD ||
-    bytes.byteLength > maxOriginalSize ||
     typeof CompressionStream !== 'function' ||
     typeof DecompressionStream !== 'function'
   )
@@ -33,6 +32,7 @@ export async function prepareContent(bytes, file, metadata, chunkSize, maxOrigin
     const chunks = Math.ceil(length / rawChunkSize);
     const html = renderWrapper({
       title: '',
+      files,
       payload: { ...metadata, v, ...(format.isUnencryptedVersion(v) ? { content: [] } : { tag: '', ciphertext: [] }) }
     });
     // Base64 chunks are multiples of three bytes, except the last; JSON adds quotes/commas.

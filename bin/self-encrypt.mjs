@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 import { createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes } from 'node:crypto';
-import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { basename, dirname, resolve } from 'node:path';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 
-import { createPreview } from '../src/preview.mjs';
+import { SOURCE_MAX_BYTES, HTML_MAX_BYTES } from '../src/limits.mjs';
 import { createFormat } from '../src/format.mjs';
 import { createCrypto } from '../src/crypto.mjs';
 import { renderWrapper } from '../src/wrapper.mjs';
@@ -13,6 +13,7 @@ import { preparePackage } from '../src/creation.mjs';
 import { inflateContent } from '../src/gzip.mjs';
 import { isHtmlFile, createPageViewer } from '../src/viewer.mjs';
 import { themeStyle } from '../src/cli-theme.mjs';
+import { createSourceLoader, reportRoot, sourceUrl } from './lib/source.mjs';
 
 const format = createFormat(value => Buffer.from(value, 'base64'));
 const { fromBase64Chunks, unpackContent } = format;
@@ -21,10 +22,6 @@ const { authenticatedDataFor } = createCrypto();
 const VERSION = '1.3.2';
 const DEFAULT_ITERATIONS = 210_000;
 const DEFAULT_CHUNK_SIZE = 64 * 1024;
-// CLI product policy; independent of browser creation and technical format limits.
-const CLI_ORIGINAL_MAX_BYTES = 128 * 1024 * 1024;
-const CLI_PAYLOAD_MAX_BYTES = 25 * 1024 * 1024;
-const CLI_HTML_MAX_BYTES = 35 * 1024 * 1024;
 function parseArgs(argv) {
   const args = {
     iterations: DEFAULT_ITERATIONS,
@@ -74,6 +71,13 @@ function parseArgs(argv) {
       case '--html-page':
         args.htmlPage = true;
         break;
+      case '--bundle':
+        args.bundle = args.htmlPage = true;
+        break;
+      case '--resource-root':
+        args.resourceRoot = requiredString(next, '--resource-root');
+        index += 1;
+        break;
       case '--minimal':
         args.minimal = true;
         break;
@@ -106,10 +110,10 @@ function printHelp() {
 Usage:
   node ./bin/self-encrypt.mjs --in input.pdf --out input_sealed.html [--title "Protected file"]
 
-Limits (experimental): 128 MiB original, 25 MiB binary package, 35 MiB final HTML.
+Limits (experimental): 128 MiB sources/prepared content, 25 MiB final HTML transport.
 
 Options:
-  --in <file>              Static source file
+  --in <file|URL>          Source path, file:// or HTTP(S) URL
   --out <file>             Encrypted self-contained HTML wrapper
   --title <text>           Browser title and lock-screen context
   --iterations <number>    PBKDF2 iterations, default ${DEFAULT_ITERATIONS}
@@ -118,6 +122,8 @@ Options:
   --stdin-password         Read password from stdin instead of prompting
   --no-password            Seal for crawler resistance only; no confidentiality
   --html-page              Display self-contained HTML as a webpage, including scripts
+  --bundle                 Embed HTML/MHTML report resources; implies --html-page
+  --resource-root <dir>    Allowed local resource directory for --bundle (default: report directory)
   --minimal                Opening screen with logo/title/form only; errors still shown
   --button-label <text>    Optional opening button text
   --theme-bg <hex>         Optional lock-screen background color
@@ -152,8 +158,6 @@ function toBase64Chunks(bytes, size) {
   }
   return chunks;
 }
-
-const { inferContentType } = createPreview();
 
 function stripFinalLineEnding(value) {
   if (value.endsWith('\r\n')) {
@@ -248,12 +252,10 @@ async function encryptBytes(
       salt: salt?.toString('base64'),
       iv: iv?.toString('base64'),
       htmlPage,
-      chunkSize,
-      maxOriginalSize: CLI_ORIGINAL_MAX_BYTES
+      readerFiles: [{ filename: sourceName, contentType }],
+      chunkSize
     }
   );
-  if (content.binarySize > CLI_PAYLOAD_MAX_BYTES)
-    throw new Error('Binary package exceeds the 25 MiB CLI limit after compression.');
   const { metadata, lengthPrefix, header } = content;
   if (access === 'sealed') {
     const packed = Buffer.concat([lengthPrefix, header, content.bytes]);
@@ -321,9 +323,9 @@ async function main() {
 
   const css = themeStyle(args.theme);
 
-  const inputPath = resolve(requiredString(args.in, '--in'));
+  const inputPath = requiredString(args.in, '--in');
+  const inputUrl = sourceUrl(inputPath);
   const outputPath = resolve(requiredString(args.out, '--out'));
-  const sourceName = basename(inputPath);
   const title = args.title || 'Protected file';
 
   if (!Number.isInteger(args.iterations) || args.iterations < 100_000) {
@@ -336,8 +338,17 @@ async function main() {
     throw new Error('--no-password cannot be combined with --stdin-password.');
   }
 
-  if ((await stat(inputPath)).size > CLI_ORIGINAL_MAX_BYTES) {
-    throw new Error('Original file exceeds the 128 MiB CLI limit.');
+  if (args.resourceRoot && !args.bundle) throw new Error('--resource-root requires --bundle.');
+  const load = createSourceLoader({
+    root: args.bundle && inputUrl.protocol === 'file:' ? resolve(args.resourceRoot || reportRoot(inputUrl)) : undefined,
+    allowFiles: inputUrl.protocol === 'file:'
+  });
+  let source = await load(inputUrl);
+  const originalSize = source.bytes.byteLength;
+  if (args.bundle) {
+    const { bundleReport } = await import('./lib/report.mjs');
+    source = await bundleReport(source, load);
+    for (const warning of source.warnings) console.error('Warning: ' + warning);
   }
 
   const access = args.noPassword ? 'sealed' : 'passphrase';
@@ -346,13 +357,13 @@ async function main() {
     throw new Error('Password must not be empty.');
   }
 
-  const bytes = await readFile(inputPath);
-  if (bytes.byteLength > CLI_ORIGINAL_MAX_BYTES) throw new Error('Original file exceeds the 128 MiB CLI limit.');
+  const bytes = source.bytes;
+  if (bytes.byteLength > SOURCE_MAX_BYTES) throw new Error('Original file exceeds the 128 MiB CLI limit.');
   const payload = await encryptBytes(bytes, password, {
     iterations: args.iterations,
     chunkSize: args.chunkSize,
-    sourceName,
-    contentType: inferContentType(basename(inputPath)),
+    sourceName: source.name,
+    contentType: source.type.split(';')[0],
     access,
     htmlPage: args.htmlPage
   });
@@ -360,13 +371,14 @@ async function main() {
   const plainWrapper = renderWrapper({
     title,
     payload,
+    files: [{ filename: source.name, contentType: source.type }],
     minimal: args.minimal,
     buttonLabel: args.buttonLabel
   });
   const wrapper = css ? plainWrapper.replace('</head>', () => `<style>${css}</style></head>`) : plainWrapper;
 
-  if (Buffer.byteLength(wrapper, 'utf8') > CLI_HTML_MAX_BYTES) {
-    throw new Error('HTML package exceeds the 35 MiB CLI limit.');
+  if (Buffer.byteLength(wrapper, 'utf8') > HTML_MAX_BYTES) {
+    throw new Error('HTML package exceeds the 25 MiB transport limit.');
   }
 
   await mkdir(dirname(outputPath), { recursive: true });
@@ -376,7 +388,9 @@ async function main() {
   output.write(`Access: ${access === 'sealed' ? 'no passphrase, crawler barrier only' : 'passphrase'}\n`);
   output.write('Content type: private\n');
   output.write(`Payload chunks: ${(payload.content || payload.ciphertext).length}\n`);
-  output.write(`Original: ${bytes.byteLength} bytes → HTML package: ${Buffer.byteLength(wrapper)} bytes\n`);
+  output.write(
+    `Original source: ${originalSize} bytes → Prepared content: ${bytes.byteLength} bytes → HTML package: ${Buffer.byteLength(wrapper)} bytes\n`
+  );
 }
 
 main().catch(error => {

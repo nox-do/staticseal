@@ -9,6 +9,7 @@ export default [
     ignores: [
       'index.html',
       'fatseal.html',
+      'examples/fatseal/demo-*.html',
       'src/logo.mjs',
       'src/wrapper-template.mjs',
       'src/reader-factories.mjs',
@@ -16,13 +17,13 @@ export default [
     ]
   },
   {
-    files: ['**/*.{js,mjs}', 'src/app.html'],
+    files: ['**/*.{js,mjs}', 'src/app.html', 'examples/fatseal/website/**/*.html'],
     plugins: { html },
     languageOptions: { ecmaVersion: 2022 },
     rules: js.configs.recommended.rules
   },
   {
-    files: ['src/**/*.{js,mjs}', 'src/app.html', 'test/*-smoke-runner.js'],
+    files: ['src/**/*.{js,mjs}', 'src/app.html', 'test/*-smoke-runner.js', 'examples/fatseal/website/**/*.html'],
     languageOptions: { globals: globals.browser }
   },
   {
@@ -34,7 +35,7 @@ export default [
     // These modules are inserted at build markers inside the creator's scope.
     languageOptions: {
       globals: readonly(
-        'createFormat createPreview createCrypto createPageViewer preparePackage inflateContent isHtmlFile renderWrapper BROWSER_FILE_MAX_BYTES BROWSER_FILE_WARN_BYTES BROWSER_FILE_CONFIRM_BYTES'
+        'createFormat createPreview createCrypto createPageViewer preparePackage inflateContent isHtmlFile renderWrapper SOURCE_MAX_BYTES HTML_MAX_BYTES BROWSER_FILE_WARN_BYTES BROWSER_FILE_CONFIRM_BYTES'
       )
     }
   },
@@ -47,7 +48,7 @@ export default [
     // This fragment shares the creator scope; sealSelection is called at a build marker.
     languageOptions: {
       globals: readonly(
-        '$ sourceFile htmlPageOption htmlPage button fileMeta inferContentType formatBytes setStatus password passwordRepeat encryptBytes DEFAULT_ITERATIONS outputFilenameFor renderWrapper downloadHtml BROWSER_FILE_MAX_BYTES BROWSER_FILE_WARN_BYTES BROWSER_FILE_CONFIRM_BYTES inspectHtmlSelection embedSelectedHtml packCollection'
+        '$ sourceFile htmlPageOption htmlPage button fileMeta inferContentType formatBytes setStatus password passwordRepeat encryptBytes DEFAULT_ITERATIONS outputFilenameFor renderWrapper downloadHtml SOURCE_MAX_BYTES PREPARED_MAX_BYTES BROWSER_FILE_WARN_BYTES BROWSER_FILE_CONFIRM_BYTES inspectHtmlSelection embedSelectedHtml packCollection'
       )
     },
     rules: { 'no-unused-vars': ['error', { varsIgnorePattern: '^sealSelection$' }] }
