@@ -22,24 +22,39 @@ test('gzip threshold, total-package savings and native API fallback', async () =
   const { renderWrapper } = await import('../src/wrapper.mjs');
   const asHtml = (content, chunkSize = 65536) => {
     const ciphertext = Buffer.alloc(4 + content.header.length + content.bytes.length);
-    return renderWrapper({ title: 'Size test', payload: { ...metadata, v: content.v, tag: '',
-      ciphertext: toBase64Chunks(ciphertext, chunkSize) } });
+    return renderWrapper({
+      title: 'Size test',
+      payload: { ...metadata, v: content.v, tag: '', ciphertext: toBase64Chunks(ciphertext, chunkSize) }
+    });
   };
   const incompressible = randomFillSync(Buffer.alloc(8192));
   const partlyCompressible = Buffer.concat([randomFillSync(Buffer.alloc(7000)), Buffer.alloc(1192)]);
   const smallGain = Buffer.concat([randomFillSync(Buffer.alloc(7900)), Buffer.alloc(292)]);
   assert.ok(gzipSync(smallGain).length < smallGain.length);
-  assert.equal((await prepareContent(smallGain, file, metadata, 65536)).v, 2,
-    'reject gzip savings that do not pay for the embedded decoder');
+  assert.equal(
+    (await prepareContent(smallGain, file, metadata, 65536)).v,
+    2,
+    'reject gzip savings that do not pay for the embedded decoder'
+  );
   for (const chunkSize of [40, 65, 65536]) {
-    for (const bytes of [Buffer.alloc(COMPRESSION_THRESHOLD - 1), Buffer.alloc(COMPRESSION_THRESHOLD),
-      incompressible, partlyCompressible, smallGain, Buffer.alloc(65536)]) {
+    for (const bytes of [
+      Buffer.alloc(COMPRESSION_THRESHOLD - 1),
+      Buffer.alloc(COMPRESSION_THRESHOLD),
+      incompressible,
+      partlyCompressible,
+      smallGain,
+      Buffer.alloc(65536)
+    ]) {
       const result = await prepareContent(bytes, file, metadata, chunkSize);
       const raw = { bytes, header: Buffer.from(JSON.stringify(file)), v: 2 };
-      const compressed = { bytes: gzipSync(bytes),
-        header: Buffer.from(JSON.stringify({ ...file, originalSize: bytes.length })), v: 3 };
-      const worthwhile = bytes.length >= COMPRESSION_THRESHOLD
-        && Buffer.byteLength(asHtml(compressed, chunkSize)) < Buffer.byteLength(asHtml(raw, chunkSize));
+      const compressed = {
+        bytes: gzipSync(bytes),
+        header: Buffer.from(JSON.stringify({ ...file, originalSize: bytes.length })),
+        v: 3
+      };
+      const worthwhile =
+        bytes.length >= COMPRESSION_THRESHOLD &&
+        Buffer.byteLength(asHtml(compressed, chunkSize)) < Buffer.byteLength(asHtml(raw, chunkSize));
       assert.equal(result.v, worthwhile ? 3 : 2, `size ${bytes.length}, chunk width ${chunkSize}`);
       assert.ok(Buffer.byteLength(asHtml(result, chunkSize)) <= Buffer.byteLength(asHtml(raw, chunkSize)));
       if (result.v === 2) assert.ok(!asHtml(result).includes('DecompressionStream'));
@@ -47,8 +62,10 @@ test('gzip threshold, total-package savings and native API fallback', async () =
   }
   const fileInfo = { name: 'fallback.txt', type: 'text/plain' };
   for (const missing of ['CompressionStream', 'DecompressionStream']) {
-    const { html } = await createThroughUi(source, Buffer.alloc(8192), fileInfo,
-      { password: 'test', globals: { [missing]: undefined } });
+    const { html } = await createThroughUi(source, Buffer.alloc(8192), fileInfo, {
+      password: 'test',
+      globals: { [missing]: undefined }
+    });
     const payload = wrapper(html).payload;
     assert.equal(payload.v, 2);
     assert.ok(!html.includes('DecompressionStream'));
@@ -71,16 +88,28 @@ test('compressed module-created and CLI envelopes restore exactly 25 MiB in both
       assert.ok(appHtml.includes('DecompressionStream'));
       assert.ok(!appHtml.includes('CompressionStream'));
       assert.ok(Buffer.byteLength(appHtml) < 200000);
-      const cli = spawnSync(process.execPath, ['bin/self-encrypt.mjs', '--in', join(dir, file.name),
-        '--out', join(dir, 'sealed.html'), '--iterations', '160000',
-        '--chunk-size', '65', '--private-filename',
-        access === 'sealed' ? '--no-password' : '--stdin-password'],
-        { cwd: new URL('..', import.meta.url), input: 'test\n', encoding: 'utf8' });
+      const cli = spawnSync(
+        process.execPath,
+        [
+          'bin/self-encrypt.mjs',
+          '--in',
+          join(dir, file.name),
+          '--out',
+          join(dir, 'sealed.html'),
+          '--iterations',
+          '160000',
+          '--chunk-size',
+          '65',
+          '--private-filename',
+          access === 'sealed' ? '--no-password' : '--stdin-password'
+        ],
+        { cwd: new URL('..', import.meta.url), input: 'test\n', encoding: 'utf8' }
+      );
       assert.equal(cli.status, 0, cli.stderr);
       const cliHtml = await readFile(join(dir, 'sealed.html'), 'utf8');
       for (const html of [appHtml, cliHtml]) {
         const reader = wrapper(html);
-    
+
         assert.equal(reader.payload.v, access === 'sealed' ? 5 : 3);
         assert.deepEqual(Buffer.from(await reader.open('test')), bytes);
         const restored = await decodePayload(reader.payload, 'test');
@@ -97,16 +126,28 @@ test('compressed module-created and CLI envelopes restore exactly 25 MiB in both
         assert.ok(!html.includes(file.name));
       }
     }
-  } finally { await rm(dir, { recursive: true, force: true }); }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 test('gzip restoration rejects damaged streams, invalid sizes and unsupported browsers', async () => {
   const bytes = Buffer.alloc(8192, 255);
-  const content = { bytes: gzipSync(bytes), originalSize: bytes.length, filename: 'test.bin', contentType: 'application/octet-stream' };
+  const content = {
+    bytes: gzipSync(bytes),
+    originalSize: bytes.length,
+    filename: 'test.bin',
+    contentType: 'application/octet-stream'
+  };
   // Exercise the serialized minified helper too; it must have no module closure.
   const built = await import('../src/reader-factories.mjs');
   for (const helper of [inflateContent, built.inflateContent]) {
-    const inflate = vm.runInNewContext('(' + helper.toString() + ')', { Blob, DecompressionStream, Uint8Array, DOMException });
+    const inflate = vm.runInNewContext('(' + helper.toString() + ')', {
+      Blob,
+      DecompressionStream,
+      Uint8Array,
+      DOMException
+    });
     assert.deepEqual(Buffer.from((await inflate(content, createFormat().MAX_EXPANDED_BYTES)).bytes), bytes);
     await assert.rejects(inflate(content), /Invalid or oversized compressed content/);
     for (const originalSize of [undefined, -1, 1.5, 128 * 1024 * 1024 + 1, bytes.length - 1, bytes.length + 1]) {
@@ -116,8 +157,13 @@ test('gzip restoration rejects damaged streams, invalid sizes and unsupported br
       await assert.rejects(inflate({ ...content, bytes: data }, createFormat().MAX_EXPANDED_BYTES));
     }
   }
-  const payload = await makePayload(bytes, 'test', 160000,
-    { name: content.filename, type: content.contentType }, 'passphrase');
+  const payload = await makePayload(
+    bytes,
+    'test',
+    160000,
+    { name: content.filename, type: content.contentType },
+    'passphrase'
+  );
   const html = renderWrapper({ title: 'Unsupported browser', payload });
   const reader = wrapper(html, undefined, { globals: { DecompressionStream: undefined } });
   reader.nodes.get('password').value = 'test';

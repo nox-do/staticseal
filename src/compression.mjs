@@ -14,11 +14,16 @@ export async function prepareContent(bytes, file, metadata, chunkSize, maxOrigin
   const compressedVersion = format.versionFor(metadata.access, true);
   const original = { bytes, header, v: rawVersion };
   // The browser keeps its original limit; the CLI opts into a larger range.
-  if (bytes.byteLength < COMPRESSION_THRESHOLD || bytes.byteLength > maxOriginalSize
-      || typeof CompressionStream !== 'function' || typeof DecompressionStream !== 'function') return original;
-  const compressed = new Uint8Array(await new Response(
-    new Blob([bytes]).stream().pipeThrough(new CompressionStream('gzip'))
-  ).arrayBuffer());
+  if (
+    bytes.byteLength < COMPRESSION_THRESHOLD ||
+    bytes.byteLength > maxOriginalSize ||
+    typeof CompressionStream !== 'function' ||
+    typeof DecompressionStream !== 'function'
+  )
+    return original;
+  const compressed = new Uint8Array(
+    await new Response(new Blob([bytes]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer()
+  );
   if (compressed.byteLength >= bytes.byteLength) return original;
   const compressedHeader = encoder.encode(JSON.stringify({ ...file, originalSize: bytes.byteLength }));
   if (compressedHeader.byteLength > format.MAX_METADATA_BYTES) return original;
@@ -26,11 +31,17 @@ export async function prepareContent(bytes, file, metadata, chunkSize, maxOrigin
   const packageSize = (v, headerSize, contentSize) => {
     const length = format.HEADER_LENGTH_BYTES + headerSize + contentSize;
     const chunks = Math.ceil(length / rawChunkSize);
-    const html = renderWrapper({ title: '', payload: { ...metadata, v, ...(format.isUnencryptedVersion(v) ? { content: [] } : { tag: '', ciphertext: [] }) } });
+    const html = renderWrapper({
+      title: '',
+      payload: { ...metadata, v, ...(format.isUnencryptedVersion(v) ? { content: [] } : { tag: '', ciphertext: [] }) }
+    });
     // Base64 chunks are multiples of three bytes, except the last; JSON adds quotes/commas.
     return encoder.encode(html).byteLength + 4 * Math.ceil(length / 3) + 3 * chunks - 1;
   };
-  if (packageSize(compressedVersion, compressedHeader.byteLength, compressed.byteLength)
-      >= packageSize(rawVersion, header.byteLength, bytes.byteLength)) return original;
+  if (
+    packageSize(compressedVersion, compressedHeader.byteLength, compressed.byteLength) >=
+    packageSize(rawVersion, header.byteLength, bytes.byteLength)
+  )
+    return original;
   return { bytes: compressed, header: compressedHeader, v: compressedVersion };
 }

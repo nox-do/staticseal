@@ -1,0 +1,16 @@
+# Build outputs
+index.html
+fatseal.html
+src/logo.mjs
+src/wrapper-template.mjs
+src/reader-factories.mjs
+
+# Exact HTML build markers and compact CSS (quotes/leading zeroes affect output size)
+src/*.html
+src/wrapper.css
+
+# Third-party code, fixed legacy fixtures and npm-managed metadata
+src/seal.svg
+src/srcset-parser.mjs
+test/fixtures/
+package-lock.json

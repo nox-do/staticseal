@@ -8,20 +8,28 @@
   },
   "scripts": {
     "encrypt": "node ./bin/self-encrypt.mjs",
-    "check": "node scripts/build.mjs --check && node ./bin/self-encrypt.mjs --help && npm test",
+    "check": "npm run lint && npm run format:check && node scripts/build.mjs --check && node ./bin/self-encrypt.mjs --help && npm test",
     "test": "node --test test/format.test.mjs test/compression.test.mjs test/creator.test.mjs test/cli.test.mjs test/preview.test.mjs test/integration.test.mjs test/multi-file.test.mjs test/html-import.test.mjs",
     "test:browser": "node test/build-browser-smoke.mjs",
     "build": "node scripts/build.mjs",
-    "measure:size": "node scripts/measure-size.mjs"
+    "measure:size": "node scripts/measure-size.mjs",
+    "lint": "eslint . --max-warnings 0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "engines": {
-    "node": ">=20"
+    "node": "^20.19.0 || ^22.13.0 || >=24"
   },
   "license": "MIT",
   "devDependencies": {
+    "@eslint/js": "10.0.1",
     "clean-css": "5.3.3",
+    "eslint": "10.13.0",
+    "eslint-plugin-html": "8.2.1",
+    "globals": "17.13.0",
     "happy-dom": "20.14.5",
     "html-minifier-terser": "7.2.0",
+    "prettier": "3.9.10",
     "terser": "5.51.2"
   }
 }

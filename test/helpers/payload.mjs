@@ -18,28 +18,54 @@ export function toBase64Chunks(bytes, width) {
   return chunks;
 }
 
-export async function makePayload(bytes, password, iterations, file, access, privateFilename = false, htmlPage = false, collection = false) {
+export async function makePayload(
+  bytes,
+  password,
+  iterations,
+  file,
+  access,
+  privateFilename = false,
+  htmlPage = false,
+  collection = false
+) {
   const salt = access === 'sealed' ? undefined : webcrypto.getRandomValues(new Uint8Array(16));
   const iv = access === 'sealed' ? undefined : webcrypto.getRandomValues(new Uint8Array(12));
-  const content = await preparePackage(bytes, { filename: file.name, contentType: file.type }, {
-    access, iterations, htmlPage, collection, chunkSize: 65536,
-    salt: salt && Buffer.from(salt).toString('base64'), iv: iv && Buffer.from(iv).toString('base64')
-  });
+  const content = await preparePackage(
+    bytes,
+    { filename: file.name, contentType: file.type },
+    {
+      access,
+      iterations,
+      htmlPage,
+      collection,
+      chunkSize: 65536,
+      salt: salt && Buffer.from(salt).toString('base64'),
+      iv: iv && Buffer.from(iv).toString('base64')
+    }
+  );
   // Legacy public-metadata fixtures only. Product creators always keep these
   // fields inside the package; readers must still authenticate older envelopes.
   if (!privateFilename) Object.assign(content.metadata, { filename: file.name, contentType: file.type });
   const packed = Buffer.concat([content.lengthPrefix, content.header, content.bytes]);
   if (access === 'sealed') return { ...content.metadata, content: toBase64Chunks(packed, 65536) };
   const key = await cryptography.deriveKey(password, salt, iterations, ['encrypt', 'decrypt']);
-  const encrypted = new Uint8Array(await webcrypto.subtle.encrypt(
-    { name: 'AES-GCM', iv, additionalData: cryptography.authenticatedDataFor(content.metadata) }, key, packed
-  ));
-  return { ...content.metadata, tag: Buffer.from(encrypted.subarray(-16)).toString('base64'),
-    ciphertext: toBase64Chunks(encrypted.subarray(0, -16), 65536) };
+  const encrypted = new Uint8Array(
+    await webcrypto.subtle.encrypt(
+      { name: 'AES-GCM', iv, additionalData: cryptography.authenticatedDataFor(content.metadata) },
+      key,
+      packed
+    )
+  );
+  return {
+    ...content.metadata,
+    tag: Buffer.from(encrypted.subarray(-16)).toString('base64'),
+    ciphertext: toBase64Chunks(encrypted.subarray(0, -16), 65536)
+  };
 }
 
 export async function decodePayload(payload, password) {
-  const bytes = format.isUnencryptedVersion(payload.v) ? format.fromBase64Chunks(payload.content)
+  const bytes = format.isUnencryptedVersion(payload.v)
+    ? format.fromBase64Chunks(payload.content)
     : await cryptography.decryptPayload(payload, password, format.fromBase64, format.fromBase64Chunks);
   const content = format.unpackContent(bytes, payload);
   return format.isCompressedVersion(payload.v) ? inflateContent(content, format.MAX_EXPANDED_BYTES) : content;

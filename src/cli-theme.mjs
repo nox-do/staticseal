@@ -2,7 +2,10 @@
 export function themeStyle(theme = {}) {
   const declarations = [];
   for (const [name, property] of Object.entries({
-    bg: '--bg', text: '--ink', accent: '--accent', panel: '--panel'
+    bg: '--bg',
+    text: '--ink',
+    accent: '--accent',
+    panel: '--panel'
   })) {
     const value = theme[name];
     if (value === undefined) continue;
@@ -15,7 +18,11 @@ export function themeStyle(theme = {}) {
   }
   if (theme.font !== undefined) {
     // Font stacks only; no declarations, URLs, HTML or external font loading.
-    if (!/^(?:[a-zA-Z][\w -]*|"[a-zA-Z][\w -]*"|'[a-zA-Z][\w -]*')(?:\s*,\s*(?:[a-zA-Z][\w -]*|"[a-zA-Z][\w -]*"|'[a-zA-Z][\w -]*'))*$/.test(theme.font)) {
+    if (
+      !/^(?:[a-zA-Z][\w -]*|"[a-zA-Z][\w -]*"|'[a-zA-Z][\w -]*')(?:\s*,\s*(?:[a-zA-Z][\w -]*|"[a-zA-Z][\w -]*"|'[a-zA-Z][\w -]*'))*$/.test(
+        theme.font
+      )
+    ) {
       throw new Error('--theme-font requires a font-family stack, e.g. "Georgia, serif".');
     }
     declarations.push(`font-family:${theme.font}`);
@@ -27,6 +34,9 @@ export function themeStyle(theme = {}) {
     }
     radius = `.lock-shell{border-radius:${theme.radius}}`;
   }
-  return (declarations.length ? `body:not(.vp){${declarations.join(';')}}` : '')
-    + (theme.accent !== undefined ? 'body:not(.vp) :focus-visible{outline-color:var(--accent)}' : '') + radius;
+  return (
+    (declarations.length ? `body:not(.vp){${declarations.join(';')}}` : '') +
+    (theme.accent !== undefined ? 'body:not(.vp) :focus-visible{outline-color:var(--accent)}' : '') +
+    radius
+  );
 }

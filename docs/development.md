@@ -2,15 +2,15 @@
 
 ## Source map
 
-| Files | Purpose |
-| --- | --- |
-| `src/app.html`, `browser-limits.mjs` | Small creator UI and browser limits |
-| `src/multi-file-ui.js`, `html-import.mjs`, `srcset-parser.mjs` | FatSeal selection and local resource embedding |
-| `src/creation.mjs`, `compression.mjs` | Inner metadata, package parts and gzip selection |
-| `src/format.mjs`, `crypto.mjs`, `gzip.mjs` | Standalone format parser, AES-GCM decoder and bounded inflater |
-| `src/viewer.mjs`, `preview.mjs`, `collection.mjs` | File/page/collection previews, collection codec and store-only ZIP writer |
-| `src/wrapper.mjs`, `reader.js`, `wrapper.html`, `wrapper.css`, `seal.svg` | Opening screen and selected reader assembly |
-| `bin/self-encrypt.mjs`, `src/cli-theme.mjs` | CLI creation, limits and opening-screen themes |
+| Files                                                                     | Purpose                                                                   |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `src/app.html`, `browser-limits.mjs`                                      | Small creator UI and browser limits                                       |
+| `src/multi-file-ui.js`, `html-import.mjs`, `srcset-parser.mjs`            | FatSeal selection and local resource embedding                            |
+| `src/creation.mjs`, `compression.mjs`                                     | Inner metadata, package parts and gzip selection                          |
+| `src/format.mjs`, `crypto.mjs`, `gzip.mjs`                                | Standalone format parser, AES-GCM decoder and bounded inflater            |
+| `src/viewer.mjs`, `preview.mjs`, `collection.mjs`                         | File/page/collection previews, collection codec and store-only ZIP writer |
+| `src/wrapper.mjs`, `reader.js`, `wrapper.html`, `wrapper.css`, `seal.svg` | Opening screen and selected reader assembly                               |
+| `bin/self-encrypt.mjs`, `src/cli-theme.mjs`                               | CLI creation, limits and opening-screen themes                            |
 
 `npm run build` generates `index.html`, `fatseal.html`, `src/logo.mjs`,
 `src/wrapper-template.mjs` and `src/reader-factories.mjs`. Do not edit these outputs.
@@ -27,10 +27,10 @@ Both creators return metadata plus separate length-prefix/header/content buffers
 The browser joins them for Web Crypto. The CLI encrypts the parts without making
 another complete plaintext copy. Creation verifies bytes and metadata before output.
 
-| Version | Access | Content |
-| --- | --- | --- |
-| 2 / 3 | Passphrase | Raw / gzip |
-| 4 / 5 | No passphrase | Raw / gzip |
+| Version | Access        | Content    |
+| ------- | ------------- | ---------- |
+| 2 / 3   | Passphrase    | Raw / gzip |
+| 4 / 5   | No passphrase | Raw / gzip |
 
 All use `encoding: "metadata"`. The decoded body starts with a four-byte big-endian
 JSON-header length, followed by UTF-8 JSON (`filename`, `contentType`, and for gzip
@@ -67,7 +67,9 @@ Warnings do not make incomplete HTML self-contained; inspect the prepared result
 npm run check
 ```
 
-Checks generated files, CLI help and Node tests. Test files are grouped by feature;
+Runs ESLint, Prettier's format check, generated-file checks, CLI help and Node tests.
+GitHub runs the same command on pull requests and pushes to `main`.
+Test files are grouped by feature;
 shared fixtures live in `test/helpers/`. Historical v2–v5 packages are fixed fixtures.
 
 The integration matrix covers actual browser-app and CLI output across both access
@@ -77,6 +79,15 @@ Targeted tests cover malformed data, authenticated fields, encodings, previews,
 selection state, package limits, original-buffer use and one KDF call per creation.
 Happy DOM tests cover HTML-import regressions, graph caching and cancellation.
 Keep unique failure cases; do not repeat the full integration matrix in feature tests.
+
+Use `npm run lint` for lint only and `npm run format` to format sources.
+Generated files, HTML templates with exact build markers, compact wrapper CSS,
+third-party code and fixed legacy fixtures are excluded from formatting.
+ESLint still checks the app's inline JavaScript; injected scopes are declared in
+`eslint.config.mjs`. These tools are development dependencies only. Tooling requires
+Node.js `^20.19.0 || ^22.13.0 || >=24`; the standalone apps need no Node.js.
+Compare `measure:size` reports before and after formatting/build changes; source
+readability must not silently increase the shipped app or reader sizes.
 
 For real-browser checks:
 

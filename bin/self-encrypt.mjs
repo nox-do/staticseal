@@ -180,7 +180,7 @@ function readHiddenLine(prompt) {
       input.pause();
       output.write('\n');
     };
-    const onData = (chunk) => {
+    const onData = chunk => {
       const text = chunk.toString('utf8');
       for (const char of text) {
         if (char === '\u0003') {
@@ -225,7 +225,11 @@ async function readPassword({ stdinPassword }) {
   return password;
 }
 
-async function encryptBytes(bytes, password, { iterations, chunkSize, sourceName, contentType, access, htmlPage = false }) {
+async function encryptBytes(
+  bytes,
+  password,
+  { iterations, chunkSize, sourceName, contentType, access, htmlPage = false }
+) {
   if (htmlPage) {
     if (!isHtmlFile(sourceName, contentType)) throw new Error('--html-page requires an HTML file.');
     createPageViewer().decodeHtml(bytes);
@@ -235,11 +239,21 @@ async function encryptBytes(bytes, password, { iterations, chunkSize, sourceName
     salt = randomBytes(format.SALT_BYTES);
     iv = randomBytes(format.IV_BYTES);
   }
-  const content = await preparePackage(bytes, { filename: sourceName, contentType }, {
-    access, iterations, salt: salt?.toString('base64'), iv: iv?.toString('base64'),
-    htmlPage, chunkSize, maxOriginalSize: CLI_ORIGINAL_MAX_BYTES
-  });
-  if (content.binarySize > CLI_PAYLOAD_MAX_BYTES) throw new Error('Binary package exceeds the 25 MiB CLI limit after compression.');
+  const content = await preparePackage(
+    bytes,
+    { filename: sourceName, contentType },
+    {
+      access,
+      iterations,
+      salt: salt?.toString('base64'),
+      iv: iv?.toString('base64'),
+      htmlPage,
+      chunkSize,
+      maxOriginalSize: CLI_ORIGINAL_MAX_BYTES
+    }
+  );
+  if (content.binarySize > CLI_PAYLOAD_MAX_BYTES)
+    throw new Error('Binary package exceeds the 25 MiB CLI limit after compression.');
   const { metadata, lengthPrefix, header } = content;
   if (access === 'sealed') {
     const packed = Buffer.concat([lengthPrefix, header, content.bytes]);
@@ -251,7 +265,12 @@ async function encryptBytes(bytes, password, { iterations, chunkSize, sourceName
   const cipher = createCipheriv('aes-256-gcm', key, iv);
   cipher.setAAD(authenticatedDataFor(metadata));
   // Feed the header separately rather than allocating a second full plaintext buffer.
-  const ciphertext = Buffer.concat([cipher.update(lengthPrefix), cipher.update(header), cipher.update(content.bytes), cipher.final()]);
+  const ciphertext = Buffer.concat([
+    cipher.update(lengthPrefix),
+    cipher.update(header),
+    cipher.update(content.bytes),
+    cipher.final()
+  ]);
   const tag = cipher.getAuthTag();
 
   const payload = {
@@ -276,7 +295,9 @@ function decryptPayload(payload, password, existingKey) {
 }
 
 async function verifyPayload(payload, password, expectedBytes, existingKey, expectedFile) {
-  const decoded = format.isUnencryptedVersion(payload.v) ? fromBase64Chunks(payload.content) : decryptPayload(payload, password, existingKey);
+  const decoded = format.isUnencryptedVersion(payload.v)
+    ? fromBase64Chunks(payload.content)
+    : decryptPayload(payload, password, existingKey);
   let content = unpackContent(decoded, payload);
   if (format.isCompressedVersion(payload.v)) content = await inflateContent(content, format.MAX_EXPANDED_BYTES);
   if (expectedFile && (content.filename !== expectedFile.name || content.contentType !== expectedFile.type)) {
@@ -358,7 +379,7 @@ async function main() {
   output.write(`Original: ${bytes.byteLength} bytes → HTML package: ${Buffer.byteLength(wrapper)} bytes\n`);
 }
 
-main().catch((error) => {
+main().catch(error => {
   console.error(error.message);
   process.exitCode = 1;
 });
