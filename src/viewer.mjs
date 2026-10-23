@@ -13,11 +13,12 @@ export function createPageViewer() {
       throw new DOMException('Page mode requires UTF-8 or BOM-marked UTF-16 HTML.', 'NotSupportedError');
     }
   };
-  const renderHtmlPage = bytes => {
+  const renderHtmlPage = (bytes, content) => {
     const html = decodeHtml(bytes);
     document.open();
     document.write(html);
     document.close();
+    if (!document.title?.trim()) document.title = content?.filename || 'Opened webpage';
     // Retain the wrapper's indexing request after replacing its document.
     const robots = document.createElement('meta');
     robots.name = 'robots';
@@ -27,17 +28,20 @@ export function createPageViewer() {
   return { decodeHtml, renderHtmlPage };
 }
 
-export function createFileViewer(escapeHtml, previewFactory, pdfNoticeShown = false) {
+export function createFileViewer(escapeHtml, previewFactory) {
   const $ = id => document.getElementById(id);
   const { inferContentType, previewKind, renderMarkdown, codeLanguage, highlightCode } = previewFactory();
   const brand = $('wrapper-brand').outerHTML;
+  let currentUrl;
   return function renderFile(bytes, unlockedContent) {
     const filename = unlockedContent.filename || 'sealed-file';
+    document.title = filename;
     const contentType = inferContentType(filename, unlockedContent.contentType);
     const kind = previewKind(filename, contentType);
     const isPdf = kind === 'pdf';
     const blob = new Blob([bytes], { type: contentType });
-    const url = URL.createObjectURL(blob);
+    if (currentUrl) URL.revokeObjectURL(currentUrl);
+    const url = currentUrl = URL.createObjectURL(blob);
     const safeName = escapeHtml(filename);
     const safeType = escapeHtml(contentType);
 
@@ -51,10 +55,6 @@ export function createFileViewer(escapeHtml, previewFactory, pdfNoticeShown = fa
       '</div></header><section id="vc"></section></main>';
 
     const viewer = $('vc');
-    if (isPdf && pdfNoticeShown) {
-      viewer.innerHTML = '<iframe class="vf" title="' + safeName + '" src="' + url + '"></iframe>';
-      return;
-    }
     if (kind === 'image') {
       viewer.innerHTML = '<img class="im" alt="' + safeName + '" src="' + url + '">';
       return;

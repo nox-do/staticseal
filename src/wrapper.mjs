@@ -1,22 +1,21 @@
-import { createFormat, createPreview, inflateContent, createCrypto, createFileViewer, createPageViewer } from './reader-factories.mjs';
+import { createFormat, createPreview, inflateContent, createCrypto, createFileViewer, createPageViewer, createCollection, createCollectionViewer } from './reader-factories.mjs';
 import { sealLogo } from './logo.mjs';
 import { wrapperTemplate, readerTemplate } from './wrapper-template.mjs';
 
-export function renderWrapper({ title, payload, minimal = false, buttonLabel }) {
+export function renderWrapper({ title = 'Protected file', payload, minimal = false, buttonLabel }) {
   const format = createFormat();
   const { escapeHtml } = format;
   const hasPassphrase = payload.access !== 'sealed';
   const isPage = payload.display === 'page';
-  const pdfNoticeShown = !minimal && !isPage && createPreview().previewKind(payload.filename || '', payload.contentType) === 'pdf';
-  const subject = isPage ? 'webpage' : 'file';
+  const isCollection = payload.display === 'collection';
+  const subject = isCollection ? 'file collection' : isPage ? 'webpage' : 'file';
   const values = {
-    TITLE: escapeHtml(payload.filename === undefined ? 'Protected file' : title),
+    TITLE: escapeHtml(title),
     LOGO: sealLogo,
     KICKER: (hasPassphrase ? 'Protected ' : 'Sealed ') + subject,
     COPY: minimal ? '' : '<p>' + (hasPassphrase
       ? 'Enter the passphrase to open this ' + subject + ' in your browser.'
-      : 'Open this ' + subject + ' in your browser.') + '</p>' + (pdfNoticeShown
-        ? '<p class="pn">PDFs may contain links or interactive content. Open only files you trust.</p>' : ''),
+      : 'Open this ' + subject + ' in your browser.') + '</p>',
     PASSWORD_FIELD: hasPassphrase
       ? '<label for="password">Passphrase</label><input id="password" name="password" type="password" placeholder="Passphrase" autofocus>'
       : '',
@@ -32,7 +31,9 @@ export function renderWrapper({ title, payload, minimal = false, buttonLabel }) 
       .replace('STATICSEAL_FORMAT', () => '(' + createFormat.toString() + ')')
       .replace('STATICSEAL_VIEWER', () => isPage
         ? '(()=>(' + createPageViewer.toString() + ')().renderHtmlPage)'
-        : '(e=>(' + createFileViewer.toString() + ')(e,' + createPreview.toString() + ',' + pdfNoticeShown + '))')
+        : isCollection
+          ? '(e=>(' + createCollectionViewer.toString() + ')(e,' + createFileViewer.toString() + ',' + createPreview.toString() + ',' + createCollection.toString() + '))'
+          : '(e=>(' + createFileViewer.toString() + ')(e,' + createPreview.toString() + '))')
   };
   // Callback replacement preserves literal $ sequences in filenames and payloads.
   return wrapperTemplate.replace(/STATICSEAL_(TITLE|LOGO|KICKER|COPY|PASSWORD_FIELD|BUTTON|PAYLOAD|READER)\b/g,

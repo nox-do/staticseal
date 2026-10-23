@@ -28,11 +28,15 @@ for (const large of [false, true]) for (const access of ['sealed', 'passphrase']
   const text = pageBase.replace('EXTRA', large ? '<!--' + 'No page truncation.\n'.repeat(9000) + '-->' : '');
   const cliName = 'page-' + access + '-' + Number(large) + '.html';
   await writeFile(join(out, 'demo-page.html'), text);
-  cli('demo-page.html', cliName, ['--html-page', access === 'sealed' ? '--no-password' : '--stdin-password', '--private-filename'], 'page-test');
+  cli('demo-page.html', cliName, ['--html-page', access === 'sealed' ? '--no-password' : '--stdin-password'], 'page-test');
   pageCases.push({ large, access, text, cliName });
 }
 await writeFile(join(out, 'creator.html'), await readFile(new URL('../index.html', import.meta.url)));
 await writeFile(join(out, 'smoke.js'), await readFile(new URL('./browser-smoke-runner.js', import.meta.url)));
 await writeFile(join(out, 'fixtures.json'), JSON.stringify({ embeddingName, previewCases, pageCases }));
 await writeFile(join(out, 'smoke.html'), '<!doctype html><meta charset="utf-8"><title>Staticseal browser smoke</title><h1>Staticseal browser smoke</h1><pre id="smoke-results"></pre><script src="smoke.js"></script>\n');
-console.log(join(out, 'smoke.html'));
+const fat = await readFile(new URL('../fatseal.html', import.meta.url), 'utf8');
+const multiRunner = await readFile(new URL('./multi-file-smoke-runner.js', import.meta.url), 'utf8');
+await writeFile(join(out, 'fatseal-smoke.html'), fat.replace(/<\/body>\s*<\/html>\s*$/, () => '<script>' + multiRunner + '</script></body></html>'));
+await writeFile(join(out, 'index.html'), '<!doctype html><meta charset="utf-8"><title>Browser checks</title><h1>Browser checks</h1><p><a href="smoke.html">Staticseal</a></p><p><a href="fatseal-smoke.html">FatSeal</a></p>');
+console.log(out);

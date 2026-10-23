@@ -1,165 +1,86 @@
 # Staticseal
 
-Package a file or a complete static HTML page into one standalone HTML file.
-Recipients open it in their browser through a button or a passphrase screen.
-Send it as an attachment or host it on your website; no backend is required.
+Package files or a static HTML page into one standalone HTML file. Recipients open
+it in their browser, with an optional passphrase. No upload, account or backend.
 
-**[Open Staticseal](https://nox-do.github.io/staticseal/)** · [MIT license](LICENSE)
+**[Open Staticseal](https://nox-do.github.io/staticseal/)** ·
+[Download for offline use](https://github.com/nox-do/staticseal/releases/latest/download/staticseal.html) ·
+[MIT license](LICENSE)
 
-- **Share a file:** open a preview or download the original after unlocking.
-- **Publish a static page:** replace the opening screen with the original HTML,
-  including its layout and JavaScript. Optionally protect access with a passphrase,
-  or use a simple opening button to obstruct basic text crawlers.
+## Browser
 
-## Publish a static HTML page
+1. Choose a file.
+2. Enter and repeat a passphrase, generate one, or leave both fields empty.
+3. Select **Seal & download file**. Share the passphrase separately.
 
-For example, you can package a self-contained `impressum.html` so visitors first
-see your heading and an **Impressum öffnen** button. Clicking it displays the full
-original page. With `--no-password`, visitors do not need a passphrase:
+The output is named `sealed_YYMMDD_HHmm.html`, using local time. Original filenames
+and types stay inside the package and reappear in previews and downloads.
+
+Images display inline; PDFs offer a preview button; text and Markdown have limited
+formatting. Text previews stop at 128 KiB; downloads contain the complete original.
+Unknown formats are download-only. For HTML, enable **Display as a webpage after
+opening** to restore its layout and scripts instead of showing escaped source.
+Staticseal expects that HTML to be self-contained.
+
+## FatSeal experiment
+
+This branch also builds `fatseal.html`, a larger offline creator:
+
+- Select multiple files or a folder with subfolders; remove or reorder entries.
+- Open collections with previous/next navigation, individual downloads and a ZIP
+  download of all entries. One passphrase covers the collection.
+- Automatically recognize a unique `index.html`/`index.htm`, or a single otherwise
+  named HTML file. Ambiguous entries remain separate files with a warning.
+- Embed selected images, icons, CSS imports, backgrounds and fonts. Only selected
+  resources are available; missing or unsupported references produce warnings.
+- Download the prepared HTML separately. It is a modified working copy; other
+  files retain their original bytes. Disable webpage display to keep all originals.
+
+Relative paths follow the selected folder structure; the entry's top-level folder
+also defines the root for `/...` paths. Flat selections can match unique basenames.
+Resources with remaining unrewritten references stay available as separate entries.
+
+JavaScript dependencies, linked HTML subpages, frames and media are not bundled.
+CSS escapes, `image-set()` and SVG `<use>` need manual checking. An HTML entry with
+attachments runs in a sandboxed iframe, which may restrict some functionality.
+FatSeal is experimental and is not included in the release download above.
+
+## CLI
+
+Requires Node.js 20+. From this checkout:
 
 ```sh
-node bin/self-encrypt.mjs --in impressum.html --out impressum_sealed.html \
+node bin/self-encrypt.mjs --in report.pdf --out sealed.html
+```
+
+The CLI prompts for the passphrase. For automation, use `--stdin-password`.
+To publish a self-contained page behind an opening button:
+
+```sh
+node bin/self-encrypt.mjs --in impressum.html --out sealed.html \
   --html-page --no-password --minimal --title "Impressum" \
   --button-label "Impressum öffnen"
 ```
 
-Host the generated file and link to it, for example
-`<a href="impressum_sealed.html">Impressum</a>`. Keep CSS, scripts and images
-embedded in the source HTML for a fully standalone result. Staticseal does not
-collect dependencies from a website or bundle multiple pages.
+Omit `--no-password` to require a passphrase. `--title` and `--button-label` are
+public opening-screen text, independent of the original filename. The old
+`--private-filename` flag remains a compatibility alias; privacy is always enabled.
 
-`--minimal` keeps the Staticseal logo, heading and opening button, plus the
-passphrase field if used. `--button-label` changes the button text independently.
-Optional theme parameters can match the opening screen to your site's colors
-and typography; examples are below. To require a passphrase, omit `--no-password`.
+Optional `--theme-bg`, `--theme-text`, `--theme-accent` and `--theme-panel` accept
+hex colors; `--theme-font` accepts a local font-family stack; `--theme-radius`
+accepts `px`, `rem`, `em` or `0`. Run `node bin/self-encrypt.mjs --help` for options.
 
-The button is a barrier for simple crawlers, not confidential access control.
-The original text is encoded rather than directly present in the HTML source;
-crawlers that execute JavaScript or decode the package can still read it.
-Generated pages request `noindex,nofollow,noarchive`. These mechanisms do not
-guarantee exclusion from search engines or establish GDPR or other legal compliance.
+## Limits
 
-## Use in your browser
-
-1. Choose a file.
-2. Optionally select **Generate passphrase** to fill both fields and show the generated passphrase, or enter and repeat your own. When both nonempty fields match, use **Copy** to save it separately.
-3. Select **Seal & download file**.
-
-Your file and passphrase stay in your browser. No upload, account, or backend is
-required. [Download the latest release](https://github.com/nox-do/staticseal/releases/latest/download/staticseal.html)
-and open `staticseal.html` in your browser to use it offline.
-
-**Hide original filename and file type** is available beside file selection.
-The browser uses 210,000 PBKDF2 rounds and automatically names the output file.
-Custom titles, output paths and iteration counts remain CLI options.
-Share the passphrase separately from the generated file.
-
-For HTML files, **Display as a webpage after opening** appears below the file
-picker. It is off by default and resets when you select another file. Turn it on
-to replace the lock screen with the original self-contained page, including its
-CSS and JavaScript. Passphrase protection and automatic gzip still work in this
-mode. With the switch off, HTML remains an escaped source preview.
-
-Files from 4 KiB up to 25 MiB are automatically tried with gzip before packaging.
-Compression is used only when the complete HTML package, including its unpacker,
-is smaller. This works for any file type and restores the original bytes exactly.
-Uncompressed packages contain no gzip unpacker. The result shows original and
-HTML package sizes. The CLI tries compression up to its experimental 128 MiB original-file limit.
-Compression needs native Compression Streams support during creation and
-Decompression Streams support when opening a compressed package; no library is bundled.
-
-After unlocking, PNG, JPEG, GIF, WebP and SVG display inline. SVG uses an image
-element. Text and source code (including HTML) display as escaped text, and
-JavaScript, JSON and HTML get basic syntax colors, including labeled Markdown
-code blocks. Markdown offers basic formatting: headings, paragraphs, emphasis, lists, quotes,
-fenced code blocks and links. Markdown HTML remains text; images are not loaded.
-Text previews show at most 128 KiB and support UTF-8 and BOM-marked UTF-16.
-Downloads always contain the complete original file. PDFs offer an optional
-preview directly after opening when the trust notice was already shown.
-When the file type is hidden, the notice and a preview button appear after unlocking. Other formats are download-only.
-Staticseal packages individual files, including self-contained HTML pages. It does
-not collect dependencies or bundle multi-file websites.
-
-## Use the CLI
-
-Requires Node.js 20 or later. From a checkout of this repository:
-
-```sh
-node bin/self-encrypt.mjs --in report.pdf --out report_sealed.html
-```
-
-The CLI prompts for a passphrase without displaying it. To hide the original
-filename and file type, add `--private-filename` and choose a neutral output name:
-
-```sh
-node bin/self-encrypt.mjs --in report.pdf --out protected_file.html --private-filename
-```
-
-For automation, supply the passphrase through standard input:
-
-```sh
-printf '%s\n' "$STATICSEAL_PASSPHRASE" | node bin/self-encrypt.mjs \
-  --in report.pdf --out protected_file.html --stdin-password
-```
-
-Run `node bin/self-encrypt.mjs --help` for all options.
-
-To open a self-contained HTML page as a webpage instead of showing source code:
-
-```sh
-node bin/self-encrypt.mjs --in page.html --out page_sealed.html --html-page
-```
-
-For a compact opening screen, add `--minimal`: the logo, heading and opening
-button remain, along with the passphrase field when protected. Introductory copy
-and the initial no-passphrase message are omitted. Progress and errors still
-appear when opening. The bottom explanatory note is omitted in all new packages.
-Use `--button-label` independently to set the button text.
-
-Optional CLI theme parameters customize only the opening screen. They work with
-or without a passphrase and in both file and webpage modes:
-
-```sh
-node bin/self-encrypt.mjs --in page.html --out page_sealed.html --html-page \
-  --theme-bg "#181818" --theme-text "#eeeeee" --theme-accent "#e98663" \
-  --theme-panel "#252525" --theme-font "Georgia, serif" --theme-radius "8px"
-```
-
-All parameters are independent and optional; omitted settings keep their defaults.
-Colors accept hex notation (`#RGB`, `#RGBA`, `#RRGGBB`, `#RRGGBBAA`).
-`--theme-font` accepts a simple font-family stack with Latin names (quotes allowed),
-using fonts available on the recipient's device; it does not embed or load fonts.
-`--theme-radius` sets the card rounding in `px`, `rem`, `em`, or `0`.
-The original webpage, file preview, payload bytes and encryption are unaffected.
-Theme settings are visible before unlocking. Without theme parameters the output
-has no additional theme CSS. The browser creator's interface is unchanged.
-
-Add `--no-password` to omit passphrase protection. Page mode supports UTF-8 and
-BOM-marked UTF-16 HTML. It runs the page's scripts with the wrapper's origin and
-browser permissions. External resources are not bundled; embed everything needed
-for offline use. The `noindex,nofollow,noarchive` hint is retained after opening.
-
-## Know the limits
-
-- **Passphrase protection depends on a strong passphrase.** Anyone with the file
-  can attempt offline password guesses. There is no password reset or server-side
-  access control.
-- **Without a passphrase, contents are not private.** Leaving both browser fields
-  blank, or using `--no-password`, stores Base64-encoded content, optionally gzip
-  compressed. These packages contain no encryption or decryption code. This only
-  obstructs simple crawlers; anyone with the file can recover its contents.
-  They have no AES-GCM integrity check; creation still verifies the original bytes.
-- **Names are public by default.** Enable private filenames to put the name
-  and MIME type inside the encoded content. With a passphrase they are encrypted;
-  without one, they remain recoverable. File size remains observable. Publish only the protected
-  output if the original should stay private.
-- **Browser sizes are provisional.** Warning from 5 MiB, confirmation above 10 MiB,
-  maximum 25 MiB. These are product limits, not validated browser capacities.
-- **CLI sizes are experimental.** Maximum 128 MiB original, 25 MiB binary package
-  (including metadata, length prefix and authentication tag), and 35 MiB final HTML.
-  Oversized results are rejected before writing. Creation still uses full buffers;
-  recipient browser memory and large HTML page execution are not validated.
-- **Only open trusted content.** Encryption and previews do not scan for malware.
+- A strong passphrase protects against offline guessing. There is no password reset.
+- Without a passphrase, contents and original names are recoverable. The button
+  only obstructs simple crawlers. `noindex` does not guarantee search exclusion.
+- Only open trusted content. HTML page mode executes the page's JavaScript.
+- Browser limit: 25 MiB; warning from 5 MiB, confirmation above 10 MiB. FatSeal also
+  limits selections to 1,000 files and 25 MiB of prepared content including metadata.
+- CLI limits: 128 MiB input, 25 MiB binary package, 35 MiB final HTML.
+- These are product limits, not measured device capacities. Compressed output
+  requires browser support for native gzip decompression.
 
 ## Development
 
@@ -169,50 +90,8 @@ npm run build
 npm run check
 ```
 
-Edit `src/app.html` for the browser UI, `src/wrapper.mjs` for wrapper generation,
-`src/wrapper.html` and `src/wrapper.css` for its layout, `src/reader.js` for the
-unlock/viewer script, `src/format.mjs`, `src/crypto.mjs` and `src/preview.mjs` for shared helpers,
-`src/compression.mjs` for compression selection, `src/gzip.mjs` for the optional
-unpacker, `src/viewer.mjs` for the separate file/page renderers,
-`src/creation.mjs` for shared creator metadata and package preparation,
-`src/browser-limits.mjs` for browser-only creator limits,
-`src/cli-theme.mjs` for CLI-only theme validation, and `src/seal.svg`
-for the logo.
-The build generates `index.html`, `src/logo.mjs`, `src/wrapper-template.mjs`
-and `src/reader-factories.mjs`; do not edit them directly.
-CSS, HTML and JavaScript are minified only during the build. Terser preserves
-function scopes so the serialized preview and format helpers remain standalone.
-Generated wrappers use compact JSON; original file bytes are restored exactly.
-Build dependencies are not needed to run the CLI or the generated files.
-The browser app and generated wrappers remain standalone HTML files.
+Edit `src/`, not the generated HTML. See [Development](docs/development.md) for
+architecture, format, test coverage, browser checks, size measurements and releases.
 
-`npm run check` checks generated files, CLI help, and the regression suite.
-Tests import shared modules directly and invoke the real CLI. Selected integration
-checks run unchanged built app/reader scripts through forms with Node Web Crypto
-and DOM stubs, including large-file roundtrips. These stubs are not real browser
-checks and do not establish browser or mobile compatibility. The separate
-[browser smoke harness](docs/technical-notes.md#regression-checks-and-remaining-browser-validation)
-uses unchanged app and reader HTML in real browser iframes.
-
-`npm run --silent measure:size` rebuilds the app and reports its UTF-8 size plus
-eight real CLI-generated readers as JSON. Fixed fixtures cover passphrase/no
-passphrase, raw/gzip and file/page modes. See the [measurement method and recorded
-baseline](docs/size-measurement.md) for options, byte definitions and limitations.
-
-### Release download
-
-Publish a GitHub Release for a tag containing `.github/workflows/release.yml`.
-The workflow checks out that tag, builds the browser app, runs `npm run check`,
-and attaches the result as `staticseal.html`. The website's fixed download URL
-automatically follows GitHub's latest stable release; prereleases do not replace it.
-Every stable release must include this asset. Check that the workflow completes
-successfully before announcing the download. Re-running it replaces the asset.
-
-- [Technical notes and browser smoke tests](docs/technical-notes.md)
-- [Current architecture](docs/architecture.md) and [AP1–AP5 validation and size comparison](docs/refactoring-validation.md)
-- [Historical working plan and validation history (German)](docs/staticseal-arbeitsplan.md)
-- [Proposed multi-file website mode (German)](docs/staticseal-website-konzept.md) — not implemented; separate from the supported single-file HTML page mode
-
-## License
-
-[MIT](LICENSE) © 2026 Daniel Deuter.
+[MIT](LICENSE) © 2026 Daniel Deuter. FatSeal includes an MIT-licensed srcset parser
+from SingleFile Core; its attribution is preserved in the source and built HTML.

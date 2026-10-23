@@ -515,9 +515,8 @@ button:disabled {
           <strong><span>Choose your file</span> or drop it here</strong>
           <input id="source-file" name="source-file" type="file" aria-describedby="file-meta">
         </div>
+        <!-- STATICSEAL_EXTRA_PICKER -->
         <p class="meta" id="file-meta" aria-live="polite">No file selected</p>
-        <label><input id="private-filename" type="checkbox"> Hide original filename and file type</label>
-        <p class="meta">Uses a neutral public title and download name. Without a passphrase, anyone can still recover the original name and contents.</p>
       </div>
       <div class="row" id="html-page-option" hidden>
         <label><input id="html-page" type="checkbox" disabled aria-describedby="html-page-note"> Display as a webpage after opening</label>
@@ -577,7 +576,6 @@ button:disabled {
   const htmlPage = $('html-page');
   const password = $('password');
   const passwordRepeat = $('password-repeat');
-  const privateFilename = $('private-filename');
   const button = $('encrypt-button');
   const status = $('status');
 
@@ -611,11 +609,10 @@ button:disabled {
     return chunks;
   };
 
-  const outputFilenameFor = (name) => {
-    const base = (name.replace(/\.[^.]+$/, '') || 'file')
-      .trim()
-      .replace(/\s+/g, '_');
-    return `${base}_sealed.html`;
+  const outputFilenameFor = (date = new Date()) => {
+    const parts = [date.getFullYear() % 100, date.getMonth() + 1, date.getDate(), date.getHours(), date.getMinutes()]
+      .map(value => String(value).padStart(2, '0'));
+    return 'sealed_' + parts.slice(0, 3).join('') + '_' + parts.slice(3).join('') + '.html';
   };
 
   const formatBytes = (bytes) => {
@@ -637,7 +634,7 @@ button:disabled {
     return packed;
   }
 
-  async function encryptBytes(bytes, passphrase, iterationCount, file, access, privateName = false, pageMode = false) {
+  async function encryptBytes(bytes, passphrase, iterationCount, file, access, pageMode = false) {
     if (pageMode) {
       if (!isHtmlFile(file.name, inferContentType(file))) throw new Error('Page mode is available for HTML files only.');
       createPageViewer().decodeHtml(bytes);
@@ -650,7 +647,7 @@ button:disabled {
     const content = await preparePackage(bytes,
       { filename: file.name, contentType: inferContentType(file) }, {
         access, iterations: iterationCount, salt: salt && toBase64(salt), iv: iv && toBase64(iv),
-        privateFilename: privateName, htmlPage: pageMode, chunkSize: DEFAULT_CHUNK_SIZE
+        htmlPage: pageMode, collection: !!file.collection, chunkSize: DEFAULT_CHUNK_SIZE
       });
     const { metadata } = content;
     if (access === 'sealed') {
@@ -766,7 +763,9 @@ button:disabled {
     }
   });
 
+  /* STATICSEAL_EXTENDED_INIT */
   sourceFile.addEventListener('change', () => {
+    /* STATICSEAL_EXTENDED_CHANGE */
     const file = sourceFile.files[0];
     const supportsPage = !!file && isHtmlFile(file.name, inferContentType(file));
     htmlPageOption.hidden = !supportsPage;
@@ -789,14 +788,13 @@ button:disabled {
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
+    /* STATICSEAL_EXTENDED_SUBMIT */
     const file = sourceFile.files[0];
     const enteredPassphrase = password.value;
     const repeatedPassphrase = passwordRepeat.value;
     const iterationCount = DEFAULT_ITERATIONS;
-    const privateName = privateFilename.checked;
     const pageMode = htmlPage.checked;
-    const title = privateName ? 'Protected file' : (file?.name.replace(/\.[^.]+$/, '') || 'Protected file');
-    const output = privateName ? 'protected_file.html' : (file ? outputFilenameFor(file.name) : '');
+    const output = outputFilenameFor();
     const access = enteredPassphrase ? 'passphrase' : 'sealed';
     const passphrase = enteredPassphrase;
 
@@ -828,9 +826,9 @@ button:disabled {
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
       setStatus(access === 'sealed' ? 'Sealing locally ...' : 'Encrypting locally ...');
-      const payload = await encryptBytes(bytes, passphrase, iterationCount, file, access, privateName, pageMode);
+      const payload = await encryptBytes(bytes, passphrase, iterationCount, file, access, pageMode);
 
-      const wrapper = renderWrapper({ title, payload });
+      const wrapper = renderWrapper({ payload });
       downloadHtml(output, wrapper);
       setStatus('Original: ' + formatBytes(bytes.byteLength) + ' → HTML package: ' + formatBytes(new Blob([wrapper]).size) + '.');
     } catch (error) {

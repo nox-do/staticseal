@@ -69,7 +69,7 @@ function parseArgs(argv) {
         args.stdinPassword = true;
         break;
       case '--private-filename':
-        args.privateFilename = true;
+        // Compatibility alias: filenames and file types are now always private.
         break;
       case '--html-page':
         args.htmlPage = true;
@@ -114,7 +114,7 @@ Options:
   --title <text>           Browser title and lock-screen context
   --iterations <number>    PBKDF2 iterations, default ${DEFAULT_ITERATIONS}
   --chunk-size <number>    Base64 payload chunk size, default ${DEFAULT_CHUNK_SIZE}
-  --private-filename       Hide original name/type; use a neutral --out path
+  --private-filename       Compatibility alias; original name/type are always private
   --stdin-password         Read password from stdin instead of prompting
   --no-password            Seal for crawler resistance only; no confidentiality
   --html-page              Display self-contained HTML as a webpage, including scripts
@@ -225,7 +225,7 @@ async function readPassword({ stdinPassword }) {
   return password;
 }
 
-async function encryptBytes(bytes, password, { iterations, chunkSize, sourceName, contentType, access, privateFilename = false, htmlPage = false }) {
+async function encryptBytes(bytes, password, { iterations, chunkSize, sourceName, contentType, access, htmlPage = false }) {
   if (htmlPage) {
     if (!isHtmlFile(sourceName, contentType)) throw new Error('--html-page requires an HTML file.');
     createPageViewer().decodeHtml(bytes);
@@ -237,7 +237,7 @@ async function encryptBytes(bytes, password, { iterations, chunkSize, sourceName
   }
   const content = await preparePackage(bytes, { filename: sourceName, contentType }, {
     access, iterations, salt: salt?.toString('base64'), iv: iv?.toString('base64'),
-    privateFilename, htmlPage, chunkSize, maxOriginalSize: CLI_ORIGINAL_MAX_BYTES
+    htmlPage, chunkSize, maxOriginalSize: CLI_ORIGINAL_MAX_BYTES
   });
   if (content.binarySize > CLI_PAYLOAD_MAX_BYTES) throw new Error('Binary package exceeds the 25 MiB CLI limit after compression.');
   const { metadata, lengthPrefix, header } = content;
@@ -303,7 +303,7 @@ async function main() {
   const inputPath = resolve(requiredString(args.in, '--in'));
   const outputPath = resolve(requiredString(args.out, '--out'));
   const sourceName = basename(inputPath);
-  const title = args.title || `${sourceName} - protected file`;
+  const title = args.title || 'Protected file';
 
   if (!Number.isInteger(args.iterations) || args.iterations < 100_000) {
     throw new Error('--iterations must be an integer >= 100000.');
@@ -333,7 +333,6 @@ async function main() {
     sourceName,
     contentType: inferContentType(basename(inputPath)),
     access,
-    privateFilename: args.privateFilename,
     htmlPage: args.htmlPage
   });
 
@@ -354,7 +353,7 @@ async function main() {
 
   output.write(`${access === 'sealed' ? 'Sealed' : 'Encrypted'} ${inputPath} -> ${outputPath}\n`);
   output.write(`Access: ${access === 'sealed' ? 'no passphrase, crawler barrier only' : 'passphrase'}\n`);
-  output.write(`Content type: ${args.privateFilename ? 'private' : payload.contentType}\n`);
+  output.write('Content type: private\n');
   output.write(`Payload chunks: ${(payload.content || payload.ciphertext).length}\n`);
   output.write(`Original: ${bytes.byteLength} bytes → HTML package: ${Buffer.byteLength(wrapper)} bytes\n`);
 }

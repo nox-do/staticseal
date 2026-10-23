@@ -34,7 +34,7 @@
     input.files = transfer.files;
     input.dispatchEvent(new frame.contentWindow.Event('change', { bubbles: true }));
   };
-  const create = (bytes, name, type, password = '', privateFilename = false, page = false) =>
+  const create = (bytes, name, type, password = '', page = false) =>
     withFrame({ url: 'creator.html' }, async frame => {
       const doc = frame.contentDocument, node = id => doc.getElementById(id);
       const blobs = captureBlobs(frame);
@@ -43,8 +43,6 @@
       frame.contentWindow.confirm = () => true;
       selectFile(frame, bytes, name, type);
       node('password').value = node('password-repeat').value = password;
-      node('private-filename').checked = privateFilename;
-      node('private-filename').dispatchEvent(new frame.contentWindow.Event('change'));
       node('html-page').checked = page;
       node('encrypt-form').requestSubmit();
       await waitFor(() => (!node('encrypt-button').disabled && blobs.length) || node('status').dataset.kind === 'error');
@@ -80,7 +78,7 @@
     ]) {
       await withFrame({ html }, async frame => {
         const parsed = JSON.parse(frame.contentDocument.getElementById('encrypted-payload').textContent);
-        check(parsed.filename === embeddingName, 'filename changed during HTML parsing');
+        check(parsed.filename === undefined && parsed.contentType === undefined, 'original metadata exposed before opening');
         await equalBytes(await open(frame, 'browser-test-only'), embeddingBytes);
         check(frame.contentDocument.body.textContent.includes(embeddingName), 'filename not displayed');
       });
@@ -88,7 +86,7 @@
     }
     for (const [name, type, text, kind] of previewCases) {
       const bytes = new TextEncoder().encode(text);
-      const html = await create(bytes, name, type, '', true);
+      const html = await create(bytes, name, type, '');
       await withFrame({ html }, async frame => {
         await equalBytes(await open(frame, ''), bytes);
         const doc = frame.contentDocument, pre = doc.getElementById('tp');
@@ -112,7 +110,7 @@
       const bytes = new Uint8Array(size * 1024 * 1024);
       for (let i = 0; i < bytes.length; i++) bytes[i] = i & 255;
       const password = access === 'sealed' ? '' : 'browser-test-only';
-      const html = await create(bytes, 'Private-test.bin', 'application/octet-stream', password, true, false);
+      const html = await create(bytes, 'Private-test.bin', 'application/octet-stream', password, false);
       check(!html.includes('Private-test.bin'), 'private filename leaked');
       await withFrame({ html }, async frame => {
         await equalBytes(await open(frame, password), bytes);
@@ -135,7 +133,7 @@
     for (const row of pageCases) {
       const password = row.access === 'sealed' ? '' : 'page-test';
       const bytes = new TextEncoder().encode(row.text);
-      const appHtml = await create(bytes, 'demo-page.html', 'text/html', password, true, true);
+      const appHtml = await create(bytes, 'demo-page.html', 'text/html', password, true);
       for (const [generator, html] of [['app', appHtml], ['CLI', await (await fetch(row.cliName)).text()]]) {
         if (password) await wrongPassword(html);
         await withFrame(generator === 'CLI' ? { url: row.cliName } : { html }, async frame => {

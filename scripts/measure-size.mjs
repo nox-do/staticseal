@@ -20,12 +20,13 @@ const utf8Bytes = text => Buffer.byteLength(text, 'utf8');
 // Rebuild via the normal build only. Keep stdout as a machine-readable JSON report.
 run(process.execPath, ['scripts/build.mjs']);
 const app = await readFile(new URL('../index.html', import.meta.url));
+const fatApp = await readFile(new URL('../fatseal.html', import.meta.url));
 const sourceCommit = run('git', ['rev-parse', 'HEAD']);
 const trackedChanges = run('git', ['diff', 'HEAD', '--name-only']).split('\n').filter(Boolean);
 const options = {
   filename: 'sample.html', title: 'Größenmessung – Staticseal',
   buttonLabel: 'Öffnen', iterations: 210000, chunkSize: 65536,
-  password: 'staticseal-size-fixture-only', privateFilename: false, minimal: false, theme: null
+  password: 'staticseal-size-fixture-only', minimal: false, theme: null
 };
 const page = body => '<!doctype html><html lang="de"><meta charset="utf-8">'
   + '<title>Größenmessung</title><body>' + body + '</body></html>\n';
@@ -79,5 +80,6 @@ console.log(JSON.stringify({
   options,
   fixtures: fixtures.map(({ id, compression, bytes }) => ({ id, compression, bytes: bytes.byteLength, sha256: sha256(bytes) })),
   app: { path: 'index.html', utf8Bytes: app.byteLength, sha256: sha256(app) },
+  fatApp: { path: 'fatseal.html', utf8Bytes: fatApp.byteLength, sha256: sha256(fatApp) },
   readers
 }, null, 2));

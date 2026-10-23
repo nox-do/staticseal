@@ -67,7 +67,7 @@ export function wrapper(html, payload, options = {}) {
 }
 
 export async function createThroughUi(html, bytes, file, {
-  password = '', privateFilename = false, htmlPage = false, ...environment
+  password = '', htmlPage = false, ...environment
 } = {}) {
   const ui = executeHtml(html, environment);
   const node = id => ui.nodes.get(id);
@@ -76,7 +76,6 @@ export async function createThroughUi(html, bytes, file, {
   } }];
   node('source-file').handlers.change();
   node('password').value = node('password-repeat').value = password;
-  node('private-filename').checked = privateFilename;
   node('html-page').checked = htmlPage;
   await node('encrypt-form').handlers.submit({ preventDefault() {} });
   if (node('status').dataset.kind === 'error') throw new Error(node('status').textContent);

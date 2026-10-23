@@ -3,17 +3,16 @@ import { createFormat } from './format.mjs';
 import { prepareContent } from './compression.mjs';
 
 export async function preparePackage(bytes, file, {
-  access, iterations, salt, iv, privateFilename = false, htmlPage = false,
+  access, iterations, salt, iv, htmlPage = false, collection = false,
   chunkSize, maxOriginalSize
 }) {
   const format = createFormat();
-  const display = htmlPage ? { display: 'page' } : {};
-  const publicFile = privateFilename ? {} : { filename: file.filename, contentType: file.contentType };
+  const display = collection ? { display: 'collection' } : htmlPage ? { display: 'page' } : {};
   // Preserve outer JSON field order as well as the independent AAD field order.
   const metadata = access === 'sealed'
-    ? { v: format.versionFor(access), encoding: format.METADATA_ENCODING, access, ...display, ...publicFile }
+    ? { v: format.versionFor(access), encoding: format.METADATA_ENCODING, access, ...display }
     : { v: format.versionFor(access), alg: 'AES-GCM', kdf: 'PBKDF2-SHA256', iterations,
-      encoding: format.METADATA_ENCODING, ...display, ...publicFile, access, salt, iv };
+      encoding: format.METADATA_ENCODING, ...display, access, salt, iv };
   const content = await prepareContent(bytes, file, metadata, chunkSize, maxOriginalSize);
   metadata.v = content.v;
   const lengthPrefix = new Uint8Array(format.HEADER_LENGTH_BYTES);
