@@ -1,3 +1,5 @@
+import { cssReferencePattern } from './css-references.mjs';
+import { toBase64 } from './base64.mjs';
 // Creator only: selected File objects are the entire resource authority. Never fetch URLs.
 import { process as parseSrcset, serialize as serializeSrcset } from './srcset-parser.mjs';
 import { PREPARED_MAX_BYTES } from './limits.mjs';
@@ -57,12 +59,6 @@ export async function embedSelectedHtml(
     const url = pathUrl(file.path.replace(/index\.html?$/i, ''));
     byUrl.set(url, byUrl.has(url) ? null : file);
   }
-  const toBase64 = bytes => {
-    let text = '';
-    for (let offset = 0; offset < bytes.length; offset += 32768)
-      text += String.fromCharCode(...bytes.subarray(offset, offset + 32768));
-    return btoa(text);
-  };
   const read = async file => {
     check();
     if (!cache.has(file))
@@ -200,23 +196,19 @@ export async function embedSelectedHtml(
       retainAll('CSS with escapes needs manual checking: ' + from.replace(base, ''));
       return text;
     }
-    return replaceAsync(
-      text,
-      /\/\*[\s\S]*?\*\/|@import\b(?:\s|\/\*[\s\S]*?\*\/)*(["'])(.*?)\1|(?:@import\b(?:\s|\/\*[\s\S]*?\*\/)*)?\burl\(\s*(?:"([^"\n]*)"|'([^'\n]*)'|([^)'"\s]*))\s*\)|\b(?:-webkit-)?image-set\s*\(|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/gi,
-      async match => {
-        if (/^(?:\/\*|["'])/.test(match[0])) return match[0];
-        if (/^(?:-webkit-)?image-set\s*\(/i.test(match[0])) {
-          retainAll('CSS image-set() needs manual checking: ' + from.replace(base, ''));
-          return match[0];
-        }
-        const ref = match[2] ?? match[3] ?? match[4] ?? match[5];
-        // @import url(...) and quoted @import both establish stylesheet context.
-        const isImport = /^@import\b/i.test(match[0]);
-        const kind = isImport ? 'css' : '';
-        const value = await data(ref, from, ancestors, kind);
-        return value === ref ? match[0] : (isImport ? '@import ' : '') + 'url("' + value + '")';
+    return replaceAsync(text, cssReferencePattern(), async match => {
+      if (/^(?:\/\*|["'])/.test(match[0])) return match[0];
+      if (/^(?:-webkit-)?image-set\s*\(/i.test(match[0])) {
+        retainAll('CSS image-set() needs manual checking: ' + from.replace(base, ''));
+        return match[0];
       }
-    );
+      const ref = match[2] ?? match[3] ?? match[4] ?? match[5];
+      // @import url(...) and quoted @import both establish stylesheet context.
+      const isImport = /^@import\b/i.test(match[0]);
+      const kind = isImport ? 'css' : '';
+      const value = await data(ref, from, ancestors, kind);
+      return value === ref ? match[0] : (isImport ? '@import ' : '') + 'url("' + value + '")';
+    });
   }
   const decodeHtml = bytes =>
     new TextDecoder(

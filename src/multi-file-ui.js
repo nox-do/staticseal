@@ -1,4 +1,4 @@
-// Injected only into the experimental FatSeal build, inside the creator scope.
+// Selection and preparation UI, inserted inside the creator scope.
 const folderInput = $('source-folder');
 const selectionList = $('selection-list');
 const selectionReport = $('selection-report');
@@ -41,25 +41,15 @@ async function refreshSelection() {
     const name = document.createElement('span');
     name.textContent = item.path + ' · ' + formatBytes(item.file.size) + ' ';
     row.append(name);
-    for (const [label, delta] of [
-      ['Move up', -1],
-      ['Move down', 1],
-      ['Remove', 0]
-    ]) {
-      if (pageMode && delta) continue;
-      const control = document.createElement('button');
-      control.type = 'button';
-      control.textContent = delta < 0 ? '↑' : delta > 0 ? '↓' : '×';
-      control.setAttribute('aria-label', label + ' ' + item.path);
-      control.disabled = delta !== 0 && (index + delta < 0 || index + delta >= snapshot.length);
-      control.onclick = () => {
-        if (delta === 0) selectedItems.splice(index, 1);
-        else
-          [selectedItems[index], selectedItems[index + delta]] = [selectedItems[index + delta], selectedItems[index]];
-        refreshSelection();
-      };
-      row.append(control);
-    }
+    const control = document.createElement('button');
+    control.type = 'button';
+    control.textContent = '×';
+    control.setAttribute('aria-label', 'Remove ' + item.path);
+    control.onclick = () => {
+      selectedItems.splice(index, 1);
+      refreshSelection();
+    };
+    row.append(control);
     selectionList.append(row);
   });
   fileMeta.textContent = snapshot.length
@@ -108,7 +98,7 @@ async function refreshSelection() {
       isPage = false;
     if (entries.length === 1 && !html?.warnings.length) {
       bytes = entries[0].bytes;
-      file = { name: entries[0].filename.split('/').pop(), type: entries[0].contentType };
+      file = { name: snapshot.find(item => item.path === entries[0].filename).file.name, type: entries[0].contentType };
       isPage = !!entries[0].page;
     } else {
       bytes = packCollection(entries);
@@ -210,6 +200,7 @@ async function sealSelection() {
     return;
   }
   const output = outputFilenameFor();
+  const title = $('output-title').value.trim();
   sealing = true;
   button.disabled = true;
   setStatus(passphrase ? 'Encrypting locally …' : 'Sealing locally …');
@@ -222,7 +213,7 @@ async function sealSelection() {
       passphrase ? 'passphrase' : 'sealed',
       prepared.isPage
     );
-    const html = renderWrapper({ payload, files: prepared.file.readerFiles });
+    const html = renderWrapper({ title, payload, files: prepared.file.readerFiles });
     downloadHtml(output, html);
     setStatus(
       'Prepared content: ' +

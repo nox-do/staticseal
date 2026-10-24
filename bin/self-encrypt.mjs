@@ -124,7 +124,7 @@ Options:
   --html-page              Display self-contained HTML as a webpage, including scripts
   --bundle                 Embed HTML/MHTML report resources; implies --html-page
   --resource-root <dir>    Allowed local resource directory for --bundle (default: report directory)
-  --minimal                Opening screen with logo/title/form only; errors still shown
+  --minimal                Compatibility option; opening screens are always minimal
   --button-label <text>    Optional opening button text
   --theme-bg <hex>         Optional lock-screen background color
   --theme-text <hex>       Optional lock-screen text color
@@ -326,7 +326,7 @@ async function main() {
   const inputPath = requiredString(args.in, '--in');
   const inputUrl = sourceUrl(inputPath);
   const outputPath = resolve(requiredString(args.out, '--out'));
-  const title = args.title || 'Protected file';
+  const title = args.title;
 
   if (!Number.isInteger(args.iterations) || args.iterations < 100_000) {
     throw new Error('--iterations must be an integer >= 100000.');
@@ -372,7 +372,6 @@ async function main() {
     title,
     payload,
     files: [{ filename: source.name, contentType: source.type }],
-    minimal: args.minimal,
     buttonLabel: args.buttonLabel
   });
   const wrapper = css ? plainWrapper.replace('</head>', () => `<style>${css}</style></head>`) : plainWrapper;

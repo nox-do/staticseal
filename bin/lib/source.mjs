@@ -2,9 +2,9 @@ import { readFile, realpath, stat } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { SOURCE_MAX_BYTES } from '../../src/limits.mjs';
-import { createPreview } from '../../src/preview.mjs';
+import { createFileTypes } from '../../src/preview.mjs';
 
-const { inferContentType } = createPreview();
+const { inferContentType } = createFileTypes();
 export const sourceUrl = value => (/^(?:https?:|file:)/i.test(value) ? new URL(value) : pathToFileURL(resolve(value)));
 export function createSourceLoader({ root, allowFiles = true, maxBytes = SOURCE_MAX_BYTES, maxFiles = 1000 } = {}) {
   const cache = new Map();

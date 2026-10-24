@@ -43,7 +43,6 @@ export function createFileViewer(escapeHtml, previewFactory, renderers) {
     if (currentUrl) URL.revokeObjectURL(currentUrl);
     const url = (currentUrl = URL.createObjectURL(blob));
     const safeName = escapeHtml(filename);
-    const safeType = escapeHtml(contentType);
 
     document.body.className = 'vp';
     document.body.innerHTML =
@@ -52,9 +51,7 @@ export function createFileViewer(escapeHtml, previewFactory, renderers) {
       brand +
       '<div class="vt">' +
       safeName +
-      '<small>' +
-      safeType +
-      '</small></div>' +
+      '</div>' +
       '<div class="va">' +
       '<a href="' +
       url +

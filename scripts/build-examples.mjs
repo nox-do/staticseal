@@ -143,7 +143,7 @@ try {
   const archivePath = new URL('jupyter.zip', jupyter);
   if (checking) assert.deepEqual(await readFile(archivePath), Buffer.from(archive), 'Jupyter ZIP is stale.');
   else await writeFile(archivePath, archive);
-  console.log(checking ? 'Examples are current.' : 'Built FatSeal examples and source ZIPs.');
+  console.log(checking ? 'Examples are current.' : 'Built Staticseal examples and source ZIPs.');
 } finally {
   await window.happyDOM.close();
 }

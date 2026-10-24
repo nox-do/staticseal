@@ -9,9 +9,10 @@ it in their browser, with an optional passphrase. No upload, account or backend.
 
 ## Browser
 
-1. Choose a file.
-2. Enter and repeat a passphrase, generate one, or leave both fields empty.
-3. Select **Seal & download file**. Share the passphrase separately.
+1. Choose files or a folder.
+2. Optionally give the package a public opening title.
+3. Enter and repeat a passphrase, generate one, or leave both fields empty.
+4. Select **Seal & download file**. Share the passphrase separately.
 
 The output is named `sealed_YYMMDD_HHmm.html`, using local time. Original filenames
 and types stay inside the package and reappear in previews and downloads.
@@ -20,11 +21,12 @@ Images display inline; PDFs offer a preview button; text and Markdown have limit
 formatting. Text previews stop at 128 KiB; downloads contain the complete original.
 Unknown formats are download-only. For HTML, enable **Display as a webpage after
 opening** to restore its layout and scripts instead of showing escaped source.
-Staticseal expects that HTML to be self-contained.
+A recognized HTML entry is prepared automatically; disable webpage display to keep the original files.
 
-## FatSeal experiment
+## Files and websites
 
-This branch also builds `fatseal.html`, a larger offline creator:
+This branch uses the former FatSeal creator as Staticseal (`index.html`).
+The published release may still contain the previous single-file creator.
 
 Try the [guided example](examples/fatseal/index.html): working packages, source ZIPs
 and a practical explanation of file/folder selection, unused files and warnings.
@@ -32,7 +34,7 @@ and a practical explanation of file/folder selection, unused files and warnings.
 The [Jupyter example](examples/jupyter/index.html) includes notebook/Python sources,
 an HTML export, a sealed offline report and the commands to reproduce the workflow.
 
-- Select multiple files or a folder with subfolders; remove entries or reorder independent files. Recognized websites use their detected start page.
+- Select multiple files or a folder with subfolders; review relative paths and remove entries. Files keep their selection order. Recognized websites use their detected start page.
 - Both pickers share a drop zone that also accepts files and folders, preserving nested paths.
 - Open collections with previous/next navigation, individual downloads and a ZIP
   download of all entries. One passphrase covers the collection.
@@ -47,7 +49,7 @@ an HTML export, a sealed offline report and the commands to reproduce the workfl
 - Download the prepared HTML separately. It is a modified working copy; other
   files retain their original bytes. Disable webpage display to keep all originals.
 
-In FatSeal, the viewer header disappears only for one prepared website without recognized
+In Staticseal, the viewer header disappears only for one prepared website without recognized
 warnings or independent attachments. Warnings retain the header even for one entry.
 
 Relative paths follow the selected folder structure; the entry's top-level folder
@@ -59,7 +61,6 @@ and server behavior are not emulated.
 CSS escapes, `image-set()` and SVG `<use>` need manual checking. An HTML entry with
 attachments runs in an iframe without a sandbox. Its scripts can access the outer
 viewer; the iframe keeps page styles separate from navigation and downloads.
-FatSeal is experimental and is not included in the release download above.
 
 ## CLI
 
@@ -105,9 +106,9 @@ Legacy Excel framesets are converted with a layout warning; sheet links, conditi
 Office markup and server-backed dashboards need manual checking. Missing resources
 produce warnings on stderr and keep their original URLs; inspect the result offline.
 The CLI keeps webpage display even with import warnings; the warning-dependent
-header rule applies only to FatSeal.
+header rule applies only to Staticseal.
 Without `--bundle`, source bytes remain unchanged. These additions are CLI-only;
-neither browser app includes the importer or its Node HTML parser.
+the browser app does not include the CLI importer or its Node HTML parser.
 
 Optional `--theme-bg`, `--theme-text`, `--theme-accent` and `--theme-panel` accept
 hex colors; `--theme-font` accepts a local font-family stack; `--theme-radius`
@@ -119,12 +120,12 @@ accepts `px`, `rem`, `em` or `0`. Run `node bin/self-encrypt.mjs --help` for opt
 - Without a passphrase, contents and original names are recoverable. The button
   only obstructs simple crawlers. `noindex` does not guarantee search exclusion.
 - Only open trusted content. HTML page mode executes the page's JavaScript.
-- Transport limit for both browser apps and the CLI: **25 MiB of final HTML**,
+- Transport limit for the browser app and the CLI: **25 MiB of final HTML**,
   including Base64, metadata, encryption and the embedded reader. Compressible
   sources can be much larger (for example, a 100 MiB report).
 - Separate working limits: 128 MiB of source data and 128 MiB of prepared content
   before gzip, including collection metadata. Imports also bound intermediate
-  expansion; FatSeal and the CLI allow at most 1,000 source files/resources.
+  expansion; Staticseal and the CLI allow at most 1,000 source files/resources.
 - Browser memory warning from 5 MiB of source or prepared data; confirmation above
   10 MiB before reading large selections or expanding HTML resources. These
   thresholds describe work, not transport size. Files are fully buffered today.
@@ -145,5 +146,5 @@ npm run check
 Edit `src/`, not the generated HTML. See [Development](docs/development.md) for
 architecture, format, test coverage, browser checks, size measurements and releases.
 
-[MIT](LICENSE) © 2026 Daniel Deuter. FatSeal includes an MIT-licensed srcset parser
-from SingleFile Core; its attribution is preserved in the source and built HTML.
+[MIT](LICENSE) © 2026 Daniel Deuter. Staticseal includes an MIT-licensed srcset parser
+from SingleFile Core. See [Third-party notices](THIRD_PARTY.md) for provenance and licenses.

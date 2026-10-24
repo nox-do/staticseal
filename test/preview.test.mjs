@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createPreview } from '../src/preview.mjs';
-import { renderWrapper } from '../src/wrapper.mjs';
+import { renderWrapper, planReader } from '../src/wrapper.mjs';
 import { wrapper } from './helpers/html-harness.mjs';
 import { makePayload } from './helpers/payload.mjs';
 
@@ -65,7 +65,11 @@ test('file viewer routes supported formats and keeps downloads byte-exact', asyn
   ]) {
     const name = 'example.' + extension;
     const payload = await makePayload(bytes, '', 100000, { name, type }, 'sealed', true);
-    const html = renderWrapper({ payload, files: [{ filename: name, contentType: type }] });
+    const files = [{ filename: name, contentType: type }];
+    const plan = planReader(payload.display, files);
+    assert.ok(!JSON.stringify(plan).includes(name), 'The link plan contains no original filename');
+    const html = renderWrapper({ payload, plan });
+    assert.equal(html, renderWrapper({ payload, files }), 'Explicit and automatic planning must agree');
     assert.equal(html.includes('Formatting simplified for this large document'), extension === 'md');
     assert.equal(html.includes('PDFs may contain'), extension === 'pdf');
     assert.equal(html.includes('Preview limited to'), ['txt', 'html', 'xhtml', 'json', 'ts', 'md'].includes(extension));

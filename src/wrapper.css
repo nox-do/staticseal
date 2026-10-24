@@ -173,12 +173,7 @@ input:focus-visible, button:focus-visible, a:focus-visible {
   font-size: 13px;
   font-weight: 650;
 }
-.vt small {
-  display: block;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 400;
-}
+
 .va {
   flex: none;
 }

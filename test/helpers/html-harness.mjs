@@ -1,3 +1,4 @@
+import { Window } from 'happy-dom';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { webcrypto } from 'node:crypto';
@@ -36,13 +37,20 @@ export function executeHtml(html, { payload, crypto = webcrypto, globals = {} } 
         click() {
           downloads.push(this.download);
         },
-        remove() {}
+        remove() {},
+        append() {},
+        setAttribute() {}
       };
     },
     getElementById(id) {
       if (id === 'password' && !html.includes('id="password"')) return null;
       if (!nodes.has(id))
         nodes.set(id, {
+          replaceChildren() {},
+          append() {},
+          closest() {
+            return document.getElementById('drop-zone');
+          },
           value: '',
           dataset: {},
           checked: false,
@@ -91,12 +99,17 @@ export function executeHtml(html, { payload, crypto = webcrypto, globals = {} } 
     CompressionStream,
     DecompressionStream,
     DOMException,
-    URL: {
-      createObjectURL(blob) {
+    AbortController,
+    setTimeout,
+    DOMParser: new Window({
+      settings: { disableJavaScriptEvaluation: true, disableCSSFileLoading: true, disableIframePageLoading: true }
+    }).DOMParser,
+    URL: class extends URL {
+      static createObjectURL(blob) {
         blobs.push(blob);
         return 'blob:test';
-      },
-      revokeObjectURL() {}
+      }
+      static revokeObjectURL() {}
     },
     ...globals
   });
@@ -134,7 +147,12 @@ export function wrapper(html, payload, options = {}) {
   };
 }
 
-export async function createThroughUi(html, bytes, file, { password = '', htmlPage = false, ...environment } = {}) {
+export async function createThroughUi(
+  html,
+  bytes,
+  file,
+  { password = '', htmlPage = false, title = '', ...environment } = {}
+) {
   const ui = executeHtml(html, environment);
   const node = id => ui.nodes.get(id);
   node('source-file').files = [
@@ -146,9 +164,13 @@ export async function createThroughUi(html, bytes, file, { password = '', htmlPa
       }
     }
   ];
-  node('source-file').handlers.change();
+  await node('source-file').handlers.change();
   node('password').value = node('password-repeat').value = password;
+  ui.document.getElementById('output-title').value = title;
+  if (htmlPage && node('html-page').disabled) throw new Error('HTML files only');
   node('html-page').checked = htmlPage;
+  await node('html-page').handlers.change();
+  if (node('encrypt-button').disabled) throw new Error(node('selection-report').textContent);
   await node('encrypt-form').handlers.submit({ preventDefault() {} });
   if (node('status').dataset.kind === 'error') throw new Error(node('status').textContent);
   assert.equal(ui.blobs.length, 1, 'Creator must download one standalone HTML file');

@@ -109,12 +109,10 @@ export function createCodePreview() {
     }
     return output + escape(text.slice(start));
   }
-  return { codeLanguage, highlightCode };
+  return { codeLanguage, highlightCode, escape };
 }
 
-export function createMarkdownPreview(highlightCode) {
-  const escape = value =>
-    value.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+export function createMarkdownPreview({ highlightCode, escape }) {
   function inline(text, depth = 0) {
     if (depth > 8) return escape(text);
     const pattern =
@@ -206,5 +204,5 @@ export function createMarkdownPreview(highlightCode) {
 
 export function createPreview() {
   const code = createCodePreview();
-  return { ...createFileTypes(), ...code, ...createMarkdownPreview(code.highlightCode) };
+  return { ...createFileTypes(), ...code, ...createMarkdownPreview(code) };
 }

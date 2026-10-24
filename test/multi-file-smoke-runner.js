@@ -144,7 +144,7 @@
     await clear();
     drop([{ kind: 'file', getAsFile: () => file('dropped.txt', 'Dropped file', 'text/plain') }]);
     await wait(() => $('selection-list').children.length === 1 && !$('encrypt-button').disabled, 'plain file drop');
-    check(!!document.querySelector('[aria-label^="Move up"]'), 'independent files retain ordering controls');
+    check(!document.querySelector('[aria-label^="Move up"]'), 'independent files have no ordering controls');
     await clear();
     const png = Uint8Array.from(
       atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=='),
@@ -285,7 +285,7 @@
     const website = await open(await seal('browser-test-only'), 'browser-test-only');
     const siteDoc = () =>
       website.doc.querySelector('#vc > iframe')?.contentDocument?.querySelector('iframe')?.contentDocument;
-    await wait(() => siteDoc()?.getElementById('guide'), 'website home loads');
+    await wait(() => siteDoc()?.readyState === 'complete' && siteDoc()?.getElementById('guide'), 'website home loads');
     check(
       website.doc.getElementById('choose-file').options.length === 2,
       'embedded pages, shared CSS and linked images are absent from file navigation'
@@ -314,12 +314,18 @@
     );
     check(siteDoc().defaultView.visits === 1, 'subpage JavaScript executes in a fresh page context');
     siteDoc().getElementById('contact').click();
-    await wait(() => siteDoc()?.querySelector('h1')?.textContent === 'Contact', 'recursive link opens contact');
+    await wait(
+      () => siteDoc()?.readyState === 'complete' && siteDoc()?.querySelector('h1')?.textContent === 'Contact',
+      'recursive link opens contact'
+    );
     website.doc.querySelector('#vc > iframe').contentWindow.history.back();
     await wait(() => siteDoc()?.getElementById('contact'), 'browser Back restores guide');
     check(siteDoc().defaultView.visits === 1, 'back navigation does not reuse stale script globals');
     siteDoc().getElementById('home').click();
-    await wait(() => siteDoc()?.getElementById('guide'), 'cyclic link returns home');
+    await wait(
+      () => siteDoc()?.readyState === 'complete' && siteDoc()?.getElementById('guide'),
+      'cyclic link returns home'
+    );
     const siteWindow = website.doc.querySelector('#vc > iframe').contentWindow;
     const siteErrors = [];
     siteWindow.addEventListener('error', event => siteErrors.push(event.message));

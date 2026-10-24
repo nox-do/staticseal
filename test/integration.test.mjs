@@ -1,3 +1,4 @@
+import { decodePayload } from './helpers/payload.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { webcrypto, randomFillSync } from 'node:crypto';
@@ -60,6 +61,7 @@ for (const access of ['passphrase', 'sealed']) {
 test('browser and CLI roundtrip matrix preserves privacy, viewer isolation and standalone readers', async () => {
   const factories = await import('../src/reader-factories.mjs');
   assert.deepEqual(Object.keys(factories).sort(), [
+    'collectionViewerSource',
     'createCodePreview',
     'createCollection',
     'createCollectionReader',
@@ -77,6 +79,7 @@ test('browser and CLI roundtrip matrix preserves privacy, viewer isolation and s
     'isHtmlFile',
     'openWebsite',
     'renderImagePreview',
+    'renderPageFrame',
     'renderPdfPreview',
     'renderTextPreview'
   ]);
@@ -144,9 +147,16 @@ test('browser and CLI roundtrip matrix preserves privacy, viewer isolation and s
             assert.equal(reader.payload.filename, undefined);
             assert.equal(reader.payload.contentType, undefined);
             assert.equal(reader.payload.v, (encrypted ? 2 : 4) + Number(compressed));
-            assert.deepEqual(Buffer.from(await reader.open(password)), bytes);
+            const opened = Buffer.from(await reader.open(password));
+            const expected =
+              page && html === browserHtml ? Buffer.from((await decodePayload(reader.payload, password)).bytes) : bytes;
+            assert.deepEqual(opened, expected);
+            if (page && html === browserHtml) {
+              assert.match(opened.toString(), /<title>Original page<\/title>/);
+              assert.match(opened.toString(), /globalThis.pageReady=true/);
+            }
             if (page) {
-              assert.equal(reader.document.writtenHtml, bytes.toString());
+              assert.equal(reader.document.writtenHtml, expected.toString());
               assert.equal(reader.document.robots.name, 'robots');
               assert.equal(reader.document.robots.content, 'noindex,nofollow,noarchive');
             }

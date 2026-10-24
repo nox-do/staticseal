@@ -42,41 +42,35 @@ test('opening errors focus the available control without requiring a password fi
     }
 });
 
-test('page choice is per-file, HTML-only and captured before asynchronous reads', async () => {
+test('selection detects HTML, captures page choice before reads and allows original-file mode', async () => {
   const ui = executeHtml(source);
   const node = id => ui.nodes.get(id);
   const bytes = Buffer.from('<!doctype html><title>Selected page</title><h1>Hello</h1>');
-  const file = {
-    name: 'selected.html',
-    type: 'text/html',
-    size: bytes.length,
-    async arrayBuffer() {
-      node('html-page').checked = false;
-      return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  node('source-file').files = [
+    {
+      name: 'selected.html',
+      type: 'text/html',
+      size: bytes.length,
+      async arrayBuffer() {
+        node('html-page').checked = false;
+        return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+      }
     }
-  };
-  node('source-file').files = [file];
-  node('source-file').handlers.change();
+  ];
+  await node('source-file').handlers.change();
   assert.equal(node('html-page-option').hidden, false);
   assert.equal(node('html-page').disabled, false);
-  assert.equal(node('html-page').checked, false);
-  node('html-page').checked = true;
   await node('encrypt-form').handlers.submit({ preventDefault() {} });
-  assert.match(ui.downloads[0], /^sealed_\d{6}_\d{4}\.html$/);
   const emitted = wrapper(await ui.blobs[0].text());
   assert.equal(emitted.payload.display, 'page');
-  assert.deepEqual(Buffer.from(await emitted.open()), bytes);
-  node('source-file').files = [{ name: 'other.txt', type: 'text/plain', size: 1 }];
-  node('source-file').handlers.change();
-  assert.equal(node('html-page-option').hidden, true);
-  assert.equal(node('html-page').disabled, true);
-  assert.equal(node('html-page').checked, false);
-  node('source-file').files = [file];
-  node('source-file').handlers.change();
-  assert.equal(node('html-page').checked, false);
-  node('source-file').files = [];
-  node('source-file').handlers.change();
-  assert.equal(node('html-page-option').hidden, true);
+  assert.match(Buffer.from(await emitted.open()).toString(), /<h1>Hello<\/h1>/);
+  // Turning off webpage display preserves the exact original source.
+  node('html-page').checked = false;
+  await node('html-page').handlers.change();
+  await node('encrypt-form').handlers.submit({ preventDefault() {} });
+  const original = wrapper(await ui.blobs[1].text());
+  assert.equal(original.payload.display, undefined);
+  assert.deepEqual(Buffer.from(await original.open()), bytes);
 });
 
 test('page mode accepts UTF-8 and BOM-marked UTF-16 and rejects unsupported input', async () => {
@@ -84,7 +78,9 @@ test('page mode accepts UTF-8 and BOM-marked UTF-16 and rejects unsupported inpu
   for (const bytes of [Buffer.from(text), Buffer.concat([Buffer.from([255, 254]), Buffer.from(text, 'utf16le')])]) {
     const { html } = await createThroughUi(source, bytes, { name: 'utf.html', type: 'text/html' }, { htmlPage: true });
     const reader = wrapper(html);
-    await verifyPayload(reader.payload, '', bytes);
+    const prepared = await decodePayload(reader.payload, '');
+    assert.match(Buffer.from(prepared.bytes).toString(), /<meta charset="utf-8">/);
+    assert.equal(createPageViewer().decodeHtml(bytes), text);
     let written;
     reader.document.open = () => {};
     reader.document.close = () => {};
@@ -93,13 +89,14 @@ test('page mode accepts UTF-8 and BOM-marked UTF-16 and rejects unsupported inpu
     };
     reader.document.head = { append() {} };
     await reader.open();
-    assert.equal(written, text);
+    assert.match(written, /<title>Grüße<\/title>/);
+    assert.match(written, /<p>日本語<\/p>/);
   }
   assert.throws(() => createPageViewer().decodeHtml(Buffer.from([0xc3, 0x28])), /UTF-8 or BOM-marked UTF-16/);
   assert.equal(isHtmlFile('wrong.txt', 'text/plain'), false);
   await assert.rejects(
     createThroughUi(source, Buffer.from([0xc3, 0x28]), { name: 'bad.html', type: 'text/html' }, { htmlPage: true }),
-    /UTF-8 or BOM-marked UTF-16/
+    /encoded data|encoding/i
   );
   await assert.rejects(
     createThroughUi(source, Buffer.from(text), { name: 'wrong.txt', type: 'text/plain' }, { htmlPage: true }),
@@ -254,10 +251,7 @@ test('generator prefills both fields and copy follows edits without stale confir
   node('password-repeat').value = '';
   node('password-repeat').handlers.input();
   assert.equal(node('copy-generated').disabled, true, 'matching empty fields are not copyable');
-  assert.doesNotMatch(
-    source,
-    /id="(?:generated-password|use-generated|cancel-generator|kdf-strength|output-title|output-name)"/
-  );
+  assert.doesNotMatch(source, /id="(?:generated-password|use-generated|cancel-generator|kdf-strength|output-name)"/);
   const pending = executeHtml(source, {
     globals: {
       navigator: {
@@ -332,14 +326,15 @@ test('browser always hides metadata, captures local minute timestamp and restore
   };
   assert.ok(!source.includes('id="private-filename"'));
   node('source-file').files = [file];
+  await node('source-file').handlers.change();
   node('password').value = node('password-repeat').value = 'test';
   await node('encrypt-form').handlers.submit({ preventDefault() {} });
   assert.equal(derivations, 1, 'Derive the key once for encryption and verification');
-  assert.deepEqual(ui.downloads, ['sealed_261023_1432.html']);
-  assert.match(node('status').textContent, /Original: .* → HTML package: /);
+  assert.deepEqual(ui.downloads, ['sealed_261023_1433.html']);
+  assert.match(node('status').textContent, /Prepared content: .* → HTML package: /);
   const html = await ui.blobs[0].text();
   assert.ok(!html.includes(file.name));
-  assert.match(html, /<title>Protected file<\/title>/);
+  assert.match(html, /<title>Staticseal<\/title>/);
   const reader = wrapper(html);
   assert.equal(reader.payload.iterations, 210000);
   assert.equal(reader.payload.filename, undefined);
@@ -399,13 +394,53 @@ test('browser UI keeps warning, confirmation and rejection boundaries before fil
       confirmations++;
       return false;
     };
-    node('source-file').handlers.change();
+    await node('source-file').handlers.change();
     if (size < 5 * 1024 * 1024) assert.equal(node('status').textContent, '');
-    else assert.equal(node('status').dataset.kind, 'error');
-    await node('encrypt-form').handlers.submit({ preventDefault() {} });
+    else if (size <= 10 * 1024 * 1024) assert.match(node('status').textContent, /substantial memory/);
+    assert.equal(node('encrypt-button').disabled, size > 10 * 1024 * 1024);
     assert.equal(confirmations, size > 10 * 1024 * 1024 && size <= 128 * 1024 * 1024 ? 1 : 0);
     assert.equal(reads, size <= 10 * 1024 * 1024 ? 1 : 0);
-    if (size > 128 * 1024 * 1024) assert.match(node('status').textContent, /128 MiB/);
-    else if (size > 10 * 1024 * 1024) assert.match(node('status').textContent, /cancelled/);
+    if (size > 128 * 1024 * 1024) assert.match(node('selection-report').textContent, /128 MiB/);
+    else if (size > 10 * 1024 * 1024) assert.match(node('selection-report').textContent, /cancelled/);
+  }
+});
+
+test('minimal opening shows only public titles and labels collection buttons', async () => {
+  const bytes = Buffer.from('private content');
+  for (const password of ['', 'secret']) {
+    for (const title of ['', '  My <report> & notes  ']) {
+      const { html } = await createThroughUi(
+        source,
+        bytes,
+        { name: 'private.txt', type: 'text/plain' },
+        { password, title }
+      );
+      const expected = title ? 'My &lt;report&gt; &amp; notes' : 'Staticseal';
+      assert.ok(html.includes('<title>' + expected + '</title>'));
+      assert.ok(!html.includes('private.txt'));
+      assert.equal(html.split('<script')[0].includes('<h1>'), !!title);
+      assert.ok(html.includes('type="submit">Open sealed file</button>'));
+      assert.ok(!html.includes('in your browser.'));
+      assert.deepEqual(Buffer.from(await wrapper(html).open(password)), bytes);
+    }
+    const payload = await makePayload(
+      bytes,
+      password,
+      160000,
+      { name: 'private.txt', type: 'text/plain' },
+      password ? 'passphrase' : 'sealed'
+    );
+    payload.display = 'collection';
+    delete payload.filename;
+    const html = renderWrapper({ payload });
+    assert.ok(!html.split('<script')[0].includes('<h1>'));
+    assert.ok(html.includes('type="submit">Open sealed collection</button>'));
+    const legacy = renderWrapper({ payload: { ...payload, filename: 'Known <name>.zip' } });
+    assert.ok(legacy.includes('<h1>Known &lt;name&gt;.zip</h1>'));
+    assert.ok(
+      renderWrapper({ payload: { ...payload, filename: 'Known.zip' }, title: 'Chosen title' }).includes(
+        '<h1>Chosen title</h1>'
+      )
+    );
   }
 });

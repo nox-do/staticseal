@@ -1,29 +1,26 @@
 import {
   createFormat,
+  collectionViewerSource,
   createFileTypes,
   createCodePreview,
   createMarkdownPreview,
-  createFramedPageViewer,
-  createCollectionReader,
-  createZip,
   inflateContent,
   createCrypto,
   createFileViewer,
   renderImagePreview,
   renderTextPreview,
   renderPdfPreview,
-  createPageViewer,
-  createCollectionViewer
+  createPageViewer
 } from './reader-factories.mjs';
 import { sealLogo } from './logo.mjs';
 import { wrapperTemplate, readerTemplate, openingStyles, viewerStyles, previewStyles } from './wrapper-template.mjs';
 
-export function renderWrapper({ title = 'Protected file', payload, minimal = false, buttonLabel, files }) {
-  const format = createFormat();
-  const { escapeHtml } = format;
-  const hasPassphrase = payload.access !== 'sealed';
-  const isPage = payload.display === 'page';
-  const isCollection = payload.display === 'collection';
+// Creator-only link plan: prepare the selected viewer and styles once, independent
+// of compression/encryption. The input file inventory is never serialized.
+// String concatenation embeds each selected function as source, without eval.
+export function planReader(display, files) {
+  const isPage = display === 'page';
+  const isCollection = display === 'collection';
   const framedPage = isCollection && files?.length === 1 && files[0].page;
   const types = createFileTypes();
   const kinds = files?.filter(file => !file.page).map(file => types.previewKind(file.filename, file.contentType));
@@ -34,30 +31,20 @@ export function renderWrapper({ title = 'Protected file', payload, minimal = fal
     files.some(file => !file.page && createCodePreview().codeLanguage(file.filename, file.contentType));
   const preview =
     '(()=>{const code=' +
-    (code ? '(' + createCodePreview.toString() + ')()' : '{}') +
+    (code ? '(' + createCodePreview + ')()' : '{}') +
     ';return {...(' +
-    createFileTypes.toString() +
+    createFileTypes +
     ')(),...code' +
-    (markdown ? ',...(' + createMarkdownPreview.toString() + ')(code.highlightCode)' : '') +
+    (markdown ? ',...(' + createMarkdownPreview + ')(code)' : '') +
     '}})';
   const renderers = [];
-  if (!files || kinds.includes('image')) renderers.push('image:' + renderImagePreview.toString());
-  if (!files || kinds.includes('pdf')) renderers.push('pdf:' + renderPdfPreview.toString());
-  if (!files || kinds.some(kind => kind === 'text' || kind === 'markdown'))
-    renderers.push('text:' + renderTextPreview.toString());
+  if (!files || kinds.includes('image')) renderers.push('image:' + renderImagePreview);
+  if (!files || kinds.includes('pdf')) renderers.push('pdf:' + renderPdfPreview);
+  if (!files || kinds.some(kind => kind === 'text' || kind === 'markdown')) renderers.push('text:' + renderTextPreview);
   const fileViewer =
-    '((e,p)=>{const r={' +
-    renderers.join(',') +
-    '};r.markdown=r.text;return (' +
-    createFileViewer.toString() +
-    ')(e,p,r)})';
-  const collection =
-    isCollection && !framedPage
-      ? '(()=>({...(' + createCollectionReader.toString() + ')(),zip:(' + createZip.toString() + ')()}))'
-      : '';
-  const subject = isCollection ? 'file collection' : isPage ? 'webpage' : 'file';
-  const values = {
-    STYLES:
+    '((e,p)=>{const r={' + renderers.join(',') + '};r.markdown=r.text;return (' + createFileViewer + ')(e,p,r)})';
+  return {
+    styles:
       openingStyles +
       (isPage
         ? ''
@@ -66,55 +53,45 @@ export function renderWrapper({ title = 'Protected file', payload, minimal = fal
           (markdown && !framedPage ? previewStyles[1] : '') +
           (!files || kinds.some(kind => ['text', 'markdown', 'pdf'].includes(kind)) ? previewStyles[2] : '') +
           (code && !framedPage ? previewStyles[3] : '')),
-    TITLE: escapeHtml(title),
+    viewer: isPage
+      ? '(()=>(' + createPageViewer + ')().renderHtmlPage)'
+      : isCollection
+        ? collectionViewerSource(framedPage, !files || files.some(file => file.page), fileViewer, preview)
+        : '(e=>(' + fileViewer + ')(e,' + preview + '))'
+  };
+}
+
+export function renderWrapper({ title, payload, buttonLabel, files, plan = planReader(payload.display, files) }) {
+  const format = createFormat();
+  const { escapeHtml } = format;
+  const hasPassphrase = payload.access !== 'sealed';
+  const heading = escapeHtml(title || payload.filename || '');
+  const values = {
+    STYLES: plan.styles,
+    TITLE: heading || 'Staticseal',
+    HEADING: heading ? '<h1>' + heading + '</h1>' : '',
     LOGO: sealLogo,
-    KICKER: (hasPassphrase ? 'Protected ' : 'Sealed ') + subject,
-    COPY: minimal
-      ? ''
-      : '<p>' +
-        (hasPassphrase
-          ? 'Enter the passphrase to open this ' + subject + ' in your browser.'
-          : 'Open this ' + subject + ' in your browser.') +
-        '</p>',
     PASSWORD_FIELD: hasPassphrase
       ? '<label for="password">Passphrase</label><input id="password" name="password" type="password" placeholder="Passphrase" autofocus>'
       : '',
-    BUTTON: escapeHtml(buttonLabel ?? (hasPassphrase ? 'Unlock file' : 'Open sealed file')),
+    BUTTON: escapeHtml(buttonLabel ?? 'Open sealed ' + (payload.display === 'collection' ? 'collection' : 'file')),
     // Keep HTML script-parser control sequences out of the JSON data block.
     PAYLOAD: JSON.stringify(payload).replaceAll('<', '\\u003c'),
     READER: readerTemplate
       .replace('STATICSEAL_DECODER', () =>
-        format.isUnencryptedVersion(payload.v)
-          ? '((p,k,b,c)=>c(p.content))'
-          : '(' + createCrypto.toString() + ')().decryptPayload'
+        format.isUnencryptedVersion(payload.v) ? '((p,k,b,c)=>c(p.content))' : '(' + createCrypto + ')().decryptPayload'
       )
       .replace(/STATICSEAL_RESTORE\(([$\w]+)\);/, (_, content) =>
         format.isCompressedVersion(payload.v)
-          ? content + '=await (' + inflateContent.toString() + ')(' + content + ',' + format.MAX_EXPANDED_BYTES + ');'
+          ? content + '=await (' + inflateContent + ')(' + content + ',' + format.MAX_EXPANDED_BYTES + ');'
           : ''
       )
-      .replace('STATICSEAL_FORMAT', () => '(' + createFormat.toString() + ')')
-      .replace('STATICSEAL_VIEWER', () =>
-        isPage
-          ? '(()=>(' + createPageViewer.toString() + ')().renderHtmlPage)'
-          : framedPage
-            ? '(e=>(' + createFramedPageViewer.toString() + ')(e,' + createCollectionReader.toString() + '))'
-            : isCollection
-              ? '(e=>(' +
-                createCollectionViewer.toString() +
-                ')(e,' +
-                fileViewer +
-                ',' +
-                preview +
-                ',' +
-                collection +
-                '))'
-              : '(e=>(' + fileViewer + ')(e,' + preview + '))'
-      )
+      .replace('STATICSEAL_FORMAT', () => '(' + createFormat + ')')
+      .replace('STATICSEAL_VIEWER', () => plan.viewer)
   };
   // Callback replacement preserves literal $ sequences in filenames and payloads.
   return wrapperTemplate.replace(
-    /STATICSEAL_(STYLES|TITLE|LOGO|KICKER|COPY|PASSWORD_FIELD|BUTTON|PAYLOAD|READER)\b/g,
+    /STATICSEAL_(STYLES|TITLE|HEADING|LOGO|PASSWORD_FIELD|BUTTON|PAYLOAD|READER)\b/g,
     (_, key) => values[key]
   );
 }

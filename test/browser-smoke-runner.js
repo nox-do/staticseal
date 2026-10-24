@@ -51,8 +51,11 @@
       frame.contentWindow.HTMLAnchorElement.prototype.click = function () {};
       frame.contentWindow.confirm = () => true;
       selectFile(frame, bytes, name, type);
+      await waitFor(() => !node('encrypt-button').disabled);
       node('password').value = node('password-repeat').value = password;
       node('html-page').checked = page;
+      node('html-page').dispatchEvent(new frame.contentWindow.Event('change'));
+      await waitFor(() => !node('encrypt-button').disabled);
       node('encrypt-form').requestSubmit();
       await waitFor(
         () => (!node('encrypt-button').disabled && blobs.length) || node('status').dataset.kind === 'error'
@@ -161,18 +164,16 @@
         row = doc.getElementById('html-page-option');
       check(frame.contentWindow.getComputedStyle(row).display === 'none', 'page choice initially visible');
       selectFile(frame, '<h1>Page</h1>', 'choice.html', 'text/html');
+      await waitFor(() => !doc.getElementById('encrypt-button').disabled);
       check(
-        !choice.disabled && !choice.checked && frame.contentWindow.getComputedStyle(row).display !== 'none',
-        'HTML choice unavailable'
+        !choice.disabled && choice.checked && frame.contentWindow.getComputedStyle(row).display !== 'none',
+        'HTML entry automatically recognized'
       );
-      choice.checked = true;
       selectFile(frame, 'text', 'choice.txt', 'text/plain');
-      check(
-        choice.disabled && !choice.checked && frame.contentWindow.getComputedStyle(row).display === 'none',
-        'non-HTML choice not reset'
-      );
+      await waitFor(() => !doc.getElementById('encrypt-button').disabled);
+      check(!choice.disabled && choice.checked, 'adding an attachment preserves webpage choice');
     });
-    log('PASS: creator / HTML-only page choice / default off / reset');
+    log('PASS: creator / automatic HTML entry / attachment selection');
     for (const row of pageCases) {
       const password = row.access === 'sealed' ? '' : 'page-test';
       const bytes = new TextEncoder().encode(row.text);

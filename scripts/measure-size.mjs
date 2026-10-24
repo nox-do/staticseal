@@ -20,7 +20,6 @@ const utf8Bytes = text => Buffer.byteLength(text, 'utf8');
 // Rebuild via the normal build only. Keep stdout as a machine-readable JSON report.
 run(process.execPath, ['scripts/build.mjs']);
 const app = await readFile(new URL('../index.html', import.meta.url));
-const fatApp = await readFile(new URL('../fatseal.html', import.meta.url));
 const sourceCommit = run('git', ['rev-parse', 'HEAD']);
 const trackedChanges = run('git', ['diff', 'HEAD', '--name-only']).split('\n').filter(Boolean);
 const options = {
@@ -144,7 +143,6 @@ console.log(
         sha256: sha256(bytes)
       })),
       app: { path: 'index.html', utf8Bytes: app.byteLength, sha256: sha256(app) },
-      fatApp: { path: 'fatseal.html', utf8Bytes: fatApp.byteLength, sha256: sha256(fatApp) },
       readers,
       viewerProfiles
     },

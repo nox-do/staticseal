@@ -27,7 +27,7 @@ export function packCollection(files) {
   new DataView(bytes.buffer).setUint32(0, header.length);
   bytes.set(header, 4);
   files.forEach((file, index) => bytes.set(file.bytes, 4 + header.length + entries[index].offset));
-  createCollection().unpack(bytes);
+  createCollectionReader().unpack(bytes);
   return bytes;
 }
 
@@ -140,7 +140,7 @@ export function createZip() {
   return zip;
 }
 
-export function createCollectionViewer(escapeHtml, fileViewerFactory, previewFactory, collectionFactory) {
+export function createCollectionViewer(escapeHtml, fileViewerFactory, previewFactory, collectionFactory, renderPage) {
   const codec = collectionFactory();
   const renderFile = fileViewerFactory(escapeHtml, previewFactory);
   let zipUrl;
@@ -150,30 +150,7 @@ export function createCollectionViewer(escapeHtml, fileViewerFactory, previewFac
     const show = () => {
       const file = files[index];
       renderFile(file.bytes, file);
-      if (file.page) {
-        const frame = document.createElement('iframe');
-        frame.className = 'vf';
-        frame.title = file.filename;
-        frame.onload = () => {
-          const doc = frame.contentDocument;
-          if (!doc) return;
-          doc.addEventListener('click', event => {
-            const link = event.target.closest?.('a[href^="#"]');
-            if (!link || event.defaultPrevented || event.button !== 0) return;
-            event.preventDefault();
-            try {
-              const name = decodeURIComponent(link.getAttribute('href').slice(1));
-              const target = doc.getElementById(name) || doc.getElementsByName(name)[0];
-              if (target) target.scrollIntoView();
-              else if (!name || name.toLowerCase() === 'top') frame.contentWindow.scrollTo(0, 0);
-            } catch {
-              /* Ignore malformed fragments. */
-            }
-          });
-        };
-        frame.srcdoc = new TextDecoder().decode(file.bytes);
-        document.getElementById('vc').replaceChildren(frame);
-      }
+      if (file.page) renderPage(document.getElementById('vc'), file);
       const nav = document.createElement('nav');
       nav.className = 'vn';
       nav.setAttribute('aria-label', 'Files');
@@ -228,7 +205,7 @@ export function createCollection() {
 }
 
 // A warning keeps the webpage header, but does not require collection navigation.
-export function createFramedPageViewer(escapeHtml, collectionFactory) {
+export function createFramedPageViewer(escapeHtml, collectionFactory, renderPage) {
   const brand = document.getElementById('wrapper-brand').outerHTML;
   return bytes => {
     const files = collectionFactory().unpack(bytes);
@@ -245,27 +222,44 @@ export function createFramedPageViewer(escapeHtml, collectionFactory) {
       escapeHtml(file.filename) +
       '">Download</a></div></header><section id="vc"></section></main>';
     document.getElementById('page-download').href = URL.createObjectURL(new Blob([file.bytes], { type: 'text/html' }));
-    const frame = document.createElement('iframe');
-    frame.className = 'vf';
-    frame.title = file.filename;
-    frame.onload = () => {
-      const doc = frame.contentDocument;
-      if (!doc) return;
-      doc.addEventListener('click', event => {
-        const link = event.target.closest?.('a[href^="#"]');
-        if (!link || event.defaultPrevented || event.button !== 0) return;
-        event.preventDefault();
-        try {
-          const name = decodeURIComponent(link.getAttribute('href').slice(1));
-          const target = doc.getElementById(name) || doc.getElementsByName(name)[0];
-          if (target) target.scrollIntoView();
-          else if (!name || name.toLowerCase() === 'top') frame.contentWindow.scrollTo(0, 0);
-        } catch {
-          /* Ignore malformed fragments. */
-        }
-      });
-    };
-    frame.srcdoc = new TextDecoder().decode(file.bytes);
-    document.getElementById('vc').append(frame);
+    renderPage(document.getElementById('vc'), file);
   };
+}
+
+export function renderPageFrame(viewer, file) {
+  const frame = document.createElement('iframe');
+  frame.className = 'vf';
+  frame.title = file.filename;
+  frame.onload = () => {
+    const doc = frame.contentDocument;
+    if (!doc) return;
+    doc.addEventListener('click', event => {
+      const link = event.target.closest?.('a[href^="#"]');
+      if (!link || event.defaultPrevented || event.button !== 0) return;
+      event.preventDefault();
+      try {
+        const name = decodeURIComponent(link.getAttribute('href').slice(1));
+        const target = doc.getElementById(name) || doc.getElementsByName(name)[0];
+        if (target) target.scrollIntoView();
+        else if (!name || name.toLowerCase() === 'top') frame.contentWindow.scrollTo(0, 0);
+      } catch {
+        /* Ignore malformed fragments. */
+      }
+    });
+  };
+  frame.srcdoc = new TextDecoder().decode(file.bytes);
+  viewer.replaceChildren(frame);
+}
+
+// Creator-only assembly stays out of the small, single-file creator.
+export function collectionViewerSource(singlePage, hasPages, fileViewer, preview) {
+  const frame = hasPages ? renderPageFrame.toString() : 'null';
+  if (singlePage)
+    return (
+      '(e=>(' + createFramedPageViewer.toString() + ')(e,' + createCollectionReader.toString() + ',' + frame + '))'
+    );
+  const codec = '(()=>({...(' + createCollectionReader.toString() + ')(),zip:(' + createZip.toString() + ')()}))';
+  return (
+    '(e=>(' + createCollectionViewer.toString() + ')(e,' + fileViewer + ',' + preview + ',' + codec + ',' + frame + '))'
+  );
 }

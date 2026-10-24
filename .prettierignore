@@ -1,6 +1,5 @@
 # Build outputs
 /index.html
-/fatseal.html
 src/logo.mjs
 src/wrapper-template.mjs
 src/reader-factories.mjs

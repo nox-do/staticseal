@@ -1,3 +1,4 @@
+import { cssReferencePattern } from '../../src/css-references.mjs';
 import { Window } from 'happy-dom';
 import { embedSelectedHtml } from '../../src/html-import.mjs';
 import { process as parseSrcset, serialize as serializeSrcset } from '../../src/srcset-parser.mjs';
@@ -77,13 +78,11 @@ export async function bundleReport(source, load) {
   }
   async function css(value, base) {
     // Same conservative URL grammar as the offline importer; it reports escapes/image-set.
-    const pattern =
-      /\/\*[\s\S]*?\*\/|@import\b(?:\s|\/\*[\s\S]*?\*\/)*(["'])(.*?)\1|(?:@import\b(?:\s|\/\*[\s\S]*?\*\/)*)?\burl\(\s*(?:"([^"\n]*)"|'([^'\n]*)'|([^)'"\s]*))\s*\)|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/gi;
     let result = '',
       offset = 0;
-    for (const match of value.matchAll(pattern)) {
+    for (const match of value.matchAll(cssReferencePattern())) {
       result += value.slice(offset, match.index);
-      if (/^(?:\/\*|["'])/.test(match[0])) result += match[0];
+      if (/^(?:\/\*|["']|(?:-webkit-)?image-set\s*\()/i.test(match[0])) result += match[0];
       else {
         const ref = match[2] ?? match[3] ?? match[4] ?? match[5];
         const imported = /^@import\b/i.test(match[0]);

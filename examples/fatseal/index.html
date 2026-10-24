@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>FatSeal ausprobieren · Dateien richtig einpacken</title>
+    <title>Staticseal ausprobieren · Dateien richtig einpacken</title>
     <meta
       name="description"
-      content="FatSeal an drei Beispielen ausprobieren: vollständige Website, unabhängige Anhänge und fehlende Ressourcen. Mit Anleitung zur Ordnerauswahl."
+      content="Staticseal an drei Beispielen ausprobieren: vollständige Website, unabhängige Anhänge und fehlende Ressourcen. Mit Anleitung zur Ordnerauswahl."
     />
     <link rel="icon" href="website/assets/favicon.svg" />
     <link rel="stylesheet" href="guide.css" />
@@ -15,7 +15,7 @@
     <header>
       <span class="brand">STATICSEAL / FATSEAL</span>
       <nav class="links">
-        <a href="../../fatseal.html">FatSeal öffnen ↗</a><a href="#auswahl">Dateien auswählen</a
+        <a href="../../index.html">Staticseal öffnen ↗</a><a href="#auswahl">Dateien auswählen</a
         ><a href="../jupyter/index.html">Jupyter-Beispiel</a><a href="#fragen">Fragen</a>
       </nav>
     </header>
@@ -24,7 +24,7 @@
         <span class="eyebrow">Selbst ausprobieren</span>
         <h1>Was kommt mit?<br />Was bleibt einzeln?</h1>
         <p class="lead">
-          Eine kleine Website, drei Packvarianten. Erlebe, wie FatSeal Seiten und Ressourcen zusammenfügt – und warum
+          Eine kleine Website, drei Packvarianten. Erlebe, wie Staticseal Seiten und Ressourcen zusammenfügt – und warum
           die Dateileiste manchmal bleibt.
         </p>
         <a class="button" href="demo-website.html">Mit der Website starten →</a>
@@ -37,7 +37,7 @@
             <h3>Nur die Website.</h3>
             <p>
               Drei verknüpfte Seiten mit Bild, Favicon und CSS. Keine weiteren Dateien und keine erkannten Warnungen:
-              Nach dem Öffnen verschwindet der FatSeal-Header.
+              Nach dem Öffnen verschwindet der Staticseal-Header.
             </p>
             <a class="button" href="demo-website.html">Ohne Header erleben →</a
             ><small><a href="website.zip" download>Quellordner als ZIP herunterladen</a></small>
@@ -56,7 +56,7 @@
             <div class="number">03 / EINE DATEI FEHLT</div>
             <h3>Fast vollständig.</h3>
             <p>
-              Das Landschaftsbild wurde nicht mit ausgewählt. FatSeal meldet die fehlende Ressource. Trotz nur einer
+              Das Landschaftsbild wurde nicht mit ausgewählt. Staticseal meldet die fehlende Ressource. Trotz nur einer
               Website bleibt die Dateileiste erhalten.
             </p>
             <a class="button secondary" href="demo-warning.html">Warnfall ansehen →</a
@@ -68,7 +68,7 @@
         <span class="eyebrow">Der wichtige erste Schritt</span>
         <h2>Öffnen ist noch nicht auswählen.</h2>
         <p>
-          ZIP herunterladen, entpacken und <a href="../../fatseal.html">FatSeal öffnen</a>. Wähle dann genau den
+          ZIP herunterladen, entpacken und <a href="../../index.html">Staticseal öffnen</a>. Wähle dann genau den
           entpackten Ordner <code>Website</code> – nicht den übergeordneten Download-Ordner. Du kannst den Ordner auch
           direkt in die Dropzone ziehen; Unterordner und ihre Pfade bleiben erhalten.
         </p>
@@ -105,7 +105,7 @@
         </div>
         <aside class="note">
           <strong>„Hochladen“ ist die Bezeichnung des Browserdialogs.</strong> Die ausgewählten Dateien werden lokal in
-          FatSeal verarbeitet. Die App sendet sie nicht an einen Server.
+          Staticseal verarbeitet. Die App sendet sie nicht an einen Server.
         </aside>
       </section>
       <section class="flow">
@@ -125,7 +125,7 @@
             <thead>
               <tr>
                 <th>Ausgewählter Inhalt</th>
-                <th>Was FatSeal damit macht</th>
+                <th>Was Staticseal damit macht</th>
                 <th>Eigener Eintrag?</th>
               </tr>
             </thead>
@@ -154,8 +154,9 @@
           </table>
         </div>
         <aside class="note">
-          <strong>Nicht benötigte Dateien vor dem Verpacken entfernen.</strong> FatSeal errät nicht, ob ein unbenutztes
-          Bild oder ein alter Entwurf versehentlich im Ordner liegt. Auch diese Dateien werden mit aufgenommen.
+          <strong>Nicht benötigte Dateien vor dem Verpacken entfernen.</strong> Staticseal errät nicht, ob ein
+          unbenutztes Bild oder ein alter Entwurf versehentlich im Ordner liegt. Auch diese Dateien werden mit
+          aufgenommen.
         </aside>
       </section>
       <section class="two">
@@ -175,7 +176,7 @@ Website/
         <article class="panel">
           <h3>Wann verschwindet der Header?</h3>
           <p>
-            Wenn genau eine vorbereitete Website übrig bleibt und FatSeal keine Warnungen erkannt hat. Verknüpfte
+            Wenn genau eine vorbereitete Website übrig bleibt und Staticseal keine Warnungen erkannt hat. Verknüpfte
             Unterseiten zählen dabei zur selben Website.
           </p>
           <p>
@@ -194,7 +195,7 @@ Website/
         <details>
           <summary>Welche index.html ist die richtige?</summary>
           <p>
-            FatSeal sucht eine eindeutige Startseite an der Wurzel der ausgewählten Website. Eine index.html im
+            Staticseal sucht eine eindeutige Startseite an der Wurzel der ausgewählten Website. Eine index.html im
             Unterordner ist eine normale Unterseite. Zwei konkurrierende Startseiten wie index.html und index.htm oder
             mehrere unabhängige Websites erzeugen eine Warnung; die Dateien bleiben einzeln.
           </p>
@@ -209,7 +210,7 @@ Website/
         <details>
           <summary>Werden Dateien aus dem Internet nachgeladen?</summary>
           <p>
-            Beim Einbetten verwendet FatSeal ausschließlich die ausgewählten Dateien. Externe Bilder, CDNs oder
+            Beim Einbetten verwendet Staticseal ausschließlich die ausgewählten Dateien. Externe Bilder, CDNs oder
             Stylesheets werden nicht heruntergeladen. Fehlende und externe Abhängigkeiten werden gemeldet. Geöffnete
             HTML-Inhalte können selbst weiterhin Netzwerkzugriffe ausführen.
           </p>
@@ -257,11 +258,11 @@ Website/
     </main>
     <footer>
       <div class="links">
-        <a href="../../fatseal.html">FatSeal öffnen</a
+        <a href="../../index.html">Staticseal öffnen</a
         ><a href="website/index.html">Unverpackte Beispiel-Website ansehen</a
         ><a href="https://github.com/nox-do/staticseal">Quellcode auf GitHub ↗</a>
       </div>
-      <p>Das FatSeal-Beispiel ist Teil des Repositorys. Es nutzt keine externen Schriften, Tracker oder Dienste.</p>
+      <p>Das Staticseal-Beispiel ist Teil des Repositorys. Es nutzt keine externen Schriften, Tracker oder Dienste.</p>
     </footer>
   </body>
 </html>

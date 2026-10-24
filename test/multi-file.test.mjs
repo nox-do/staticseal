@@ -138,18 +138,12 @@ test('collection display is authenticated and normal reader output omits collect
   }
 });
 
-test('the small creator omits folder, collection and HTML import functionality', async () => {
-  const [small, fat] = await Promise.all(
-    ['../index.html', '../fatseal.html'].map(path => readFile(new URL(path, import.meta.url), 'utf8'))
-  );
-  assert.ok(!small.includes('id="source-folder"'));
-  assert.ok(!small.includes('Missing or ambiguous resource:'));
-  assert.ok(fat.includes('id="source-folder"'));
-  assert.ok(fat.includes('webkitdirectory'));
-  assert.ok(fat.includes('Missing or ambiguous resource:'));
-  for (const app of [small, fat]) {
-    assert.ok(!app.includes('privateFilename'), 'No obsolete privacy switch in shipped creators');
-    assert.ok(!app.includes('id="private-filename"'), 'No obsolete checkbox');
-    assert.equal((app.match(/PDFs may contain/g) || []).length, 1, 'Only the post-opening PDF notice is bundled');
-  }
+test('the standalone creator includes folder selection and HTML import', async () => {
+  const app = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+  assert.ok(app.includes('id="source-folder"'));
+  assert.ok(app.includes('webkitdirectory'));
+  assert.ok(app.includes('Missing or ambiguous resource:'));
+  assert.ok(!app.includes('privateFilename'));
+  assert.ok(!app.includes('id="private-filename"'));
+  assert.equal((app.match(/PDFs may contain/g) || []).length, 1);
 });

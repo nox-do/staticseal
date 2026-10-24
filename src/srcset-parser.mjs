@@ -1,44 +1,4 @@
-/*
- * The MIT License (MIT)
- * 
- * Author: Gildas Lormeau
- * 
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-// derived from https://github.com/albell/parse-srcset
-
-/**
- * Srcset Parser
- *
- * By Alex Bell |  MIT License
- *
- * JS Parser for the string value that appears in markup <img srcset="here">
- *
- * @returns Array [{url: _, d: _, w: _, h:_}, ...]
- *
- * Based super duper closely on the reference algorithm at:
- * https://html.spec.whatwg.org/multipage/embedded-content.html#parse-a-srcset-attribute
- *
- * Most comments are copied in directly from the spec
- * (except for comments in parens).
- */
+// Third-party srcset parser; provenance and MIT license: ../THIRD_PARTY.md
 
 export {
 	process,

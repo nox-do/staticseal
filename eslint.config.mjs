@@ -8,7 +8,6 @@ export default [
   {
     ignores: [
       'index.html',
-      'fatseal.html',
       'examples/fatseal/demo-*.html',
       'src/logo.mjs',
       'src/wrapper-template.mjs',
@@ -32,10 +31,20 @@ export default [
   },
   {
     files: ['src/app.html'],
+    // Referenced by the selection UI inserted into this same scope.
+    rules: {
+      'no-unused-vars': [
+        'error',
+        {
+          varsIgnorePattern:
+            '^(fileMeta|htmlPageOption|htmlPage|button|DEFAULT_ITERATIONS|setStatus|outputFilenameFor|formatBytes|encryptBytes|downloadHtml)$'
+        }
+      ]
+    },
     // These modules are inserted at build markers inside the creator's scope.
     languageOptions: {
       globals: readonly(
-        'createFormat createPreview createCrypto createPageViewer preparePackage inflateContent isHtmlFile renderWrapper SOURCE_MAX_BYTES HTML_MAX_BYTES BROWSER_FILE_WARN_BYTES BROWSER_FILE_CONFIRM_BYTES'
+        'selectFiles sealSelection toBase64 createFormat createFileTypes createPreview createCrypto createPageViewer preparePackage inflateContent isHtmlFile renderWrapper SOURCE_MAX_BYTES HTML_MAX_BYTES BROWSER_FILE_WARN_BYTES BROWSER_FILE_CONFIRM_BYTES'
       )
     }
   },

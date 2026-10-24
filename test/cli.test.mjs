@@ -130,7 +130,7 @@ test('minimal opening screens and custom button labels preserve access modes and
           assert.ok(!html.includes('<script>bad()'));
           assert.ok(!html.includes('Anyone with this file can open it.'));
           assert.ok(!html.includes('Passphrase protection depends on'));
-          assert.equal(html.includes('in your browser.'), !minimal);
+          assert.ok(!html.includes('in your browser.'));
           const reader = wrapper(html);
           assert.equal(reader.nodes.get('status').textContent, '');
           if (access === 'passphrase') {
@@ -196,7 +196,6 @@ test('optional CLI themes affect only opening-screen CSS and preserve payload ro
           const reader = wrapper(html);
           assert.deepEqual(Buffer.from(await reader.open('theme-test')), bytes);
           const plain = renderWrapper({
-            title: 'Protected file',
             payload: reader.payload,
             files: [{ filename: 'page.html', contentType: 'text/html' }]
           });
@@ -283,7 +282,7 @@ test('CLI hides original metadata by default and keeps explicit opening titles i
       assert.equal(reader.payload.filename, undefined);
       assert.equal(reader.payload.contentType, undefined);
       assert.ok(!html.includes(name));
-      assert.ok(html.includes('<title>' + (customTitle ? 'Impressum' : 'Protected file') + '</title>'));
+      assert.ok(html.includes('<title>' + (customTitle ? 'Impressum' : 'Staticseal') + '</title>'));
       assert.deepEqual(Buffer.from(await reader.open('private-test')), bytes);
       assert.equal(reader.document.title, name);
       assert.ok(reader.document.body.innerHTML.includes('download="' + name + '"'));

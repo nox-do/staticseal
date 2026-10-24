@@ -1,7 +1,7 @@
 # Die unabhängige Packliste
 
 Diese Datei ist bewusst **nirgendwo auf der Website verlinkt**.
-FatSeal nimmt sie trotzdem als separate Datei mit auf, wenn du den ganzen Ordner auswählst.
+Staticseal nimmt sie trotzdem als separate Datei mit auf, wenn du den ganzen Ordner auswählst.
 
 - Wanderschuhe
 - Regenjacke

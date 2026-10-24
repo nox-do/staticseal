@@ -1,4 +1,4 @@
-import { renderWrapper } from './wrapper.mjs';
+import { renderWrapper, planReader } from './wrapper.mjs';
 import { createFormat } from './format.mjs';
 import { PREPARED_MAX_BYTES } from './limits.mjs';
 
@@ -27,12 +27,13 @@ export async function prepareContent(bytes, file, metadata, chunkSize, files) {
   const compressedHeader = encoder.encode(JSON.stringify({ ...file, originalSize: bytes.byteLength }));
   if (compressedHeader.byteLength > format.MAX_METADATA_BYTES) return original;
   const rawChunkSize = Math.max(3, Math.floor(chunkSize / 4) * 3);
+  const plan = planReader(metadata.display, files);
   const packageSize = (v, headerSize, contentSize) => {
     const length = format.HEADER_LENGTH_BYTES + headerSize + contentSize;
     const chunks = Math.ceil(length / rawChunkSize);
     const html = renderWrapper({
       title: '',
-      files,
+      plan,
       payload: { ...metadata, v, ...(format.isUnencryptedVersion(v) ? { content: [] } : { tag: '', ciphertext: [] }) }
     });
     // Base64 chunks are multiples of three bytes, except the last; JSON adds quotes/commas.

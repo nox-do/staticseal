@@ -4,40 +4,41 @@
 
 | Files                                                                         | Purpose                                                                   |
 | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `src/app.html`, `limits.mjs`                                                  | Small creator UI and browser limits                                       |
-| `src/multi-file-ui.js`, `html-import.mjs`, `srcset-parser.mjs`, `website.mjs` | FatSeal selection, resource embedding and website navigation              |
+| `src/app.html`, `limits.mjs`                                                  | Creator UI and browser limits                                             |
+| `src/multi-file-ui.js`, `html-import.mjs`, `srcset-parser.mjs`, `website.mjs` | Staticseal selection, resource embedding and website navigation           |
 | `src/creation.mjs`, `compression.mjs`                                         | Inner metadata, package parts and gzip selection                          |
 | `src/format.mjs`, `crypto.mjs`, `gzip.mjs`                                    | Standalone format parser, AES-GCM decoder and bounded inflater            |
 | `src/viewer.mjs`, `preview.mjs`, `collection.mjs`                             | File/page/collection previews, collection codec and store-only ZIP writer |
 | `src/wrapper.mjs`, `reader.js`, `wrapper.html`, `wrapper.css`, `seal.svg`     | Opening screen and selected reader assembly                               |
 | `bin/self-encrypt.mjs`, `bin/lib/`, `src/cli-theme.mjs`                       | CLI sources, report/MHTML import, limits and opening-screen themes        |
 
-`npm run build` generates `index.html`, `fatseal.html`, `src/logo.mjs`,
+`npm run build` generates `index.html`, `src/logo.mjs`,
 `src/wrapper-template.mjs` and `src/reader-factories.mjs`. Do not edit these outputs.
-The release workflow still publishes only `index.html` as `staticseal.html`.
+The release workflow publishes `index.html` as `staticseal.html`.
 
 `scripts/build-examples.mjs` also builds the static guide's packages and source ZIPs
-under `examples/fatseal/`, ready for GitHub Pages at `examples/fatseal/`. Edit its
+under `examples/fatseal/`; this existing URL is retained for published links. Edit its
 `website/` sources and guide, not `demo-*.html` or ZIPs. `npm run check` verifies them;
 gzip comparisons use decoded bytes so different Node/zlib versions remain valid.
 
 `examples/jupyter/` includes an actual nbconvert export and its notebook/Python
 sources. Follow its guide to rerun Python; `npm run build:examples` only rebuilds
 the sealed report and source ZIP from the checked-in HTML. Checks verify the sealed
-bytes against that HTML. Python and its report dependencies are not needed by the apps
+bytes against that HTML. Python and its report dependencies are not needed by the app
 or the Node build. The example template omits unused MathJax/RequireJS/Mermaid;
 it demonstrates static tables/charts, not those optional notebook features.
 
-The browser apps fetch no runtime dependencies. The build uses clean-css,
+The browser app fetches no runtime dependencies. The build uses clean-css,
 html-minifier-terser and Terser. CLI `--bundle` lazily loads Happy DOM, also used by
 tests/examples, with script execution and automatic resource loading disabled.
 The MIT srcset parser comes from
 SingleFile Core commit `3fe510c2f28ecb552f125fe9849a8a0f0c2d3213`; no AGPL core code
-is included. Preserve its license in both source and FatSeal output.
+is included. See `THIRD_PARTY.md`. The build embeds the compact full notice from
+`third-party/srcset-parser.LICENSE.txt`; implementation comments stay out of the HTML.
 
 ## Package and reader
 
-Both creators return metadata plus separate length-prefix/header/content buffers.
+The browser creator and CLI return metadata plus separate length-prefix/header/content buffers.
 The browser joins them for Web Crypto. The CLI encrypts the parts without making
 another complete plaintext copy. Creation verifies bytes and metadata before output.
 
@@ -73,11 +74,18 @@ Only the creator includes packing code; collection readers include decoding and 
 Each output embeds only its selected viewer, crypto only when encrypted, and the
 inflater only for gzip. Creators pass a private file inventory to the wrapper and
 compression-size calculation; this inventory is not added to public payload metadata.
+`planReader(display, files)` resolves that inventory into viewer source, CSS and the
+viewer code. `renderWrapper` assembles that plan with the payload-specific
+crypto/gzip reader and opening text. Compression candidates reuse one plan; callers
+can pass it explicitly, while existing callers get automatic planning. The plan is
+creator-only and contains neither the input inventory nor a runtime module registry.
 Image, PDF and text renderers, Markdown, highlighting and text styles are selected
 from that inventory. Callers without an inventory retain the full file viewer.
 Page mode omits viewer CSS. A single webpage with warnings retains the existing
 collection format and validation but uses a header/frame/download renderer without
-ZIP or collection navigation. Multiple independent entries retain both. Serialized factories must work without module-scope state.
+ZIP or collection navigation. Multiple independent entries retain both. Frame rendering is shared between single-page
+and collection viewers, and omitted entirely from collections without webpages.
+Serialized factories must work without module-scope state.
 Do not enable scope hoisting, function inlining or property mangling without checking
 that boundary. Template replacements use callbacks; payload JSON escapes `<`.
 
@@ -142,11 +150,10 @@ python3 -m http.server 8765 --bind 127.0.0.1 --directory /tmp/staticseal-browser
 
 Open `http://localhost:8765/` and run the linked suites. `readers.html` checks
 specialized images, Markdown/highlighting, a single framed page with anchors and
-a mixed collection; all four passed in Chrome after the reader split. Staticseal checks HTML
-parsing, previews, page CSS/scripts and interactions. FatSeal checks folder paths,
-resource rendering, navigation, ZIP, encryption and import warnings; it also runs
-from its generated `file://` page. Product scripts are unchanged by these harnesses.
-Downloads are intercepted as Blobs. The FatSeal page exposes its ZIP evidence in
+collections with and without a webpage. `smoke.html` checks HTML parsing, previews,
+page CSS/scripts and interactions. `selection-smoke.html` checks folder paths,
+resource rendering, navigation, ZIP, encryption and import warnings. Product scripts are unchanged by these harnesses.
+Downloads are intercepted as Blobs. The selection/import page exposes its ZIP evidence in
 `#test-zip` for external extraction/CRC checks.
 
 Validated locally in Chrome. Native OS pickers, download-manager behavior,
@@ -168,7 +175,7 @@ new-tab behavior for encrypted packages, collections, or other browsers.
 npm run --silent measure:size > /tmp/staticseal-size.json
 ```
 
-Rebuilds and reports actual UTF-8 bytes/hashes for both apps and eight CLI readers.
+Rebuilds and reports actual UTF-8 bytes/hashes for the app and eight CLI readers.
 Fixtures cover raw/gzip, passphrase/no passphrase and file/page. `htmlBytes` is the
 complete file; `wrapperBytes = htmlBytes - payloadJsonBytes`. Binary package size is
 the decoded payload including metadata/tag, not additional HTML bytes. These are

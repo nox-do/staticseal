@@ -60,15 +60,15 @@ await writeFile(
   join(out, 'smoke.html'),
   '<!doctype html><meta charset="utf-8"><title>Staticseal browser smoke</title><h1>Staticseal browser smoke</h1><pre id="smoke-results"></pre><script src="smoke.js"></script>\n'
 );
-const fat = await readFile(new URL('../fatseal.html', import.meta.url), 'utf8');
+const creator = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 const multiRunner = await readFile(new URL('./multi-file-smoke-runner.js', import.meta.url), 'utf8');
 await writeFile(
-  join(out, 'fatseal-smoke.html'),
-  fat.replace(/<\/body>\s*<\/html>\s*$/, () => '<script>' + multiRunner + '</script></body></html>')
+  join(out, 'selection-smoke.html'),
+  creator.replace(/<\/body>\s*<\/html>\s*$/, () => '<script>' + multiRunner + '</script></body></html>')
 );
 await writeFile(
   join(out, 'index.html'),
-  '<!doctype html><meta charset="utf-8"><title>Browser checks</title><h1>Browser checks</h1><p><a href="smoke.html">Staticseal</a></p><p><a href="fatseal-smoke.html">FatSeal</a></p><p><a href="readers.html">Specialized readers</a></p>'
+  '<!doctype html><meta charset="utf-8"><title>Browser checks</title><h1>Browser checks</h1><p><a href="smoke.html">Staticseal</a></p><p><a href="selection-smoke.html">Selection and import</a></p><p><a href="readers.html">Specialized readers</a></p>'
 );
 console.log(out);
 
@@ -112,6 +112,20 @@ for (const [kind, files] of [
     ]
   ],
   [
+    'framed-collection',
+    [
+      {
+        filename: 'report.html',
+        contentType: 'text/html',
+        page: true,
+        bytes: Buffer.from(
+          '<h1>Report</h1><a href="#end">Jump</a><div style="height:900px"></div><h2 id="end">End</h2>'
+        )
+      },
+      { filename: 'note.txt', contentType: 'text/plain', bytes: Buffer.from('First entry') }
+    ]
+  ],
+  [
     'collection',
     [
       { filename: 'note.txt', contentType: 'text/plain', bytes: Buffer.from('First entry') },
@@ -123,7 +137,7 @@ for (const [kind, files] of [
     ]
   ]
 ]) {
-  const collection = kind === 'framed' || kind === 'collection';
+  const collection = kind === 'framed' || kind.includes('collection');
   const payload = await makePayload(
     collection ? packCollection(files) : files[0].bytes,
     '',
