@@ -108,7 +108,7 @@ function printHelp() {
   output.write(`self-encrypt ${VERSION}
 
 Usage:
-  node ./bin/self-encrypt.mjs --in input.pdf --out input_sealed.html [--title "Protected file"]
+  node ./bin/self-encrypt.mjs --in input.pdf --out input_sealed.html [--title "My report"]
 
 Limits (experimental): 128 MiB sources/prepared content, 25 MiB final HTML transport.
 

@@ -15,18 +15,24 @@ it in their browser, with an optional passphrase. No upload, account or backend.
 4. Select **Seal & download file**. Share the passphrase separately.
 
 The output is named `sealed_YYMMDD_HHmm.html`, using local time. Original filenames
-and types stay inside the package and reappear in previews and downloads.
+and types stay inside the package. The viewer shows filenames and offers downloads.
 
 Images display inline; PDFs offer a preview button; text and Markdown have limited
 formatting. Text previews stop at 128 KiB; downloads contain the complete original.
-Unknown formats are download-only. For HTML, enable **Display as a webpage after
-opening** to restore its layout and scripts instead of showing escaped source.
-A recognized HTML entry is prepared automatically; disable webpage display to keep the original files.
+Unknown formats are download-only. A recognized HTML entry automatically enables
+**Display as a webpage after opening** and prepares its layout and resources.
+Disable webpage display to keep the original files and show HTML as source text.
+
+The opening screen shows the logo and Staticseal name, plus your optional title.
+Without a title, current packages show no filename before opening. The button reads
+**Open sealed collection** or **Open sealed file**; protected packages also ask for
+the passphrase. The optional title is public, even with passphrase protection.
 
 ## Files and websites
 
-This branch uses the former FatSeal creator as Staticseal (`index.html`).
-The published release may still contain the previous single-file creator.
+The standalone browser creator is `index.html`. To try this checkout, open that
+file locally; the links above point to the published site and release, which may
+differ from this branch.
 
 Try the [guided example](examples/fatseal/index.html): working packages, source ZIPs
 and a practical explanation of file/folder selection, unused files and warnings.
@@ -64,7 +70,7 @@ viewer; the iframe keeps page styles separate from navigation and downloads.
 
 ## CLI
 
-Requires Node.js 20+. From this checkout:
+Requires Node.js 20.19+, 22.13+, or 24+. From this checkout:
 
 ```sh
 node bin/self-encrypt.mjs --in report.pdf --out sealed.html
@@ -75,13 +81,14 @@ To publish a self-contained page behind an opening button:
 
 ```sh
 node bin/self-encrypt.mjs --in impressum.html --out sealed.html \
-  --html-page --no-password --minimal --title "Impressum" \
+  --html-page --no-password --title "Impressum" \
   --button-label "Impressum öffnen"
 ```
 
 Omit `--no-password` to require a passphrase. `--title` and `--button-label` are
 public opening-screen text, independent of the original filename. The old
 `--private-filename` flag remains a compatibility alias; privacy is always enabled.
+`--minimal` is also accepted for compatibility; all opening screens are now minimal.
 
 For exported reports, `--bundle` embeds static resources and implies `--html-page`:
 
@@ -106,7 +113,7 @@ Legacy Excel framesets are converted with a layout warning; sheet links, conditi
 Office markup and server-backed dashboards need manual checking. Missing resources
 produce warnings on stderr and keep their original URLs; inspect the result offline.
 The CLI keeps webpage display even with import warnings; the warning-dependent
-header rule applies only to Staticseal.
+header rule applies only to the browser creator.
 Without `--bundle`, source bytes remain unchanged. These additions are CLI-only;
 the browser app does not include the CLI importer or its Node HTML parser.
 

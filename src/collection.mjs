@@ -31,8 +31,8 @@ export function packCollection(files) {
   return bytes;
 }
 
-// Self-contained collection codec and uncompressed ZIP writer. Included only in
-// experimental creators and collection readers; ordinary file readers omit it.
+// Self-contained collection decoder, shared by the creator and collection readers.
+// Ordinary file readers omit it; ZIP generation is a separate optional factory.
 export function createCollectionReader() {
   const encoder = new TextEncoder();
   // Standalone reader: keep aligned with PREPARED_MAX_BYTES and the gzip ceiling.

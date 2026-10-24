@@ -6,6 +6,7 @@
 | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
 | `src/app.html`, `limits.mjs`                                                  | Creator UI and browser limits                                             |
 | `src/multi-file-ui.js`, `html-import.mjs`, `srcset-parser.mjs`, `website.mjs` | Staticseal selection, resource embedding and website navigation           |
+| `src/base64.mjs`, `css-references.mjs`                                        | Shared creator encoding and browser/CLI CSS reference grammar             |
 | `src/creation.mjs`, `compression.mjs`                                         | Inner metadata, package parts and gzip selection                          |
 | `src/format.mjs`, `crypto.mjs`, `gzip.mjs`                                    | Standalone format parser, AES-GCM decoder and bounded inflater            |
 | `src/viewer.mjs`, `preview.mjs`, `collection.mjs`                             | File/page/collection previews, collection codec and store-only ZIP writer |
@@ -14,7 +15,10 @@
 
 `npm run build` generates `index.html`, `src/logo.mjs`,
 `src/wrapper-template.mjs` and `src/reader-factories.mjs`. Do not edit these outputs.
-The release workflow publishes `index.html` as `staticseal.html`.
+The release workflow publishes `index.html` as `staticseal.html`. There is one
+browser build and one selection/preparation flow; no separate FatSeal output remains.
+The app template owns its markup and CSS. The build inserts the selection script
+and shared modules at checked markers, then minifies the result.
 
 `scripts/build-examples.mjs` also builds the static guide's packages and source ZIPs
 under `examples/fatseal/`; this existing URL is retained for published links. Edit its
@@ -69,13 +73,13 @@ remain readable/authenticated; current creators never emit them.
 The collection's inner v1 container uses a four-byte JSON-header length, entries
 with filename/type/offset/size and optional page flag, then concatenated file bytes.
 It validates paths, unique names, contiguous offsets, lengths and the 128 MiB prepared-content limit.
-Only the creator includes packing code; collection readers include decoding and ZIP.
+Only the creator includes packing code; collection readers include decoding and,
+when multiple entries are present, ZIP downloads.
 
 Each output embeds only its selected viewer, crypto only when encrypted, and the
 inflater only for gzip. Creators pass a private file inventory to the wrapper and
 compression-size calculation; this inventory is not added to public payload metadata.
-`planReader(display, files)` resolves that inventory into viewer source, CSS and the
-viewer code. `renderWrapper` assembles that plan with the payload-specific
+`planReader(display, files)` resolves that inventory into viewer source and CSS. `renderWrapper` assembles that plan with the payload-specific
 crypto/gzip reader and opening text. Compression candidates reuse one plan; callers
 can pass it explicitly, while existing callers get automatic planning. The plan is
 creator-only and contains neither the input inventory nor a runtime module registry.
@@ -111,6 +115,20 @@ documents; MHTML uses archived MIME parts without network fallback. Local paths 
 checked against a real resource root; remote reports cannot read local files.
 The ordinary CLI path preserves input bytes and never loads the DOM parser.
 
+## Opening screen and selection UI
+
+The opening screen contains the logo/brand, an optional heading, a passphrase field
+when required, and an opening button. The heading uses the explicit public title,
+or a legacy public payload filename if present. Current private filenames are not
+copied into the heading. With neither available, only the browser tab title falls
+back to `Staticseal`. Button labels distinguish collections from files; CLI callers
+can override them with `--button-label`. `--minimal` remains a compatibility no-op.
+
+The browser selection list displays relative paths and sizes, with one right-aligned
+remove button per entry. Pickers append to the selection. There are no ordering or
+clear-all controls; independent files keep selection order, while detected websites
+start at their entry page. The opened viewer header shows the filename, not its MIME type.
+
 ## Tests
 
 ```sh
@@ -137,7 +155,7 @@ Generated files, HTML templates with exact build markers, compact wrapper CSS,
 third-party code and fixed legacy fixtures are excluded from formatting.
 ESLint still checks the app's inline JavaScript; injected scopes are declared in
 `eslint.config.mjs`. These tools are development dependencies only. Tooling requires
-Node.js `^20.19.0 || ^22.13.0 || >=24`; the standalone apps need no Node.js.
+Node.js `^20.19.0 || ^22.13.0 || >=24`; the standalone creator and readers need no Node.js.
 Compare `measure:size` reports before and after formatting/build changes; source
 readability must not silently increase the shipped app or reader sizes.
 
