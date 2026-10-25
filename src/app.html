@@ -489,6 +489,7 @@ button:disabled {
     transition: none !important;
   }
 }
+.picker-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}.folder-picker{position:relative;display:inline-flex;align-items:center;padding:8px 12px;min-height:40px;border:1px solid #ccd9d5;border-radius:8px;cursor:pointer}.folder-picker:focus-within{outline:3px solid #27665d40;outline-offset:3px}#selection-list:empty,#selection-report:empty{display:none}.selection-list{list-style:none;padding:0;max-height:240px;overflow:auto}.selection-list li{display:flex;align-items:center;gap:12px;margin:6px 0}.selection-list span{flex:1;min-width:0;overflow-wrap:anywhere}.selection-list button{flex:none;min-width:32px;min-height:32px;padding:3px 9px}
 </style>
 </head>
 <body>
@@ -499,29 +500,38 @@ button:disabled {
 <main class="page">
   <section class="intro" aria-labelledby="page-title">
     <div class="intro-copy">
-    <p class="eyebrow">Seal a file. Open in a browser.</p>
+    <p class="eyebrow">Seal files. Open in a browser.</p>
     <h1 id="page-title">Everything needed. <em>In one file.</em></h1>
-    <p>Package a document or self-contained webpage into a single HTML file.<br>Open it offline in a browser. Add a passphrase if you want to protect its contents.</p>
+    <p>Package selected files or an HTML page with its resources into a single HTML file.<br>Open it offline in a browser. Add a passphrase if you want to protect its contents.</p>
     </div>
     <div class="mascot"><div aria-hidden="true"><!-- STATICSEAL_LOGO --></div><span class="brand">staticseal</span></div>
   </section>
   <div class="workspace">
   <section class="tool" aria-label="File packaging tool">
     <form class="panel" id="encrypt-form">
-      <div class="panel-heading"><h2>Seal a file</h2></div>
+      <div class="panel-heading"><h2>Seal files</h2></div>
       <div class="row">
-        <div class="row-header"><span class="step" aria-hidden="true">1</span><label for="source-file">Choose your file</label></div>
+        <div class="row-header"><span class="step" aria-hidden="true">1</span><label for="source-file">Choose files</label></div>
         <div class="file-picker">
-          <strong><span>Choose your file</span> or drop it here</strong>
-          <input id="source-file" name="source-file" type="file" aria-describedby="file-meta">
+          <strong>Drop files or folders here</strong>
+          <div class="picker-actions">
+            <label class="folder-picker">Choose files<input id="source-file" name="source-file" type="file" multiple aria-describedby="file-meta"></label>
+            <label class="folder-picker">Choose a folder<input id="source-folder" type="file" webkitdirectory multiple aria-describedby="file-meta"></label>
+          </div>
         </div>
+        <p class="meta">Selections are added to the list. Folder contents include subfolders. Everything stays on this device.</p>
+        <ul id="selection-list" class="selection-list"></ul>
+        <p id="selection-report" class="meta" role="status" style="white-space:pre-line"></p>
+        <button id="download-prepared" type="button" hidden>Download prepared HTML</button>
         <p class="meta" id="file-meta" aria-live="polite">No file selected</p>
-        <label><input id="private-filename" type="checkbox"> Hide original filename and file type</label>
-        <p class="meta">Uses a neutral public title and download name. Without a passphrase, anyone can still recover the original name and contents.</p>
+      </div>
+      <div class="row">
+        <label for="output-title">Title <span class="optional">optional</span></label>
+        <input id="output-title" type="text" placeholder="Use an automatic title">
       </div>
       <div class="row" id="html-page-option" hidden>
         <label><input id="html-page" type="checkbox" disabled aria-describedby="html-page-note"> Display as a webpage after opening</label>
-        <p class="meta" id="html-page-note">For self-contained HTML files. Shows the original layout and runs included JavaScript.</p>
+        <p class="meta" id="html-page-note">Selected resources are embedded into the recognized HTML entry. Other files stay separate. Included JavaScript runs after opening.</p>
       </div>
       <div class="row">
         <div class="row-header"><span class="step" aria-hidden="true">2</span><span class="field-heading">Add a passphrase<span class="optional">optional</span></span></div>
@@ -547,9 +557,9 @@ button:disabled {
     </form>
   </section>
   <aside class="guide" aria-label="How Staticseal works">
-    <h2>One file in.<br>One sealed file out.</h2>
+    <h2>Files in.<br>One sealed file out.</h2>
     <ol>
-      <li><strong>Pick a file to share</strong><p>A document, an image, a little HTML page.</p></li>
+      <li><strong>Pick files to share</strong><p>A document, an image, a little HTML page.</p></li>
       <li><strong>Seal it on your device</strong><p>Staticseal packages your file with everything needed to open it.</p></li>
       <li><strong>Your HTML, behind an opening screen.</strong><p>Visitors click to open; a passphrase is optional. Helps deter basic scraping.</p></li>
     </ol>
@@ -577,7 +587,6 @@ button:disabled {
   const htmlPage = $('html-page');
   const password = $('password');
   const passwordRepeat = $('password-repeat');
-  const privateFilename = $('private-filename');
   const button = $('encrypt-button');
   const status = $('status');
 
@@ -591,16 +600,6 @@ button:disabled {
     status.dataset.kind = kind;
   };
 
-  const toBase64 = (bytes) => {
-    const parts = [];
-    const rawChunkSize = 0x8000;
-    for (let index = 0; index < bytes.byteLength; index += rawChunkSize) {
-      parts.push(String.fromCharCode(...bytes.subarray(index, index + rawChunkSize)));
-    }
-    return btoa(parts.join(''));
-  };
-
-
   const toBase64Chunks = (bytes, size) => {
     const chunks = [];
     let rawChunkSize = Math.floor((size * 3) / 4);
@@ -611,21 +610,20 @@ button:disabled {
     return chunks;
   };
 
-  const outputFilenameFor = (name) => {
-    const base = (name.replace(/\.[^.]+$/, '') || 'file')
-      .trim()
-      .replace(/\s+/g, '_');
-    return `${base}_sealed.html`;
+  const outputFilenameFor = (date = new Date()) => {
+    const parts = [date.getFullYear() % 100, date.getMonth() + 1, date.getDate(), date.getHours(), date.getMinutes()]
+      .map(value => String(value).padStart(2, '0'));
+    return 'sealed_' + parts.slice(0, 3).join('') + '_' + parts.slice(3).join('') + '.html';
   };
 
   const formatBytes = (bytes) => {
     if (bytes < 1024 * 1024) {
-      return `${Math.ceil(bytes / 1024)} KB`;
+      return `${Math.ceil(bytes / 1024)} KiB`;
     }
-    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+    return `${(bytes / 1024 / 1024).toFixed(1)} MiB`;
   };
 
-  const fileType = createPreview().inferContentType;
+  const fileType = createFileTypes().inferContentType;
   const inferContentType = (file) => fileType(file.name, file.type);
 
   // Browser packaging needs a contiguous buffer; Node keeps these parts separate.
@@ -637,7 +635,7 @@ button:disabled {
     return packed;
   }
 
-  async function encryptBytes(bytes, passphrase, iterationCount, file, access, privateName = false, pageMode = false) {
+  async function encryptBytes(bytes, passphrase, iterationCount, file, access, pageMode = false) {
     if (pageMode) {
       if (!isHtmlFile(file.name, inferContentType(file))) throw new Error('Page mode is available for HTML files only.');
       createPageViewer().decodeHtml(bytes);
@@ -650,7 +648,7 @@ button:disabled {
     const content = await preparePackage(bytes,
       { filename: file.name, contentType: inferContentType(file) }, {
         access, iterations: iterationCount, salt: salt && toBase64(salt), iv: iv && toBase64(iv),
-        privateFilename: privateName, htmlPage: pageMode, chunkSize: DEFAULT_CHUNK_SIZE
+        readerFiles: file.readerFiles || [{ filename: file.name, contentType: inferContentType(file) }], htmlPage: pageMode, collection: !!file.collection, chunkSize: DEFAULT_CHUNK_SIZE
       });
     const { metadata } = content;
     if (access === 'sealed') {
@@ -704,8 +702,9 @@ button:disabled {
 
   /* STATICSEAL_WRAPPER */
 
-  function downloadHtml(filename, html) {
+  function downloadHtml(filename, html, maxBytes = HTML_MAX_BYTES) {
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    if (blob.size > maxBytes) throw new Error('HTML package exceeds the ' + (maxBytes / 1024 / 1024) + ' MiB limit.');
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -766,79 +765,11 @@ button:disabled {
     }
   });
 
-  sourceFile.addEventListener('change', () => {
-    const file = sourceFile.files[0];
-    const supportsPage = !!file && isHtmlFile(file.name, inferContentType(file));
-    htmlPageOption.hidden = !supportsPage;
-    htmlPage.disabled = !supportsPage;
-    htmlPage.checked = false;
-    if (!file) {
-      fileMeta.textContent = 'No file selected';
-      return;
-    }
-    const type = inferContentType(file);
-    fileMeta.textContent = `${file.name} · ${formatBytes(file.size)} · ${type}`;
-    if (file.size > BROWSER_FILE_MAX_BYTES) {
-      setStatus('Files above 25 MiB exceed the provisional browser limit.', 'error');
-    } else if (file.size >= BROWSER_FILE_WARN_BYTES) {
-      setStatus('Files from 5 MiB can use substantial browser memory. Above 10 MiB, confirmation is required; maximum 25 MiB. Mobile limits are not validated.', 'error');
-    } else {
-      setStatus('');
-    }
-  });
-
-  form.addEventListener('submit', async (event) => {
+  /* STATICSEAL_SELECTION_UI */
+  sourceFile.addEventListener('change', () => selectFiles(Array.from(sourceFile.files)));
+  form.addEventListener('submit', async event => {
     event.preventDefault();
-    const file = sourceFile.files[0];
-    const enteredPassphrase = password.value;
-    const repeatedPassphrase = passwordRepeat.value;
-    const iterationCount = DEFAULT_ITERATIONS;
-    const privateName = privateFilename.checked;
-    const pageMode = htmlPage.checked;
-    const title = privateName ? 'Protected file' : (file?.name.replace(/\.[^.]+$/, '') || 'Protected file');
-    const output = privateName ? 'protected_file.html' : (file ? outputFilenameFor(file.name) : '');
-    const access = enteredPassphrase ? 'passphrase' : 'sealed';
-    const passphrase = enteredPassphrase;
-
-    if (!file) {
-      setStatus('Choose a file first.', 'error');
-      sourceFile.focus();
-      return;
-    }
-    if (enteredPassphrase !== repeatedPassphrase) {
-      setStatus('Passphrases do not match.', 'error');
-      passwordRepeat.focus();
-      return;
-    }
-    if (access === 'passphrase' && !crypto.subtle) {
-      setStatus('This browser does not expose Web Crypto on this page.', 'error');
-      return;
-    }
-    if (file.size > BROWSER_FILE_MAX_BYTES) {
-      setStatus('Files above 25 MiB exceed the provisional browser limit.', 'error');
-      return;
-    }
-    if (file.size > BROWSER_FILE_CONFIRM_BYTES && !window.confirm('This file exceeds 10 MiB (maximum 25 MiB). Creating and opening it may use substantial memory or freeze the browser, especially on mobile. These provisional limits are not browser-validated. Continue?')) {
-      setStatus('Encryption cancelled.', 'error');
-      return;
-    }
-
-    button.disabled = true;
-    setStatus('Reading local file ...');
-    try {
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      setStatus(access === 'sealed' ? 'Sealing locally ...' : 'Encrypting locally ...');
-      const payload = await encryptBytes(bytes, passphrase, iterationCount, file, access, privateName, pageMode);
-
-      const wrapper = renderWrapper({ title, payload });
-      downloadHtml(output, wrapper);
-      setStatus('Original: ' + formatBytes(bytes.byteLength) + ' → HTML package: ' + formatBytes(new Blob([wrapper]).size) + '.');
-    } catch (error) {
-      console.error(error);
-      setStatus(error.message || 'Encryption failed.', 'error');
-    } finally {
-      button.disabled = false;
-    }
+    await sealSelection();
   });
 })();
 </script>

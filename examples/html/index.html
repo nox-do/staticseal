@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Nordlicht · Prozessvergleich</title>
+    <link rel="stylesheet" href="site.css" />
+  </head>
+  <body>
+    <header>
+      <span class="brand">Nordlicht / Beratung</span>
+      <div class="navigation-guide">
+        <strong>Unterseiten direkt im Paket öffnen</strong>
+        <p>
+          Die Unterseite ist mit eingebettet. Die internen Links wurden für den Wechsel zwischen den eingebetteten
+          Seiten angepasst. Die Navigation funktioniert innerhalb derselben HTML-Datei, auch offline.
+        </p>
+      </div>
+      <nav class="site-nav" aria-label="Beispielseiten">
+        <a href="index.html" aria-current="page">Prozessvergleich</a>
+        <a href="methodik/annahmen.html">Annahmen &amp; Methodik →</a>
+      </nav>
+    </header>
+    <main id="vergleich">
+      <span class="eyebrow">Prozessvergleich / Auftragseingang</span>
+      <h1>Weniger Übergaben. Mehr Zeit.</h1>
+      <p class="lead">
+        Heute dauert die Bearbeitung 30 Minuten pro Fall. Was verändert sich, wenn wir Rückfragen reduzieren oder die
+        Erfassung automatisieren?
+      </p>
+      <figure class="process-figure">
+        <figcaption>Der Ablauf im Überblick</figcaption>
+        <img
+          class="process-image"
+          src="prozess.png"
+          width="840"
+          height="144"
+          alt="Drei verbundene Prozessschritte: Eingang, Prüfung und Freigabe"
+        />
+      </figure>
+      <div class="comparison">
+        <section class="controls" aria-label="Annahmen verändern">
+          <fieldset>
+            <legend>Variante wählen</legend>
+            <div class="variants">
+              <div class="option">
+                <input type="radio" name="variant" id="today" value="30" /><label for="today">Heute</label>
+              </div>
+              <div class="option">
+                <input type="radio" name="variant" id="clear" value="22" checked /><label for="clear"
+                  >Klarer Ablauf</label
+                >
+              </div>
+              <div class="option">
+                <input type="radio" name="variant" id="auto" value="15" /><label for="auto">Automatisiert</label>
+              </div>
+            </div>
+          </fieldset>
+          <label class="volume-label" for="volume"
+            >Fälle pro Monat <output id="volume-label" for="volume">200</output></label
+          >
+          <input id="volume" type="range" min="50" max="500" step="50" value="200" />
+          <div class="bounds"><span>50 Fälle</span><span>500 Fälle</span></div>
+        </section>
+        <section class="result" aria-label="Ergebnis" aria-live="polite" aria-atomic="true">
+          <p>Zeitersparnis pro Monat</p>
+          <strong id="saved">26,7 Stunden</strong>
+          <div class="metric"><span>Heute</span><span id="before">100 Std.</span></div>
+          <div class="track"><span style="width: 100%"></span></div>
+          <div class="metric"><span id="variant-name">Klarer Ablauf</span><span id="after">73,3 Std.</span></div>
+          <div class="track after"><span id="after-bar" style="width: 73.333%"></span></div>
+        </section>
+      </div>
+      <p class="assumptions">
+        Modellannahmen: 30 / 22 / 15 Minuten je Fall. Ersparnis = (30 − Variantenzeit) × Fallzahl ÷ 60. Fiktive Werte;
+        Einführungsaufwand und Kosten sind nicht berücksichtigt.
+        <a href="methodik/annahmen.html#rechnung">So wird gerechnet →</a>
+      </p>
+    </main>
+    <footer>
+      <span>Beratungsergebnisse zum Weiterdenken.</span
+      ><span>Berechnung vollständig lokal · Keine Datenübertragung</span>
+    </footer>
+    <script>
+      const volume = document.getElementById('volume');
+      const format = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 1 });
+      function update() {
+        const selected = document.querySelector('input[name="variant"]:checked');
+        const count = Number(volume.value);
+        const minutes = Number(selected.value);
+        document.getElementById('volume-label').textContent = count;
+        document.getElementById('saved').textContent = format.format(((30 - minutes) * count) / 60) + ' Stunden';
+        document.getElementById('before').textContent = format.format((30 * count) / 60) + ' Std.';
+        document.getElementById('after').textContent = format.format((minutes * count) / 60) + ' Std.';
+        document.getElementById('variant-name').textContent = selected.labels[0].textContent;
+        document.getElementById('after-bar').style.width = (minutes / 30) * 100 + '%';
+      }
+      volume.addEventListener('input', update);
+      document.querySelectorAll('input[name="variant"]').forEach(input => input.addEventListener('change', update));
+      update();
+    </script>
+  </body>
+</html>

@@ -5,7 +5,7 @@
   const button = $('unlock-button');
   const status = $('status');
   const payload = JSON.parse($('encrypted-payload').textContent);
-  const { escapeHtml, fromBase64, fromBase64Chunks, unpackContent } = (STATICSEAL_FORMAT)();
+  const { escapeHtml, fromBase64, fromBase64Chunks, unpackContent } = STATICSEAL_FORMAT();
   const renderContent = STATICSEAL_VIEWER(escapeHtml);
   const decodeContent = STATICSEAL_DECODER;
 
@@ -21,7 +21,7 @@
     renderContent(bytes, unlockedContent);
   }
 
-  form.addEventListener('submit', async (event) => {
+  form.addEventListener('submit', async event => {
     event.preventDefault();
     const sealedMode = payload.access === 'sealed';
     const passphrase = sealedMode ? '' : input.value;
@@ -40,8 +40,12 @@
     } catch (error) {
       console.warn('Unlock failed', error);
       status.dataset.kind = 'error';
-      status.textContent = error.name === 'NotSupportedError' ? error.message
-        : sealedMode ? 'Damaged file or unsupported format.' : 'Wrong passphrase or damaged file.';
+      status.textContent =
+        error.name === 'NotSupportedError'
+          ? error.message
+          : sealedMode
+            ? 'Damaged file or unsupported format.'
+            : 'Wrong passphrase or damaged file.';
       button.disabled = false;
       if (input?.isConnected) {
         input.select();
@@ -51,5 +55,4 @@
       }
     }
   });
-
 })();
