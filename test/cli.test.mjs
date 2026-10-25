@@ -362,7 +362,9 @@ test('CLI accepts 128 MiB HTML and rejects source and final HTML budget overflow
     assert.match(result.stderr, /HTML package exceeds the 25 MiB/);
     assert.equal(await readFile(outputPath, 'utf8'), 'keep existing output');
     // Count UTF-8 title bytes and the final theme, including the exact boundary.
-    await truncate(inputPath, (25 * 1024 * 1024 * 3) / 4 - 64 * 1024);
+    // Fresh random bytes prevent a zero-filled extension from compressing and
+    // inflating the boundary title beyond Linux's per-argument size limit.
+    await writeFile(inputPath, randomFillSync(Buffer.alloc((25 * 1024 * 1024 * 3) / 4 - 64 * 1024)));
     for (const access of ['--no-password', '--stdin-password']) {
       const options = [access, '--theme-bg', '#abcdef'];
       result = run(...options, '--title', 'x', '--button-label', 'x');
