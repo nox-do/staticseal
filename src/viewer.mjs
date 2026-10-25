@@ -34,7 +34,7 @@ export function createFileViewer(escapeHtml, previewFactory, renderers) {
   const { inferContentType, previewKind } = helpers;
   const brand = $('wrapper-brand').outerHTML;
   let currentUrl;
-  return function renderFile(bytes, unlockedContent) {
+  return function renderFile(bytes, unlockedContent, preview = true) {
     const filename = unlockedContent.filename || 'sealed-file';
     document.title = filename;
     const contentType = inferContentType(filename, unlockedContent.contentType);
@@ -61,6 +61,7 @@ export function createFileViewer(escapeHtml, previewFactory, renderers) {
       '</div></header><section id="vc"></section></main>';
 
     const viewer = $('vc');
+    if (!preview) return;
     const render = renderers[kind];
     if (render) render(viewer, { bytes, url, safeName, filename, contentType, kind }, helpers);
     else
@@ -112,11 +113,5 @@ export function renderTextPreview(
 }
 
 export function renderPdfPreview(viewer, { safeName, url }) {
-  viewer.innerHTML =
-    '<div class="dl"><p class="kicker">Ready to download</p><h1>' +
-    safeName +
-    '</h1><p>Your file is ready to download.</p><p class="pn">PDFs may contain links or interactive content. Open only files you trust.</p><button id="pdf" type="button">Preview PDF</button></div>';
-  document.getElementById('pdf').addEventListener('click', () => {
-    viewer.innerHTML = '<iframe class="vf" title="' + safeName + '" src="' + url + '"></iframe>';
-  });
+  viewer.innerHTML = '<iframe class="vf" title="' + safeName + '" src="' + url + '"></iframe>';
 }

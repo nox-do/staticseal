@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFile } from 'node:fs/promises';
+import vm from 'node:vm';
+import { openWebsite } from '../src/website.mjs';
 import { createCollection, packCollection } from '../src/collection.mjs';
 import { inspectHtmlSelection } from '../src/html-import.mjs';
 import { preparePackage } from '../src/creation.mjs';
@@ -13,6 +15,44 @@ const files = [
   { filename: 'image.png', contentType: 'image/png', bytes: new Uint8Array([137, 80, 78, 71]) },
   { filename: 'index.html', contentType: 'text/html', bytes: new TextEncoder().encode('<h1>Example</h1>'), page: true }
 ];
+
+test('website navigation preserves the visible page until loading finishes and discards superseded loads', () => {
+  const frames = [];
+  let navigate;
+  const location = { hash: '' };
+  const document = {
+    title: 'Website',
+    body: { append: frame => frames.push(frame) },
+    createElement: () => ({
+      style: {},
+      contentDocument: { title: 'Page', addEventListener() {} },
+      remove() {
+        const index = frames.indexOf(this);
+        if (index !== -1) frames.splice(index, 1);
+      }
+    })
+  };
+  vm.runInNewContext('(' + openWebsite + ')([["home", "guide", "contact"], [], "asset"]);', {
+    document,
+    location,
+    window: { addEventListener: (_event, handler) => (navigate = handler) }
+  });
+  const home = frames[0];
+  home.onload();
+  location.hash = '#seal-page=1';
+  navigate();
+  const guide = frames[1];
+  assert.ok(frames.includes(home), 'The current page must remain attached during loading');
+  assert.match(guide.style.cssText, /visibility:hidden/);
+  location.hash = '#seal-page=2';
+  navigate();
+  const contact = frames[1];
+  guide.onload();
+  assert.deepEqual(frames, [home, contact], 'A superseded load must not replace the visible page');
+  contact.onload();
+  assert.deepEqual(frames, [contact], 'Only the newly loaded page remains attached');
+  assert.equal(contact.style.cssText, '');
+});
 
 test('collection keeps original bytes, paths and page flags and disambiguates duplicate names', () => {
   const entries = codec.unpack(packCollection([...files, files[1]]));
@@ -145,5 +185,5 @@ test('the standalone creator includes folder selection and HTML import', async (
   assert.ok(app.includes('Missing or ambiguous resource:'));
   assert.ok(!app.includes('privateFilename'));
   assert.ok(!app.includes('id="private-filename"'));
-  assert.equal((app.match(/PDFs may contain/g) || []).length, 1);
+  assert.ok(!app.includes('Preview PDF'));
 });

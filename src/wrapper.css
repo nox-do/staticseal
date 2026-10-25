@@ -118,6 +118,7 @@ input:focus-visible, button:focus-visible, a:focus-visible {
 }
 .status {
   margin-top: 12px;
+  min-height: 1.5em;
   color: var(--muted);
   font-size: 13px;
   overflow-wrap: anywhere;
@@ -126,7 +127,7 @@ input:focus-visible, button:focus-visible, a:focus-visible {
   color: var(--error);
 }
 .status:empty {
-  display: none;
+  visibility: hidden;
 }
 @media (max-width: 560px) {
   body { padding: 16px; }
@@ -199,9 +200,6 @@ input:focus-visible, button:focus-visible, a:focus-visible {
 }
 .dl p + p {
   margin-top: 16px;
-}
-#pdf {
-  margin-top: 24px;
 }
 .im {
   display: block;

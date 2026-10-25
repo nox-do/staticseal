@@ -390,7 +390,7 @@
       protectedReader.doc.getElementById('choose-file').options.length === 2,
       'encrypted PDF/image collection opens'
     );
-    check(protectedReader.doc.getElementById('pdf'), 'PDF notice appears before first PDF preview');
+    check(protectedReader.doc.querySelector('#vc iframe.vf'), 'first PDF previews immediately after unlocking');
     protectedReader.doc.getElementById('next-file').click();
     check(protectedReader.doc.querySelector('#vc img'), 'image preview works after PDF navigation');
     check(

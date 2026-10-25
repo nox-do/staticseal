@@ -69,7 +69,11 @@
       doc = frame.contentDocument;
     const input = doc.getElementById('password');
     if (input) input.value = password;
+    const button = doc.getElementById('unlock-button');
+    const before = button.getBoundingClientRect();
     doc.getElementById('unlock-form').requestSubmit();
+    const during = button.getBoundingClientRect();
+    check(before.x === during.x && before.y === during.y, 'loading status moved the opening button');
     await waitFor(
       () =>
         frame.contentDocument.getElementById('status')?.dataset.kind === 'error' ||

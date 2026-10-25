@@ -149,7 +149,7 @@ export function createCollectionViewer(escapeHtml, fileViewerFactory, previewFac
     let index = 0;
     const show = () => {
       const file = files[index];
-      renderFile(file.bytes, file);
+      renderFile(file.bytes, file, !file.page);
       if (file.page) renderPage(document.getElementById('vc'), file);
       const nav = document.createElement('nav');
       nav.className = 'vn';

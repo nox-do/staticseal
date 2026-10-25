@@ -8,7 +8,8 @@ export default [
   {
     ignores: [
       'index.html',
-      'examples/fatseal/demo-*.html',
+      'examples/**/sealed.html',
+      'examples/html/sealed-*.html',
       'src/logo.mjs',
       'src/wrapper-template.mjs',
       'src/reader-factories.mjs',
@@ -16,13 +17,13 @@ export default [
     ]
   },
   {
-    files: ['**/*.{js,mjs}', 'src/app.html', 'examples/fatseal/website/**/*.html'],
+    files: ['**/*.{js,mjs}', 'src/app.html', 'examples/html/szenario.html'],
     plugins: { html },
     languageOptions: { ecmaVersion: 2022 },
     rules: js.configs.recommended.rules
   },
   {
-    files: ['src/**/*.{js,mjs}', 'src/app.html', 'test/*-smoke-runner.js', 'examples/fatseal/website/**/*.html'],
+    files: ['src/**/*.{js,mjs}', 'src/app.html', 'test/*-smoke-runner.js', 'examples/html/szenario.html'],
     languageOptions: { globals: globals.browser }
   },
   {

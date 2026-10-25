@@ -1,11 +1,23 @@
 // Serialized into prepared multi-page HTML; independent of the outer file viewer.
 export function openWebsite([pages, assets, prefix]) {
+  let currentFrame;
+  let pendingFrame;
   const show = () => {
+    pendingFrame?.remove();
     const route = location.hash.match(/^#seal-page=(\d+)(?:&anchor=(.*))?$/);
     const index = route && Number(route[1]) < pages.length ? Number(route[1]) : 0;
     const frame = document.createElement('iframe');
+    pendingFrame = frame;
+    // Keep the current page visible while the next page loads at its final size.
+    frame.style.cssText = 'position:fixed;inset:0;visibility:hidden';
     frame.title = document.title;
     frame.onload = () => {
+      if (pendingFrame === frame) {
+        currentFrame?.remove();
+        currentFrame = frame;
+        pendingFrame = null;
+        frame.style.cssText = '';
+      } else if (currentFrame !== frame) return;
       const doc = frame.contentDocument;
       if (!doc) return;
       document.title = frame.title = doc.title || document.title;
@@ -43,8 +55,8 @@ export function openWebsite([pages, assets, prefix]) {
       }
     };
     frame.srcdoc = pages[index].replace(new RegExp(prefix + '(\\d+);', 'g'), (match, n) => assets[n] ?? match);
-    // Replacing the frame gives each page fresh globals and no stale iframe history.
-    document.body.replaceChildren(frame);
+    // Fresh globals per page; keep the loaded frame attached to avoid reloading it.
+    document.body.append(frame);
   };
   window.addEventListener('hashchange', show);
   show();

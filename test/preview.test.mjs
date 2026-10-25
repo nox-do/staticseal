@@ -17,7 +17,7 @@ function previewText(node) {
   );
 }
 
-test('PDF notice appears after opening for current and legacy metadata', async () => {
+test('PDF previews appear directly after opening for current and legacy metadata', async () => {
   for (const access of ['sealed', 'passphrase'])
     for (const privateFilename of [false, true]) {
       const payload = await makePayload(
@@ -30,15 +30,11 @@ test('PDF notice appears after opening for current and legacy metadata', async (
       );
       for (const minimal of [false, true]) {
         const html = renderWrapper({ title: 'Document', payload, minimal });
-        const opening = html.split('<script')[0];
-        assert.equal(opening.includes('PDFs may contain'), false);
+        assert.ok(!html.includes('Preview PDF'));
         assert.ok(!html.includes('No passphrase'));
         const reader = wrapper(html);
-        await reader.open('test');
-        assert.equal(reader.nodes.get('vc').innerHTML.includes('PDFs may contain'), true);
         reader.confirmWith(() => assert.fail('Unexpected confirmation'));
-        assert.equal(reader.nodes.get('vc').innerHTML.includes('<iframe'), false);
-        reader.nodes.get('pdf').handlers.click();
+        await reader.open('test');
         assert.match(reader.nodes.get('vc').innerHTML, /<iframe/);
       }
     }
@@ -71,13 +67,13 @@ test('file viewer routes supported formats and keeps downloads byte-exact', asyn
     const html = renderWrapper({ payload, plan });
     assert.equal(html, renderWrapper({ payload, files }), 'Explicit and automatic planning must agree');
     assert.equal(html.includes('Formatting simplified for this large document'), extension === 'md');
-    assert.equal(html.includes('PDFs may contain'), extension === 'pdf');
+    assert.equal(html.includes('renderPdfPreview'), extension === 'pdf');
     assert.equal(html.includes('Preview limited to'), ['txt', 'html', 'xhtml', 'json', 'ts', 'md'].includes(extension));
     const reader = wrapper(html);
     await reader.open();
     const viewer = reader.nodes.get('vc');
     assert.equal(viewer.innerHTML.includes('<img '), preview, extension);
-    assert.ok(!viewer.innerHTML.includes('<iframe'), extension);
+    assert.equal(viewer.innerHTML.includes('<iframe'), extension === 'pdf', extension);
     assert.ok(!reader.nodes.get('vc').innerHTML.includes('<object'), 'No document embedding');
     if (['txt', 'html', 'xhtml', 'json', 'ts'].includes(extension)) {
       assert.equal(previewText(reader.nodes.get('tp')), bytes.toString());
@@ -85,14 +81,6 @@ test('file viewer routes supported formats and keeps downloads byte-exact', asyn
     if (extension === 'md')
       assert.ok(viewer.innerHTML.includes('<article><p>Original bytes remain unchanged.</p></article>'));
     assert.deepEqual(Buffer.from(await reader.blobs[0].arrayBuffer()), bytes);
-    if (extension === 'pdf') {
-      assert.ok(viewer.innerHTML.includes('PDFs may contain'));
-      reader.confirmWith(() => {
-        assert.fail('PDF preview must not open a confirmation dialog');
-      });
-      reader.nodes.get('pdf').handlers.click();
-      assert.ok(viewer.innerHTML.includes('<iframe'));
-    }
   }
 });
 

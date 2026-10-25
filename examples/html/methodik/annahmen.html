@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Nordlicht · Annahmen und Methodik</title>
+    <link rel="stylesheet" href="../site.css" />
+  </head>
+  <body>
+    <header>
+      <span class="brand">Nordlicht / Beratung</span>
+      <div class="navigation-guide">
+        <strong>Unterseiten direkt im Paket öffnen</strong>
+        <p>
+          Die Unterseite ist mit eingebettet. Die internen Links wurden für den Wechsel zwischen den eingebetteten
+          Seiten angepasst. Die Navigation funktioniert innerhalb derselben HTML-Datei, auch offline.
+        </p>
+      </div>
+      <nav class="site-nav" aria-label="Beispielseiten">
+        <a href="../index.html">← Prozessvergleich</a>
+        <a href="annahmen.html" aria-current="page">Annahmen &amp; Methodik</a>
+      </nav>
+    </header>
+    <main>
+      <span class="eyebrow">Prozessvergleich / Hintergrund</span>
+      <h1>Was hinter dem Ergebnis steckt.</h1>
+      <p class="lead">
+        Drei Varianten, eine gemeinsame Rechenbasis. Alle Werte sind fiktiv und dienen zum Ausprobieren.
+      </p>
+      <section class="method-section" aria-labelledby="varianten">
+        <h2 id="varianten">Die Modellannahmen</h2>
+        <table class="method-table">
+          <thead>
+            <tr>
+              <th scope="col">Variante</th>
+              <th scope="col">Minuten je Fall</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">Heute</th>
+              <td>30</td>
+            </tr>
+            <tr>
+              <th scope="row">Klarer Ablauf</th>
+              <td>22</td>
+            </tr>
+            <tr>
+              <th scope="row">Automatisiert</th>
+              <td>15</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>
+          Im Vergleich lassen sich 50 bis 500 Fälle pro Monat einstellen. Die Bearbeitungszeit je Fall bleibt innerhalb
+          jeder Variante konstant.
+        </p>
+        <a href="#rechnung">Zur Berechnung ↓</a>
+      </section>
+      <section class="method-section" aria-labelledby="rechnung">
+        <h2 id="rechnung">So wird gerechnet</h2>
+        <p class="method-formula">Ersparnis in Stunden = (30 − Variantenzeit) × Fälle pro Monat ÷ 60</p>
+        <p>
+          Bei 200 Fällen und einem klareren Ablauf: (30 − 22) × 200 ÷ 60 = <strong>26,7 Stunden pro Monat</strong>. Die
+          Anzeige rundet auf eine Nachkommastelle.
+        </p>
+      </section>
+      <section class="method-section" aria-labelledby="grenzen">
+        <h2 id="grenzen">Was das Modell offenlässt</h2>
+        <p>
+          Einführung, Schulung, Betriebskosten und unterschiedliche Falltypen sind nicht berücksichtigt. Die
+          Zeitersparnis ist eine Modellrechnung und keine Zusage für einen realen Betrieb.
+        </p>
+        <a href="../index.html#vergleich">← Zurück zum interaktiven Vergleich</a>
+      </section>
+    </main>
+    <footer><span>Beratungsergebnisse zum Weiterdenken.</span><span>Fiktive Werte · Offline lesbar</span></footer>
+  </body>
+</html>

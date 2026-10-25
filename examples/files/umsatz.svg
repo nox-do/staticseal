@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="640" viewBox="0 0 1000 640" role="img" aria-labelledby="title desc">
+  <title id="title">Nordlicht · Umsatz im Überblick</title>
+  <desc id="desc">Fiktive Monatsumsätze: Januar 1.200 Euro, Februar 1.550 Euro, März 1.420 Euro, April 1.880 Euro. Gesamt 6.050 Euro.</desc>
+  <rect width="1000" height="640" rx="24" fill="#f5f2e9"/>
+  <g font-family="Arial, sans-serif" fill="#203e39">
+    <text x="64" y="66" font-size="15" letter-spacing="3">NORDLICHT / ANALYSEBRIEFING</text>
+    <text x="64" y="126" font-family="Georgia, serif" font-size="42">Vier Monate. Ein klarer Aufwärtstrend.</text>
+    <text x="64" y="169" font-size="18" fill="#64766c">Umsatz von Januar bis April · Fiktive Beispieldaten</text>
+    <rect x="64" y="209" width="210" height="310" rx="16" fill="#203e39"/>
+    <text x="88" y="250" font-size="14" fill="#d1dfd3">GESAMTUMSATZ</text>
+    <text x="88" y="310" font-size="38" fill="#fff">6.050 €</text>
+    <text x="88" y="453" font-size="16" fill="#d1dfd3">Stärkster Monat</text>
+    <text x="88" y="486" font-size="25" fill="#fff">April</text>
+    <path d="M322 480H934" stroke="#c5cfc4"/>
+    <g fill="#709883">
+      <rect x="346" y="336" width="100" height="144" rx="6"/>
+      <rect x="496" y="294" width="100" height="186" rx="6"/>
+      <rect x="646" y="310" width="100" height="170" rx="6"/>
+    </g>
+    <rect x="796" y="254" width="100" height="226" rx="6" fill="#b85e3f"/>
+    <g text-anchor="middle" font-size="19">
+      <text x="396" y="321">1.200 €</text><text x="546" y="279">1.550 €</text>
+      <text x="696" y="295">1.420 €</text><text x="846" y="239">1.880 €</text>
+      <text x="396" y="514">Jan</text><text x="546" y="514">Feb</text>
+      <text x="696" y="514">Mär</text><text x="846" y="514">Apr</text>
+    </g>
+    <path d="M64 562H936" stroke="#d7ded2"/>
+    <text x="64" y="597" font-size="15" fill="#64766c">Projekt Nordlicht · Ergebnisübergabe an den Kunden</text>
+    <text x="936" y="597" text-anchor="end" font-size="15" fill="#64766c">01 / BRIEFING</text>
+  </g>
+</svg>

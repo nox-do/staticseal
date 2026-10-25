@@ -20,17 +20,74 @@ browser build and one selection/preparation flow; no separate FatSeal output rem
 The app template owns its markup and CSS. The build inserts the selection script
 and shared modules at checked markers, then minifies the result.
 
-`scripts/build-examples.mjs` also builds the static guide's packages and source ZIPs
-under `examples/fatseal/`; this existing URL is retained for published links. Edit its
-`website/` sources and guide, not `demo-*.html` or ZIPs. `npm run check` verifies them;
-gzip comparisons use decoded bytes so different Node/zlib versions remain valid.
+### Examples
 
-`examples/jupyter/` includes an actual nbconvert export and its notebook/Python
-sources. Follow its guide to rerun Python; `npm run build:examples` only rebuilds
-the sealed report and source ZIP from the checked-in HTML. Checks verify the sealed
-bytes against that HTML. Python and its report dependencies are not needed by the app
-or the Node build. The example template omits unused MathJax/RequireJS/Mermaid;
-it demonstrates static tables/charts, not those optional notebook features.
+`examples/index.html` is the overview and `examples/guide.css` provides its shared
+styles with the CLI page. The four overview cards link to:
+
+Sealed samples and the creator open in new tabs so the overview or CLI instructions
+remain available after the reader replaces its document. Overview/CLI navigation
+and internal website links stay in the same tab. The overview offers only sample
+entry points; browser-example source archives are linked from the README. The CLI
+page retains its source archives and dependency-list downloads. The example build validates all local navigation links and
+checks that all six sealed sample links open independent tabs.
+
+| Directory                 | Sources and purpose                                                           | Generated packages/downloads                                             |
+| ------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `examples/files/`         | SVG + Markdown briefing                                                       | `sealed.html`, `sources.zip`                                             |
+| `examples/html/`          | Two-page interactive website + shared CSS + PNG; optional Markdown attachment | `sealed.html`, `sealed-extras.html`, `sources.zip`, `sources-extras.zip` |
+| `examples/pdf/`           | Decision brief + pilot plan                                                   | `sealed.html`, `sources.zip`                                             |
+| `examples/cli/`           | Shared introduction with commands for both reporting cases                    | None                                                                     |
+| `examples/jupyter/`       | Notebook, Python, template and self-contained nbconvert export                | `sealed.html`, `jupyter.zip`                                             |
+| `examples/python-report/` | Jinja2 template, generator, separate CSS and Matplotlib PNG                   | `sealed.html`, `sources.zip`                                             |
+
+`scripts/build-examples.mjs` builds packages and ZIPs from the checked-in sources;
+`npm run check` verifies their readers, decoded bytes and archives. Edit source
+assets and templates, not `sealed*.html` or ZIPs. Gzip comparisons use decoded
+bytes so different Node/zlib versions remain valid. Current encrypted outputs
+are retained; they are regenerated only when their contents or reader change.
+
+The HTML build checks that the root `index.html` is detected, its methodology
+subpage and shared CSS are embedded, a missing PNG produces an import warning, selected
+images are embedded unchanged, and the optional unused Markdown file remains an
+independent collection entry. Only the attachment variant uses collection mode.
+Only the attachment variant adds an explanation area above the sample for warnings,
+additional files and the viewer header, followed by a divider. The build inserts
+`templates/example-html-guide.html` into both pages of this variant and its source ZIP.
+The plain website and its source ZIP contain only the Nordlicht sample with navigation.
+
+The PDF collection and Jupyter report use the public demo passphrase `seal` and
+show it in their opening title. Checks decrypt both and compare original bytes.
+The Jupyter package is created through the CLI. The PDF package uses the shared
+package/crypto factories because the CLI does not create multi-file collections.
+The other examples have no passphrase.
+
+Jupyter already produces self-contained HTML; its example demonstrates CLI
+automation and encryption. The template omits unused MathJax/RequireJS/Mermaid,
+and the example covers static tables/charts. The Python report demonstrates CLI
+bundling: the build uses the CLI importer, rejects import warnings and checks the
+embedded CSS and PNG against their original bytes.
+
+Python is only needed to regenerate the checked-in source reports/documents:
+
+- Jupyter: install `examples/jupyter/requirements.txt` and use the export command
+  on `examples/cli/index.html`.
+- Python report: install `examples/python-report/requirements.txt` and run
+  `python3 examples/python-report/generate.py`. Its source ZIP includes a CLI recipe.
+- PDF pair: install ReportLab and run `python3 examples/pdf/generate.py`.
+  Both one-page PDFs embed ReportLab's bundled Vera fonts.
+
+After regenerating sources, run `npm run build:examples`. Neither the app nor the
+normal Node build requires Python or its report dependencies.
+
+### Example design
+
+Each example should explain a concrete use case with a short introduction and
+an obvious action. Keep main content and controls visible without scrolling at
+common desktop and mobile viewport sizes, including inside the sealed viewer.
+Use compact layouts or separate steps when more detail is needed; do not hide
+overflow or shrink text to force a fit. The overview may scroll; the nbconvert
+report retains its exported layout. Keep assets local for offline use.
 
 The browser app fetches no runtime dependencies. The build uses clean-css,
 html-minifier-terser and Terser. CLI `--bundle` lazily loads Happy DOM, also used by
@@ -100,6 +157,10 @@ viewer, so imported HTML is treated as executable content. Linked pages are trav
 once with a shared resource cache. Multiple pages become one standalone website with
 a page table, shared data URLs and hash-based navigation. A fresh frame
 per page prevents stale JavaScript globals; browser Back follows website routes.
+The current website frame stays visible until its replacement loads; the new frame
+loads hidden at full viewport size and is revealed without detaching it again.
+Collection HTML skips the text preview before creating its page frame. The opening
+screen reserves one status line so loading messages do not move the centered form.
 Collection and website `srcdoc` frames intercept local fragment links and scroll
 in place so these links cannot reopen the outer package inside the preview.
 Embedded pages/assets leave the collection navigation; incomplete dependencies stay

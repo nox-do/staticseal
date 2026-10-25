@@ -24,6 +24,7 @@ const DEFAULT_ITERATIONS = 210_000;
 const DEFAULT_CHUNK_SIZE = 64 * 1024;
 function parseArgs(argv) {
   const args = {
+    help: argv.length === 0,
     iterations: DEFAULT_ITERATIONS,
     chunkSize: DEFAULT_CHUNK_SIZE,
     stdinPassword: false,
@@ -133,7 +134,7 @@ Options:
   --theme-font <stack>     Optional font-family stack; no font files embedded
   --theme-radius <length>  Optional card rounding: px, rem, em, or 0
   --version                Show version
-  --help                   Show this help
+  -h, --help               Show this help (also shown when called without arguments)
 `);
 }
 
