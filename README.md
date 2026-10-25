@@ -7,6 +7,7 @@ without an upload, account or backend. Prepared packages can be opened offline.
 **[Open Staticseal](https://nox-do.github.io/staticseal/)** ·
 [Download for offline use](https://github.com/nox-do/staticseal/releases/latest/download/staticseal.html) ·
 [Try the examples](https://nox-do.github.io/staticseal/examples/) ·
+[Agent guide (llms.txt)](llms.txt) ·
 [MIT license](LICENSE)
 
 Use the browser to share a group of documents, an interactive HTML page or a
@@ -102,15 +103,29 @@ reference. All commands run from the repository root.
 | Automation | Supply the passphrase through standard input with `--stdin-password`, or explicitly choose `--no-password`. Do not rely on interactive prompts in a job.      |
 | Result     | Exit code `0` on success, `1` on error. Success details go to stdout; errors and import warnings go to stderr. Import warnings can occur on a successful run. |
 
-### Setup and help
+### Install the CLI without development tools
 
-Requires Node.js 20.19+, 22.13+, or 24 and later, as specified in
-[package.json](package.json). From the repository root, install dependencies once:
+Requires Node.js 24 LTS, or a supported Node.js 20.x (20.19+) or 22.x (22.13+)
+release; see [package.json](package.json) for the exact engines range. With Node.js
+and npm installed, download the release source archive in a new working directory:
 
 ```sh
-npm ci
+curl -fL https://github.com/nox-do/staticseal/archive/refs/tags/v2.0.0.tar.gz -o staticseal-2.0.0.tar.gz
+tar -xzf staticseal-2.0.0.tar.gz
+cd staticseal-2.0.0
+npm ci --omit=dev
+node bin/self-encrypt.mjs --version
 node bin/self-encrypt.mjs --help
 ```
+
+**No build is needed.** The release includes the generated reader modules.
+`npm ci --omit=dev` installs only runtime dependencies, needed for `--bundle`,
+without the development tools. Download the whole source archive: the small
+`bin/self-encrypt.mjs` entry script imports other project files and cannot run alone.
+
+Without `--bundle`, the CLI needs no npm dependencies. For browser collections and
+websites with linked subpages, use the browser creator; the CLI does not accept a
+directory as input or crawl linked pages.
 
 Calling the CLI without arguments or with `-h` shows the same parameter help.
 

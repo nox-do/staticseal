@@ -1,0 +1,75 @@
+# Staticseal
+
+> Create a standalone HTML package from a file, report or static website. Recipients open it in a browser, optionally with a passphrase. The browser creator processes files locally without an upload, account or backend.
+
+## Choose a local tool
+
+- Browser creator: download only [staticseal.html](https://github.com/nox-do/staticseal/releases/latest/download/staticseal.html). Version 2.0.0 is 61,613 bytes (about 62 kB / 60 KiB). It contains its runtime dependencies and works offline; no Node.js or npm installation is needed. This size describes the creator, not the CLI checkout or the resulting packages.
+- CLI automation: download or clone the repository. The entry point is `bin/self-encrypt.mjs`; it imports `bin/lib/` and `src/`, including checked-in generated reader modules. Downloading the entry script alone is insufficient. No build is required to run the CLI from a release checkout.
+- Single file or self-contained HTML: the CLI needs only a supported Node.js runtime and the checkout; no npm dependencies are required when `--bundle` is absent.
+- HTML/MHTML report with separate resources: use CLI `--bundle` after `npm ci --omit=dev`. This installs the runtime dependencies, including Happy DOM, without development tools.
+- Multiple independent files or a website with linked HTML subpages: use the browser creator's file/folder selection. The CLI does not create multi-file collections or crawl hyperlinks to subpages. Do not pass a directory as `--in`.
+
+## CLI setup
+
+Use Node.js 24 LTS, or a supported Node.js 20.x (20.19+) or 22.x (22.13+) release; the repository's `package.json` engines field defines the exact range. With Node.js and npm installed, run these commands in a new working directory to install the documented 2.0.0 release without Git or development tools:
+
+```sh
+curl -fL https://github.com/nox-do/staticseal/archive/refs/tags/v2.0.0.tar.gz -o staticseal-2.0.0.tar.gz
+tar -xzf staticseal-2.0.0.tar.gz
+cd staticseal-2.0.0
+npm ci --omit=dev
+node bin/self-encrypt.mjs --version
+node bin/self-encrypt.mjs --help
+```
+
+No build is needed. `npm ci --omit=dev` installs only runtime dependencies; skip it if you will not use `--bundle`. Alternatively, clone the source with `git clone --depth 1 --branch v2.0.0 https://github.com/nox-do/staticseal.git` and run the same Node/npm commands inside the checkout. The repository is not published as an npm package. Do not assume `npx self-encrypt` installs this project.
+
+## Non-interactive recipes
+
+Replace the absolute paths below with the user's input and intended output. Select a new output path: a successful command overwrites an existing output file. Always specify `--no-password` or `--stdin-password` in automation; otherwise the CLI prompts interactively.
+
+Package one file without encryption:
+
+```sh
+node bin/self-encrypt.mjs --in /path/to/report.pdf --out /path/to/report.sealed.html --no-password
+```
+
+Display already self-contained HTML as a webpage, preserving its input bytes:
+
+```sh
+node bin/self-encrypt.mjs --in /path/to/report.html --out /path/to/report.sealed.html --html-page --no-password
+```
+
+Bundle a report folder by naming its HTML entry file, not the folder:
+
+```sh
+node bin/self-encrypt.mjs --in /path/to/report/index.html --out /path/to/report.sealed.html --bundle --no-password
+```
+
+`--bundle` implies `--html-page`. It embeds supported referenced CSS, images, fonts, classic scripts, media and frame documents. It does not include every file in the folder. Resources default to the input file's directory; use `--resource-root /path/to/allowed-parent` when intended resources live in sibling directories. MHTML files and direct HTTP(S) report URLs are also supported. HTTP inputs/resources require network access; the browser creator never fetches dependencies during import.
+
+Protect a report using a user-provided passphrase via standard input:
+
+```sh
+node bin/self-encrypt.mjs --in /path/to/report/index.html --out /path/to/report.sealed.html --bundle --stdin-password < /path/to/passphrase.txt
+```
+
+Use an existing protected secret source or pipe the passphrase through the process's stdin. Do not put the passphrase in command arguments, logs or public titles. `--stdin-password` removes one trailing line ending and rejects an empty passphrase. `--no-password` provides no confidentiality.
+
+## Verify the result and explain limits
+
+- Require exit code 0 and the expected output file. The CLI verifies the payload roundtrip before writing; a successful exit does not prove that a bundled report is fully offline or visually correct.
+- Inspect stderr for import warnings. Missing or unsupported resources may remain as original URLs even after a successful command. Open the result offline and check images, styling, navigation and interactions before claiming it is self-contained.
+- Sources and prepared content are limited to 128 MiB; the final HTML package is limited to 25 MiB. These are file-size limits, not peak-memory guarantees.
+- `--html-page` and `--bundle` outputs execute imported HTML/JavaScript when opened. Use trusted input. Bundling does not execute scripts during capture, automate login or bundle JavaScript module graphs.
+- Browser website packages support ordinary internal navigation and Back. Modifier-click, middle-click and new-tab navigation to embedded subpages have known limitations.
+- Give the user the output path and whether the package is encrypted. Packaging does not itself upload or publish the result.
+
+## Documentation
+
+- [README and full CLI reference](https://github.com/nox-do/staticseal/blob/main/README.md): options, browser behavior, supported imports and limits.
+- [Examples](https://nox-do.github.io/staticseal/examples/): file collections, HTML websites, PDFs and reporting workflows.
+- [CLI examples](https://nox-do.github.io/staticseal/examples/cli/): Jupyter and Python-report recipes.
+- [Releases](https://github.com/nox-do/staticseal/releases): standalone browser download and source archives.
+- [Development](https://github.com/nox-do/staticseal/blob/main/docs/development.md): architecture, generated files, builds and tests; development requires the full `npm ci` installation.
