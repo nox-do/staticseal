@@ -54,7 +54,8 @@ export function executeHtml(html, { payload, crypto = webcrypto, globals = {} } 
           value: '',
           dataset: {},
           checked: false,
-          outerHTML: id === 'seal-logo' ? html.match(/<svg id="seal-logo"[\s\S]*?<\/svg>/)?.[0] : '',
+          outerHTML:
+            id === 'seal-logo' ? html.match(/<svg id=(?:"seal-logo"|seal-logo(?=[\s>]))[\s\S]*?<\/svg>/)?.[0] : '',
           textContent: id === 'encrypted-payload' ? JSON.stringify(payload ?? readPayload(html)) : '',
           attributes: {},
           setAttribute(name, value) {

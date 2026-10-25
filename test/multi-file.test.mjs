@@ -180,10 +180,10 @@ test('collection display is authenticated and normal reader output omits collect
 
 test('the standalone creator includes folder selection and HTML import', async () => {
   const app = await readFile(new URL('../index.html', import.meta.url), 'utf8');
-  assert.ok(app.includes('id="source-folder"'));
+  assert.match(app, /id=(?:"source-folder"|source-folder(?=[\s>]))/);
   assert.ok(app.includes('webkitdirectory'));
   assert.ok(app.includes('Missing or ambiguous resource:'));
   assert.ok(!app.includes('privateFilename'));
-  assert.ok(!app.includes('id="private-filename"'));
+  assert.doesNotMatch(app, /id=(?:"private-filename"|private-filename(?=[\s>]))/);
   assert.ok(!app.includes('Preview PDF'));
 });

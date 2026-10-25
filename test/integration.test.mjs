@@ -96,7 +96,7 @@ test('browser and CLI roundtrip matrix preserves privacy, viewer isolation and s
       }
     })
   };
-  assert.equal((source.match(/<svg id="seal-logo"/g) || []).length, 1);
+  assert.equal((source.match(/<svg id=(?:"seal-logo"|seal-logo(?=[\s>]))/g) || []).length, 1);
   const dir = await mkdtemp(join(tmpdir(), 'staticseal-reader-audit-'));
   try {
     for (const compressed of [false, true]) {
@@ -128,7 +128,7 @@ test('browser and CLI roundtrip matrix preserves privacy, viewer isolation and s
           assert.equal(result.status, 0, result.stderr);
           for (const html of [browserHtml, await readFile(join(dir, 'reader.html'), 'utf8')]) {
             assert.doesNotMatch(html, /STATICSEAL_/);
-            assert.equal((html.match(/<svg id="seal-logo"/g) || []).length, 1);
+            assert.equal((html.match(/<svg id=(?:"seal-logo"|seal-logo(?=[\s>]))/g) || []).length, 1);
             assert.equal(html.includes('DecompressionStream'), compressed);
             assert.equal(html.includes('crypto.subtle'), encrypted);
             assert.equal(html.includes('Preview limited to'), !page);

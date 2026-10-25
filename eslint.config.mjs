@@ -17,13 +17,13 @@ export default [
     ]
   },
   {
-    files: ['**/*.{js,mjs}', 'src/app.html', 'examples/html/szenario.html'],
+    files: ['**/*.{js,mjs}', 'src/app.html', 'examples/html/**/*.html'],
     plugins: { html },
     languageOptions: { ecmaVersion: 2022 },
     rules: js.configs.recommended.rules
   },
   {
-    files: ['src/**/*.{js,mjs}', 'src/app.html', 'test/*-smoke-runner.js', 'examples/html/szenario.html'],
+    files: ['src/**/*.{js,mjs}', 'src/app.html', 'test/*-smoke-runner.js', 'examples/html/**/*.html'],
     languageOptions: { globals: globals.browser }
   },
   {

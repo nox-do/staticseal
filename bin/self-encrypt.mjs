@@ -19,7 +19,7 @@ const format = createFormat(value => Buffer.from(value, 'base64'));
 const { fromBase64Chunks, unpackContent } = format;
 const { authenticatedDataFor } = createCrypto();
 
-const VERSION = '1.3.2';
+const VERSION = '2.0.0';
 const DEFAULT_ITERATIONS = 210_000;
 const DEFAULT_CHUNK_SIZE = 64 * 1024;
 function parseArgs(argv) {

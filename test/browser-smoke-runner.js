@@ -17,10 +17,11 @@
     frame.style.cssText = 'width:900px;height:600px';
     if (location.html === undefined) frame.src = location.url;
     else frame.srcdoc = location.html;
-    const loaded = new Promise(resolve => (frame.onload = resolve));
+    let loaded = false;
+    frame.onload = () => (loaded = true);
     document.body.append(frame);
     try {
-      await loaded;
+      await waitFor(() => loaded);
       return await fn(frame);
     } finally {
       frame.remove();

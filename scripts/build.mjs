@@ -186,7 +186,18 @@ async function buildApp() {
   const script = html.match(/<script>([\s\S]*?)<\/script>/);
   if (!script) throw new Error('Missing app script.');
   html = replace(html, script[0], '<script>' + (await compactJs(script[1])) + '</script>');
-  html = (await minifyHtml(html, htmlOptions)).trim() + '\n';
+  html =
+    (
+      await minifyHtml(html, {
+        ...htmlOptions,
+        removeAttributeQuotes: true,
+        // Explicit defaults can be significant to CSS attribute selectors.
+        removeRedundantAttributes: false,
+        removeScriptTypeAttributes: true,
+        removeStyleLinkTypeAttributes: true,
+        collapseBooleanAttributes: true
+      })
+    ).trim() + '\n';
   html = html.replace('<script>', () => '<script>' + '/*! ' + srcsetLicense + ' */');
   return html;
 }
