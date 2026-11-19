@@ -3,4 +3,10 @@
   <url>
     <loc>https://nox-do.github.io/staticseal/</loc>
   </url>
+  <url>
+    <loc>https://nox-do.github.io/staticseal/examples/</loc>
+  </url>
+  <url>
+    <loc>https://nox-do.github.io/staticseal/examples/cli/</loc>
+  </url>
 </urlset>

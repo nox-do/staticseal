@@ -367,7 +367,8 @@ async function verifyExampleNavigation() {
     for (const link of doc.querySelectorAll('a[href]')) {
       const href = link.getAttribute('href');
       if (/^(?:[a-z][\w+.-]*:|#)/i.test(href)) continue;
-      await readFile(new URL(href, pageUrl));
+      const target = new URL(href, pageUrl);
+      await readFile(target.pathname.endsWith('/') ? new URL('index.html', target) : target);
       if (!/\/sealed(?:-extras)?\.html$/.test(href)) continue;
       samples++;
       assert.equal(link.getAttribute('target'), '_blank', 'Samples must keep their overview open.');
