@@ -1,0 +1,3 @@
+https://nox-do.github.io/staticseal/
+https://nox-do.github.io/staticseal/examples/
+https://nox-do.github.io/staticseal/examples/cli/

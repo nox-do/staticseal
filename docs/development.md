@@ -45,6 +45,13 @@ navigation from the creator to both guides.
 Use the URL-prefix property `https://nox-do.github.io/staticseal/` in Search
 Console and submit `sitemap.xml` after that prefix. The full sitemap address is
 `https://nox-do.github.io/staticseal/sitemap.xml`, not the host-root `/sitemap.xml`.
+
+`sitemap.txt` lists the same URLs, one per line; keep both files in sync. Submit
+`sitemap.txt` once in the same property to compare processing when the XML sitemap
+continues to report a fetch error. Keep the XML submission. A submission confirmation
+is not evidence of processing: check for Success and discovered pages in the sitemap
+report. Google supports text sitemaps, but processing and indexing are not guaranteed.
+
 A `robots.txt` inside `/staticseal/` would not control crawling: Google reads that
 file only at `https://nox-do.github.io/robots.txt`. A 404 for the host-root file
 does not block crawling. Direct sitemap submission works without it.
@@ -55,7 +62,8 @@ control; see the protection limits in the README. A sitemap need not appear as a
 search result itself. For a sitemap fetch error, inspect the exact submitted URL
 with Search Console's live test and check the sitemap processing report separately.
 
-References: [Google sitemap report](https://support.google.com/webmasters/answer/7451001),
+References: [text sitemaps](https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap#text),
+[Google sitemap report](https://support.google.com/webmasters/answer/7451001),
 [canonical URLs](https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls),
 [robots.txt location](https://developers.google.com/crawling/docs/robots-txt/create-robots-txt),
 [robots.txt HTTP status handling](https://developers.google.com/crawling/docs/robots-txt/robots-txt-spec).
